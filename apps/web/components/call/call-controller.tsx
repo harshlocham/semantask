@@ -54,8 +54,10 @@ export default function CallController({ conversationId, peerUserId, peerName }:
     const markEnded = useCallStore((state) => state.endCall);
     const setMuted = useCallStore((state) => state.setMuted);
     const setCameraOn = useCallStore((state) => state.setCameraOn);
+    const setError = useCallStore((state) => state.setError);
     const isMuted = useCallStore((state) => state.isMuted);
     const isCameraOn = useCallStore((state) => state.isCameraOn);
+    const startVideoRequestNonce = useCallStore((state) => state.startVideoRequestNonce);
 
     const activePeerIdRef = useRef<string | null>(null);
     const activeCallIdRef = useRef<string | null>(null);
@@ -113,6 +115,42 @@ export default function CallController({ conversationId, peerUserId, peerName }:
         return other?.userId ?? null;
     }, [currentUserId, participants, peerUserId]);
 
+    const handleMediaAccessFailure = useCallback(
+        (error: unknown, mode: "incoming" | "outgoing") => {
+            const message = error instanceof Error ? error.message : "Unable to access camera or microphone.";
+            setError(message);
+
+            if (mode === "incoming") {
+                if (callId && derivedPeerId && currentUserId && resolvedConversationId) {
+                    emitReject({
+                        callId,
+                        conversationId: resolvedConversationId,
+                        from: currentUserId,
+                        to: derivedPeerId,
+                        reason: "declined",
+                    });
+                }
+
+                close();
+                return;
+            }
+
+            if (callId && derivedPeerId && currentUserId) {
+                emitEnd({
+                    callId,
+                    from: currentUserId,
+                    to: derivedPeerId,
+                    reason: "error",
+                    endedAt: new Date().toISOString(),
+                });
+            }
+
+            markEnded();
+            close();
+        },
+        [callId, close, currentUserId, derivedPeerId, emitEnd, emitReject, markEnded, resolvedConversationId, setError]
+    );
+
     useEffect(() => {
         if (!localVideoRef.current) return;
         localVideoRef.current.srcObject = localStream;
@@ -135,7 +173,12 @@ export default function CallController({ conversationId, peerUserId, peerName }:
                     activeCallIdRef.current = payload.callId;
                 }
 
-                await startLocalMedia();
+                try {
+                    await startLocalMedia();
+                } catch (error) {
+                    handleMediaAccessFailure(error, "incoming");
+                    return;
+                }
                 const answer = await handleOffer(payload.offer);
 
                 emitAnswer({
@@ -169,7 +212,12 @@ export default function CallController({ conversationId, peerUserId, peerName }:
             try {
                 activePeerIdRef.current = payload.from;
                 activeCallIdRef.current = payload.callId;
-                await startLocalMedia();
+                try {
+                    await startLocalMedia();
+                } catch (error) {
+                    handleMediaAccessFailure(error, "outgoing");
+                    return;
+                }
                 const offer = await createOffer();
 
                 emitOffer({
@@ -250,6 +298,7 @@ export default function CallController({ conversationId, peerUserId, peerName }:
         close,
         createOffer,
         currentUserId,
+        handleMediaAccessFailure,
         emitOffer,
         emitAnswer,
         handleAnswer,
@@ -337,13 +386,49 @@ export default function CallController({ conversationId, peerUserId, peerName }:
         });
     }, [currentUserId, derivedPeerId, emitOfferInit, resolvedConversationId, startOutgoingCall]);
 
+    const showPanel = Boolean(
+        isIncomingModalOpen ||
+        hasActiveCall ||
+        status === "ringing" ||
+        status === "accepted"
+    );
+
+    const lastHandledStartRequestRef = useRef(0);
+
+    useEffect(() => {
+        const isPanelVisible =
+            isIncomingModalOpen ||
+            hasActiveCall ||
+            status === "ringing" ||
+            status === "accepted";
+
+        if (startVideoRequestNonce <= 0) return;
+        if (startVideoRequestNonce === lastHandledStartRequestRef.current) return;
+        if (isPanelVisible || direction === "incoming") return;
+
+        lastHandledStartRequestRef.current = startVideoRequestNonce;
+        void startVideoCall();
+    }, [
+        direction,
+        hasActiveCall,
+        isIncomingModalOpen,
+        startVideoCall,
+        startVideoRequestNonce,
+        status,
+    ]);
+
     const acceptIncomingCall = useCallback(async () => {
         if (!currentUserId || !callId || !resolvedConversationId || !derivedPeerId) return;
 
         activePeerIdRef.current = derivedPeerId;
         activeCallIdRef.current = callId;
 
-        await startLocalMedia();
+        try {
+            await startLocalMedia();
+        } catch (error) {
+            handleMediaAccessFailure(error, "incoming");
+            return;
+        }
         emitAccept({
             callId,
             conversationId: resolvedConversationId,
@@ -351,7 +436,7 @@ export default function CallController({ conversationId, peerUserId, peerName }:
             to: derivedPeerId,
             acceptedAt: new Date().toISOString(),
         });
-    }, [callId, currentUserId, derivedPeerId, emitAccept, resolvedConversationId, startLocalMedia]);
+    }, [callId, currentUserId, derivedPeerId, emitAccept, handleMediaAccessFailure, resolvedConversationId, startLocalMedia]);
 
     const rejectIncomingCall = useCallback(() => {
         if (!currentUserId || !callId || !resolvedConversationId || !derivedPeerId) return;
@@ -408,23 +493,8 @@ export default function CallController({ conversationId, peerUserId, peerName }:
         setCameraOn(nextCameraOn);
     }, [isCameraOn, localStream, setCameraOn]);
 
-    const showPanel = Boolean(
-        isIncomingModalOpen ||
-        hasActiveCall ||
-        status === "ringing" ||
-        status === "accepted"
-    );
-
-    const canStartCall = Boolean(!showPanel && direction !== "incoming" && derivedPeerId);
-
     return (
         <>
-            {canStartCall && (
-                <div className="fixed bottom-24 right-3 z-40 lg:bottom-6 lg:right-6">
-                    <Button type="button" onClick={startVideoCall}>Start Video</Button>
-                </div>
-            )}
-
             {showPanel && (
                 <div className="fixed bottom-24 right-3 z-40 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-2xl lg:bottom-6 lg:right-6">
                     <div className="border-b border-[hsl(var(--border))] px-3 py-2 text-sm font-medium text-[hsl(var(--foreground))]">
@@ -454,17 +524,6 @@ export default function CallController({ conversationId, peerUserId, peerName }:
                     </div>
 
                     <div className="flex items-center gap-2 px-2 pb-2">
-                        {!hasActiveCall && direction !== "incoming" && (
-                            <Button
-                                type="button"
-                                onClick={startVideoCall}
-                                disabled={!derivedPeerId}
-                                className="flex-1"
-                            >
-                                Start Video
-                            </Button>
-                        )}
-
                         {canAccept && (
                             <>
                                 <Button

@@ -10,6 +10,7 @@ import TypingIndicator from "./typing-indicator";
 import ChatHeader from "../chat/chat-header";
 import { useUser } from "@/context/UserContext";
 import CallController from "@/components/call/call-controller";
+import useCallStore from "@/store/call-store";
 
 // type guard
 function isUser(p: ClientUser) {
@@ -27,6 +28,7 @@ const RightPanel = () => {
     const setSelectedConversation = useChatStore(
         (s) => s.setSelectedConversation
     );
+    const requestStartVideoCall = useCallStore((s) => s.requestStartVideoCall);
 
     // 🔑 derive selected conversation (SINGLE SOURCE OF TRUTH)
     const selectedConversation = conversations.find(
@@ -62,6 +64,7 @@ const RightPanel = () => {
         conversationName?.trim().charAt(0).toUpperCase() || "U";
 
     const conversationId = String(selectedConversation._id);
+    const canStartCall = !selectedConversation.isGroup && Boolean(otherUser?._id);
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -76,6 +79,8 @@ const RightPanel = () => {
                 avatarSrc={avatarSrc}
                 avatarFallbackInitial={avatarFallbackInitial}
                 isGroup={selectedConversation.isGroup}
+                canStartCall={canStartCall}
+                onStartCall={requestStartVideoCall}
                 onBack={() => setSelectedConversation(null)}
                 onClearSelection={() => setSelectedConversation(null)}
             />

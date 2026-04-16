@@ -7,6 +7,14 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
     { urls: ["stun:stun.l.google.com:19302"] },
 ];
 
+function createMediaStream(): MediaStream | null {
+    if (typeof MediaStream === "undefined") {
+        return null;
+    }
+
+    return new MediaStream();
+}
+
 type UseWebRTCOptions = {
     onIceCandidate?: (candidate: RTCIceCandidate) => void;
 };
@@ -21,7 +29,7 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
 
     const getRemoteStream = useCallback(() => {
         if (!remoteStreamRef.current) {
-            remoteStreamRef.current = new MediaStream();
+            remoteStreamRef.current = createMediaStream();
         }
 
         return remoteStreamRef.current;
@@ -37,11 +45,19 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
                     onIceCandidate: options.onIceCandidate,
                     onTrack: (event) => {
                         const remote = getRemoteStream();
+                        if (!remote) return;
 
                         event.streams[0]?.getTracks().forEach((track) => {
                             remote.addTrack(track);
                         });
-                        setRemoteStream(new MediaStream(remote.getTracks()));
+                        const stream = createMediaStream();
+                        if (!stream) return;
+
+                        remote.getTracks().forEach((track) => {
+                            stream.addTrack(track);
+                        });
+
+                        setRemoteStream(stream);
                     },
                     onConnectionStateChange: (state) => {
                         setConnectionState(state);
@@ -52,10 +68,27 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
     );
 
     const startLocalMedia = useCallback(async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: true,
-        });
+        if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+            throw new Error("Camera and microphone access is unavailable in this environment.");
+        }
+
+        let stream: MediaStream;
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: true,
+            });
+        } catch (error) {
+            if (error instanceof DOMException && error.name === "NotAllowedError") {
+                throw new Error("Permission denied by system for camera or microphone.");
+            }
+
+            throw error instanceof Error
+                ? error
+                : new Error("Unable to access camera or microphone.");
+        }
+
         setLocalStream(stream);
         await manager.addLocalStream(stream);
         return stream;

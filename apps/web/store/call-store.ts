@@ -25,6 +25,7 @@ export interface CallStoreState {
     startedAt: Date | null;
     connectedAt: Date | null;
     endedAt: Date | null;
+    startVideoRequestNonce: number;
 
     startOutgoingCall: (payload: {
         callId: string;
@@ -46,6 +47,7 @@ export interface CallStoreState {
     setError: (message: string | null) => void;
     stopRingtone: () => void;
     endCall: () => void;
+    requestStartVideoCall: () => void;
     reset: () => void;
 }
 
@@ -65,6 +67,7 @@ const initialState = {
     startedAt: null,
     connectedAt: null,
     endedAt: null,
+    startVideoRequestNonce: 0,
 };
 
 const useCallStore = create<CallStoreState>((set) => ({
@@ -132,6 +135,11 @@ const useCallStore = create<CallStoreState>((set) => ({
             isIncomingModalOpen: false,
             isRingtonePlaying: false,
         }),
+
+    requestStartVideoCall: () =>
+        set((state) => ({
+            startVideoRequestNonce: state.startVideoRequestNonce + 1,
+        })),
 
     reset: () => set({ ...initialState }),
 }));

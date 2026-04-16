@@ -2,13 +2,15 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import GroupMembersDialog from "@/components/home/group-members-dialog";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, X, PhoneIcon } from "lucide-react";
 
 interface ChatHeaderProps {
     conversationName: string;
     avatarSrc?: string;
     avatarFallbackInitial: string;
     isGroup: boolean;
+    canStartCall: boolean;
+    onStartCall: () => void;
     onBack: () => void;
     onClearSelection: () => void;
 }
@@ -18,6 +20,8 @@ export default function ChatHeader({
     avatarSrc,
     avatarFallbackInitial,
     isGroup,
+    canStartCall,
+    onStartCall,
     onBack,
     onClearSelection,
 }: ChatHeaderProps) {
@@ -50,15 +54,29 @@ export default function ChatHeader({
                         {isGroup && <GroupMembersDialog />}
                     </div>
                 </div>
+                <div className="hidden items-center gap-2 lg:flex">
+                    {canStartCall && (
+                        <button
+                            type="button"
+                            onClick={onStartCall}
+                            disabled={!canStartCall}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-[hsl(var(--border))] disabled:bg-transparent disabled:text-[hsl(var(--muted-foreground))]"
+                            aria-label="Start video call"
+                            title={canStartCall ? "Start video call" : "Calling is unavailable for this conversation"}
+                        >
+                            <PhoneIcon size={16} />
+                        </button>
+                    )}
 
-                <button
-                    type="button"
-                    onClick={onClearSelection}
-                    className="hidden h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--chat-hover))] lg:inline-flex"
-                    aria-label="Close conversation"
-                >
-                    <X size={18} />
-                </button>
+                    <button
+                        type="button"
+                        onClick={onClearSelection}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--chat-hover))]"
+                        aria-label="Close conversation"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
             </div>
         </div>
     );
