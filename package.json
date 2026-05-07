@@ -31,6 +31,7 @@
     "version-packages": "changeset version",
     "release": "echo \"Skipping npm publish for private repository\"",
     "typecheck": "turbo run typecheck --filter=./apps/* --filter=./packages/*",
+    "seed:contacts": "tsx scripts/seed/contacts.ts",
     "ci:verify-artifacts": "bash ./scripts/ci/verify-artifacts.sh",
     "security:audit": "npm audit --omit=dev --audit-level=high"
   },

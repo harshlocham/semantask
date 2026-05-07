@@ -9,3 +9,4 @@ export * from "./delivery.service";
 export * from "./seen.service";
 export * from "./task.service";
 export * from "./tool-normalizers";
+export * from "./contact.service";

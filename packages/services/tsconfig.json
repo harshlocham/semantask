@@ -3,6 +3,9 @@
         "baseUrl": ".",
         "ignoreDeprecations": "5.0",
         "paths": {
+            "@chat/db/models/*": [
+                "../db/models/*.ts"
+            ],
             "@/models/*": [
                 "../db/models/*"
             ],

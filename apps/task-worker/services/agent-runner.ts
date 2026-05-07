@@ -17,6 +17,8 @@ import { rankTools, type ToolRankingInput } from "./tool-ranking.js";
 import { collectPreviousStepOutputs, llmDecisionSchema, normalizeParams, resolveStepTemplates, type PreviousStepOutputs, validateToolParameters } from "./step-execution-utils.js";
 import { createDefaultLLMProvider } from "./llm/index.js";
 import { parseJsonText } from "./llm/response-parser.js";
+import { resolveToolParameters, type ResolveToolParametersResult } from "./resolve-tool-params.js";
+import type { PendingResolution } from "./entity-resolution.service.js";
 
 const INTERNAL_SECRET_HEADER = "x-internal-secret";
 
@@ -39,6 +41,7 @@ type ExecutionActionRecord = {
 type TaskDocumentLike = {
     _id: { toString(): string };
     conversationId: { toString(): string };
+    createdBy?: { toString(): string } | string | null;
     parentTaskId?: { toString(): string } | null;
     lifecycleState?: "planning" | "ready" | "executing" | "waiting_for_approval" | "blocked" | "retry_scheduled" | "paused" | "completed" | "failed";
     sourceMessageIds?: Array<{ toString(): string }>;
@@ -69,6 +72,12 @@ type ActionExecutionResult = {
     adapterSuccess: boolean;
     evidence: unknown;
     error?: string;
+};
+
+type ExecutionOptions = {
+    userId?: string | null;
+    clarificationReply?: string | null;
+    pendingResolution?: PendingResolution | null;
 };
 
 type VerificationOutcome = {
@@ -426,7 +435,7 @@ export class AgentRunner {
         };
     }
 
-    private async pauseForClarification(task: TaskDocumentLike, clarificationQuestion: string, stepId?: string) {
+    private async pauseForClarification(task: TaskDocumentLike, clarificationQuestion: string, stepId?: string, clarificationContext?: unknown) {
         await this.updateTask(task, {
             status: "waiting_for_input",
             lifecycleState: "paused",
@@ -439,10 +448,79 @@ export class AgentRunner {
                     needsClarification: true,
                     clarificationQuestion,
                     stepId: stepId ?? null,
+                    pendingResolution: clarificationContext ?? null,
                 },
                 error: clarificationQuestion,
             },
         });
+    }
+
+    private getTaskUserId(task: TaskDocumentLike): string | null {
+        if (!task.createdBy) {
+            return null;
+        }
+
+        if (typeof task.createdBy === "string") {
+            return task.createdBy;
+        }
+
+        if (typeof task.createdBy.toString === "function") {
+            return task.createdBy.toString();
+        }
+
+        return null;
+    }
+
+    private getPendingResolution(task: TaskDocumentLike): PendingResolution | null {
+        const evidence = task.result?.evidence;
+        if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+            return null;
+        }
+
+        const pending = (evidence as Record<string, unknown>).pendingResolution;
+        if (!pending || typeof pending !== "object" || Array.isArray(pending)) {
+            return null;
+        }
+
+        const candidate = pending as Partial<PendingResolution>;
+        if (candidate.toolName !== "send_email") {
+            return null;
+        }
+
+        if (!candidate.parametersSnapshot || typeof candidate.parametersSnapshot !== "object" || Array.isArray(candidate.parametersSnapshot)) {
+            return null;
+        }
+
+        if (!Array.isArray(candidate.ambiguities) || candidate.ambiguities.length === 0) {
+            return null;
+        }
+
+        return candidate as PendingResolution;
+    }
+
+    private getClarificationPayload(result: ActionExecutionResult): { question: string; pendingResolution: PendingResolution | null } | null {
+        if (!result.evidence || typeof result.evidence !== "object" || Array.isArray(result.evidence)) {
+            return null;
+        }
+
+        const evidence = result.evidence as Record<string, unknown>;
+        const needsClarification = evidence.needsClarification === true;
+        if (!needsClarification) {
+            return null;
+        }
+
+        const question = typeof evidence.clarificationQuestion === "string"
+            ? evidence.clarificationQuestion
+            : "Please clarify the recipient.";
+
+        const pendingResolution = evidence.pendingResolution && typeof evidence.pendingResolution === "object" && !Array.isArray(evidence.pendingResolution)
+            ? evidence.pendingResolution as PendingResolution
+            : null;
+
+        return {
+            question,
+            pendingResolution,
+        };
     }
 
     async resumeTask(taskId: string, userReply: string): Promise<RunTaskOutcome> {
@@ -1038,7 +1116,23 @@ Reply to confirm receipt or contact support if you have questions.
                         stepId: context.action.toolName,
                         attempt: context.retryCount + 1,
                         idempotencyKey: this.buildIdempotencyKey(taskId, context.action.toolName, context.retryCount + 1),
+                    }, {
+                        userId: this.getTaskUserId(task),
+                        clarificationReply: typeof task.pausedReason === "string" ? task.pausedReason : null,
+                        pendingResolution: this.getPendingResolution(task),
                     });
+
+                    const clarification = this.getClarificationPayload(executed);
+                    if (clarification) {
+                        await this.pauseForClarification(task, clarification.question, context.action.toolName, clarification.pendingResolution);
+                        return {
+                            completed: false,
+                            retryCount: context.retryCount,
+                            maxRetries: context.maxRetries,
+                            result: executed,
+                            verification: null,
+                        };
+                    }
 
                     await this.appendCheckpoint(task, {
                         step: "execute",
@@ -1872,7 +1966,35 @@ Reply to confirm receipt or contact support if you have questions.
                         lastError: null,
                     });
 
-                    let executed = await this.execute(executionPayload);
+                    let executed = await this.execute(executionPayload, {
+                        userId: this.getTaskUserId(latestTask),
+                        clarificationReply,
+                        pendingResolution: this.getPendingResolution(latestTask),
+                    });
+
+                    let clarification = this.getClarificationPayload(executed);
+                    if (clarification) {
+                        await this.updatePlanStepState(taskId, step.stepId, {
+                            state: "blocked",
+                            lastError: clarification.question,
+                            output: {
+                                summary: "Clarification required",
+                                data: {
+                                    clarificationQuestion: clarification.question,
+                                    pendingResolution: clarification.pendingResolution,
+                                },
+                            },
+                        });
+
+                        await this.pauseForClarification(latestTask, clarification.question, step.stepId, clarification.pendingResolution);
+                        return {
+                            completed: false,
+                            retryCount: typeof latestTask.retryCount === "number" ? latestTask.retryCount : 0,
+                            maxRetries: typeof latestTask.maxRetries === "number" ? latestTask.maxRetries : 2,
+                            result: executed,
+                            verification: null,
+                        };
+                    }
 
                     if ((!executed.adapterSuccess || executed.error) && (step.attempts ?? 0) < (step.maxAttempts ?? 3)) {
                         try {
@@ -1939,7 +2061,35 @@ Reply to confirm receipt or contact support if you have questions.
                                             lastError: null,
                                         });
 
-                                        executed = await this.execute(executionPayload);
+                                        executed = await this.execute(executionPayload, {
+                                            userId: this.getTaskUserId(latestTask),
+                                            clarificationReply,
+                                            pendingResolution: this.getPendingResolution(latestTask),
+                                        });
+
+                                        clarification = this.getClarificationPayload(executed);
+                                        if (clarification) {
+                                            await this.updatePlanStepState(taskId, step.stepId, {
+                                                state: "blocked",
+                                                lastError: clarification.question,
+                                                output: {
+                                                    summary: "Clarification required",
+                                                    data: {
+                                                        clarificationQuestion: clarification.question,
+                                                        pendingResolution: clarification.pendingResolution,
+                                                    },
+                                                },
+                                            });
+
+                                            await this.pauseForClarification(latestTask, clarification.question, step.stepId, clarification.pendingResolution);
+                                            return {
+                                                completed: false,
+                                                retryCount: typeof latestTask.retryCount === "number" ? latestTask.retryCount : 0,
+                                                maxRetries: typeof latestTask.maxRetries === "number" ? latestTask.maxRetries : 2,
+                                                result: executed,
+                                                verification: null,
+                                            };
+                                        }
                                     }
                                 }
                             }
@@ -2145,7 +2295,7 @@ Reply to confirm receipt or contact support if you have questions.
         return result;
     }
 
-    private async execute(payload: ExecutionActionRecord): Promise<ActionExecutionResult> {
+    private async execute(payload: ExecutionActionRecord, options?: ExecutionOptions): Promise<ActionExecutionResult> {
         const tool = this.toolRegistry.get(payload.toolName);
         const runId = this.getCurrentRunId();
         const toolTimeoutMs = this.getToolTimeoutMs();
@@ -2170,7 +2320,41 @@ Reply to confirm receipt or contact support if you have questions.
         }
 
         try {
-            const parsedInput = tool.inputSchema.parse(payload.parameters ?? {});
+            const resolution = await resolveToolParameters({
+                toolName: payload.toolName,
+                params: payload.parameters ?? {},
+                userId: options?.userId,
+                clarificationReply: options?.clarificationReply ?? null,
+                pendingResolution: options?.pendingResolution ?? null,
+            });
+
+            if (resolution.status === "clarification_required") {
+                return {
+                    summary: "Execution paused for clarification.",
+                    adapterSuccess: false,
+                    evidence: {
+                        toolName: payload.toolName,
+                        needsClarification: true,
+                        clarificationQuestion: resolution.clarificationQuestion,
+                        pendingResolution: resolution.pendingResolution,
+                    },
+                    error: "clarification_required",
+                };
+            }
+
+            if (resolution.status === "failed") {
+                return {
+                    summary: `Parameter resolution failed for ${payload.toolName}.`,
+                    adapterSuccess: false,
+                    evidence: {
+                        toolName: payload.toolName,
+                        resolutionError: resolution.error,
+                    },
+                    error: resolution.error,
+                };
+            }
+
+            const parsedInput = tool.inputSchema.parse(resolution.params ?? {});
             const startedAt = Date.now();
             const timeoutController = new AbortController();
             const timeoutHandle = setTimeout(() => timeoutController.abort(), toolTimeoutMs);
