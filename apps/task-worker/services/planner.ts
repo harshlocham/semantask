@@ -2,6 +2,7 @@ import * as dbModule from "@chat/db";
 import TaskPlanModel, { type ITaskStep } from "@chat/db/models/TaskPlan";
 import type { PlannerContext } from "@chat/types";
 import { createDefaultLLMProvider } from "./llm/index.js";
+import { parseJsonText } from "./llm/response-parser.js";
 
 const connectToDatabase =
     (dbModule as unknown as { connectToDatabase?: () => Promise<unknown> }).connectToDatabase
@@ -110,7 +111,8 @@ function extractJsonObject(raw: string): Record<string, unknown> | null {
         }
         return null;
     } catch {
-        return null;
+        const repaired = parseJsonText<Record<string, unknown>>(candidate);
+        return repaired.value && typeof repaired.value === "object" ? repaired.value : null;
     }
 }
 
@@ -265,20 +267,21 @@ async function requestPlanFromLlm(
     }
 
     if (!content) {
-        const apiKey = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY;
-        if (!apiKey) return null;
+        try {
+            const provider = createDefaultLLMProvider();
+            const llmResponse = await provider.generate({
+                model: DEFAULT_PLANNER_MODEL,
+                input: [
+                    { role: "system", content: prompt },
+                    { role: "user", content: taskPayload },
+                ],
+                temperature: 0.1,
+            });
 
-        const provider = createDefaultLLMProvider();
-        const llmResponse = await provider.generate({
-            model: DEFAULT_PLANNER_MODEL,
-            input: [
-                { role: "system", content: prompt },
-                { role: "user", content: taskPayload },
-            ],
-            temperature: 0.1,
-        });
-
-        content = extractLlmResponseText(llmResponse);
+            content = extractLlmResponseText(llmResponse);
+        } catch {
+            return null;
+        }
     }
 
     const parsed = extractJsonObject(content);

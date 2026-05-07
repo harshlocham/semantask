@@ -16,6 +16,7 @@ import { assertTransition } from "./task-state-machine.js";
 import { rankTools, type ToolRankingInput } from "./tool-ranking.js";
 import { collectPreviousStepOutputs, llmDecisionSchema, normalizeParams, resolveStepTemplates, type PreviousStepOutputs, validateToolParameters } from "./step-execution-utils.js";
 import { createDefaultLLMProvider } from "./llm/index.js";
+import { parseJsonText } from "./llm/response-parser.js";
 
 const INTERNAL_SECRET_HEADER = "x-internal-secret";
 
@@ -471,7 +472,7 @@ export class AgentRunner {
 
         // parse JSON-only response per system instructions
         try {
-            const parsedRaw = JSON.parse(text) as unknown;
+            const parsedRaw = parseJsonText<unknown>(text).value ?? JSON.parse(text) as unknown;
             const parsed = llmDecisionSchema.safeParse(parsedRaw);
             if (!parsed.success) {
                 console.error("agent-runner llm:parse-failure", { taskId: task._id.toString(), errors: parsed.error.flatten(), text: text.slice(0, 2000) });
@@ -1478,7 +1479,7 @@ Reply to confirm receipt or contact support if you have questions.
         }
 
         try {
-            const parsedRaw = JSON.parse(text) as unknown;
+            const parsedRaw = parseJsonText<unknown>(text).value ?? JSON.parse(text) as unknown;
             const parsed = llmDecisionSchema.safeParse(parsedRaw);
             if (!parsed.success) {
                 console.error("agent-runner llm:step-parse-failure", { taskId: input.task._id.toString(), errors: parsed.error.flatten(), text: text.slice(0, 2000) });

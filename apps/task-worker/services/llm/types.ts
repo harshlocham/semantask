@@ -29,6 +29,8 @@ export interface LLMResponse {
     raw?: unknown;
     requestId?: string;
     finishReason?: string | null;
+    responseFormat?: "responses" | "chat_completions" | "normalized";
+    parseRepaired?: boolean;
 }
 
 export interface LLMProviderConfig {
@@ -57,6 +59,14 @@ export class LLMError extends Error {
     readonly provider?: string;
     readonly status?: number;
     readonly retryable: boolean;
+    readonly category:
+        | "retryable"
+        | "non_retryable"
+        | "timeout"
+        | "rate_limit"
+        | "auth"
+        | "malformed_response"
+        | "unsupported_capability";
     readonly details?: unknown;
 
     constructor(input: {
@@ -65,6 +75,7 @@ export class LLMError extends Error {
         provider?: string;
         status?: number;
         retryable?: boolean;
+        category?: LLMError["category"];
         details?: unknown;
         cause?: unknown;
     }) {
@@ -74,6 +85,7 @@ export class LLMError extends Error {
         this.provider = input.provider;
         this.status = input.status;
         this.retryable = input.retryable ?? false;
+        this.category = input.category ?? (input.retryable ? "retryable" : "non_retryable");
         this.details = input.details;
     }
 
@@ -94,7 +106,17 @@ export class LLMError extends Error {
                 code: code ?? "LLM_ERROR",
                 provider: overrides.provider,
                 status,
-                retryable: overrides.retryable ?? status === 429 || (typeof status === "number" && status >= 500),
+                retryable: overrides.retryable ?? (status === 429 || (typeof status === "number" && status >= 500)),
+                category:
+                    status === 401 || status === 403
+                        ? "auth"
+                        : status === 429
+                            ? "rate_limit"
+                            : status === 408
+                                ? "timeout"
+                                : (overrides.retryable ?? (status === 429 || (typeof status === "number" && status >= 500)))
+                                    ? "retryable"
+                                    : "non_retryable",
                 details: overrides.details,
                 cause: error,
             });
@@ -106,6 +128,7 @@ export class LLMError extends Error {
             provider: overrides.provider,
             status: overrides.status,
             retryable: overrides.retryable ?? false,
+            category: overrides.retryable ? "retryable" : "non_retryable",
             details: overrides.details ?? error,
             cause: error,
         });

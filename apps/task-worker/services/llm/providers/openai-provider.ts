@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import type { LLMGenerateOptions, LLMHealthCheckResult, LLMProviderConfig, LLMRequest, LLMResponse, LLMUsage } from "../types.js";
 import { BaseLLMProvider } from "../base-provider.js";
 import { LLMError } from "../types.js";
+import { extractResponseText } from "../response-parser.js";
 
 function createTimeoutError(provider: string, timeoutMs: number, requestId?: string) {
     return new LLMError({
@@ -25,10 +26,18 @@ function toUsage(payload: { input_tokens?: number; output_tokens?: number; total
     };
 }
 
-export class OpenAIProvider extends BaseLLMProvider {
-    private readonly client: OpenAI;
+function toChatMessages(input: LLMRequest["input"]): Array<{ role: "assistant" | "system" | "user"; content: string }> {
+    if (typeof input === "string") {
+        return [{ role: "user", content: input }];
+    }
 
-    constructor(config: LLMProviderConfig) {
+    return input;
+}
+
+export class OpenAIProvider extends BaseLLMProvider {
+    private readonly client: Pick<OpenAI, "responses" | "chat" | "models">;
+
+    constructor(config: LLMProviderConfig, client?: Pick<OpenAI, "responses" | "chat" | "models">) {
         if (!config.apiKey) {
             throw new LLMError({
                 message: "LLM provider API key is missing",
@@ -40,7 +49,7 @@ export class OpenAIProvider extends BaseLLMProvider {
 
         super(config);
 
-        this.client = new OpenAI({
+        this.client = client ?? new OpenAI({
             apiKey: config.apiKey,
             baseURL: config.baseUrl,
             defaultHeaders: config.defaultHeaders,
@@ -63,6 +72,39 @@ export class OpenAIProvider extends BaseLLMProvider {
         return this.config.supportsJsonMode ?? true;
     }
 
+    private normalizeResponse(response: unknown, request: LLMRequest, requestId: string, responseFormat: NonNullable<LLMResponse["responseFormat"]>): LLMResponse {
+        const rawResponse = response as Record<string, unknown>;
+        const normalizedSource: LLMResponse = {
+            model: request.model,
+            provider: this.config.provider,
+            output_text: typeof rawResponse.output_text === "string" ? rawResponse.output_text : undefined,
+            output: rawResponse.output ?? rawResponse.choices ?? response,
+            raw: response,
+            requestId,
+            responseFormat,
+        };
+
+        const extracted = extractResponseText(normalizedSource);
+        const usage = toUsage((rawResponse.usage as { input_tokens?: number; output_tokens?: number; total_tokens?: number } | undefined) ?? undefined);
+
+        return {
+            model: request.model,
+            provider: this.config.provider,
+            output_text: extracted.text || undefined,
+            output: rawResponse.output ?? rawResponse.choices ?? response,
+            usage,
+            raw: response,
+            requestId: typeof rawResponse.id === "string" ? rawResponse.id : requestId,
+            finishReason: typeof rawResponse.finish_reason === "string"
+                ? rawResponse.finish_reason
+                : typeof rawResponse.status === "string"
+                    ? rawResponse.status
+                    : null,
+            responseFormat: extracted.responseFormat,
+            parseRepaired: extracted.parseRepaired,
+        };
+    }
+
     async generate(request: LLMRequest, options?: LLMGenerateOptions): Promise<LLMResponse> {
         const requestId = options?.requestId ?? (request.metadata?.requestId as string | undefined) ?? `llm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const timeoutMs = this.resolveTimeoutMs(options);
@@ -83,37 +125,67 @@ export class OpenAIProvider extends BaseLLMProvider {
         }
 
         try {
-            const response = await this.client.responses.create(
-                {
-                    model: request.model,
-                    input: request.input as never,
-                    temperature: request.temperature,
-                    top_p: request.topP,
-                    max_output_tokens: request.maxOutputTokens,
-                },
-                { signal } as never
-            );
+            let responseFormat: NonNullable<LLMResponse["responseFormat"]> = "responses";
+            let response: unknown;
 
-            const outputText = typeof response.output_text === "string" ? response.output_text : undefined;
-            const usage = toUsage((response as { usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number } }).usage);
+            try {
+                response = await this.client.responses.create(
+                    {
+                        model: request.model,
+                        input: request.input as never,
+                        temperature: request.temperature,
+                        top_p: request.topP,
+                        max_output_tokens: request.maxOutputTokens,
+                    },
+                    { signal } as never
+                );
+            } catch (error) {
+                const retryableFallback = error instanceof Error && (/404|405|unsupported|not found/i.test(error.message));
+                if (!retryableFallback) {
+                    throw error;
+                }
 
-            const llmResponse: LLMResponse = {
-                model: request.model,
-                provider: this.config.provider,
-                output_text: outputText,
-                output: response.output,
-                usage,
-                raw: response,
-                requestId: typeof response.id === "string" ? response.id : requestId,
-                finishReason: typeof response.status === "string" ? response.status : null,
-            };
+                responseFormat = "chat_completions";
+                response = await this.client.chat.completions.create(
+                    {
+                        model: request.model,
+                        messages: toChatMessages(request.input),
+                        temperature: request.temperature,
+                        top_p: request.topP,
+                        max_tokens: request.maxOutputTokens,
+                    },
+                    { signal } as never
+                );
+            }
+
+            const llmResponse = this.normalizeResponse(response, request, requestId, responseFormat);
+
+            if (!llmResponse.output_text && llmResponse.responseFormat !== "chat_completions") {
+                const chatResponse = await this.client.chat.completions.create(
+                    {
+                        model: request.model,
+                        messages: toChatMessages(request.input),
+                        temperature: request.temperature,
+                        top_p: request.topP,
+                        max_tokens: request.maxOutputTokens,
+                    },
+                    { signal } as never
+                );
+
+                const chatNormalized = this.normalizeResponse(chatResponse, request, requestId, "chat_completions");
+                if (chatNormalized.output_text) {
+                    return chatNormalized;
+                }
+            }
 
             if (this.shouldLogRequests()) {
                 console.info("llm:response", {
                     provider: this.config.provider,
                     model: request.model,
                     requestId: llmResponse.requestId,
+                    responseFormat: llmResponse.responseFormat,
                     hasOutputText: Boolean(llmResponse.output_text),
+                    parseRepaired: llmResponse.parseRepaired ?? false,
                     usage: llmResponse.usage,
                 });
             }
@@ -129,6 +201,7 @@ export class OpenAIProvider extends BaseLLMProvider {
                     requestId,
                     timeoutMs,
                     code: normalized.code,
+                    category: normalized.category,
                     retryable: normalized.retryable,
                     message: normalized.message,
                 });
@@ -175,7 +248,7 @@ export class OpenAIProvider extends BaseLLMProvider {
             name?: string;
         };
 
-        if (asError?.name === "AbortError") {
+        if (asError?.name === "AbortError" || /abort|timed out/i.test(asError?.message ?? "")) {
             return createTimeoutError(this.config.provider, timeoutMs, requestId);
         }
 
