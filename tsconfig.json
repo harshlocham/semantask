@@ -37,6 +37,9 @@
       "@chat/services/*": [
         "./packages/services/*"
       ],
+      "@chat/db/models/*": [
+        "./packages/db/models/*.ts"
+      ],
       "@/lib/repositories/*": [
         "./packages/services/repositories/*"
       ],
