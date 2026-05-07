@@ -103,12 +103,12 @@ test("openai provider normalizes responses api payloads", async () => {
     assert.equal(response.usage?.totalTokens, 5);
 });
 
-test("openai provider falls back to chat completions when responses api is unsupported", async () => {
+test("openai provider falls back to chat completions on transient responses api failures", async () => {
     const provider = createProvider({}, createClient({
         responses: {
             create: async () => {
-                const error = new Error("Request failed with status code 404");
-                (error as Error & { status?: number }).status = 404;
+                const error = new Error("Upstream connection reset");
+                error.name = "APIConnectionError";
                 throw error;
             },
         },
@@ -127,6 +127,30 @@ test("openai provider falls back to chat completions when responses api is unsup
 
     assert.equal(response.output_text, "{\"ok\":true}");
     assert.equal(response.responseFormat, "chat_completions");
+});
+
+test("openai provider does not fall back on auth failures", async () => {
+    const provider = createProvider({}, createClient({
+        responses: {
+            create: async () => {
+                const error = new Error("Invalid API key");
+                (error as Error & { status?: number }).status = 401;
+                throw error;
+            },
+        },
+        chat: {
+            completions: {
+                create: async () => {
+                    throw new Error("chat should not be called on auth failures");
+                },
+            },
+        },
+    }));
+
+    await assert.rejects(
+        () => provider.generate({ model: "gpt-4o-mini", input: "ping" }),
+        (error: unknown) => error instanceof LLMError && error.category === "auth"
+    );
 });
 
 test("openai provider surfaces timeout errors as retryable llm errors", async () => {

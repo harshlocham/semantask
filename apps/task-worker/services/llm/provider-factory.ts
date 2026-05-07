@@ -23,7 +23,7 @@ function buildConfig(): LLMProviderConfig {
     const provider = (process.env.LLM_PROVIDER || process.env.TASK_LLM_PROVIDER || "openai").toLowerCase();
     const apiKey = process.env.OPENAI_API_KEY || process.env.HUGGINGFACE_API_KEY || process.env.AMD_API_KEY || process.env.LLM_API_KEY || "";
     const baseUrl = process.env.OPENAI_BASE_URL || process.env.HUGGINGFACE_BASE_URL || process.env.AMD_BASE_URL || process.env.LLM_BASE_URL;
-    const timeoutMs = parseTimeoutMs(process.env.LLM_REQUEST_TIMEOUT_MS, 30_000);
+    const timeoutMs = parseTimeoutMs(process.env.TASK_AGENT_LLM_TIMEOUT_MS || process.env.LLM_REQUEST_TIMEOUT_MS, 30_000);
     const logRequests = process.env.LLM_LOG_REQUESTS !== "false";
     const model = process.env.TASK_AGENT_MODEL || process.env.LLM_MODEL || process.env.HUGGINGFACE_MODEL || "gpt-4o-mini";
     const providerName = provider === "openai-compatible"

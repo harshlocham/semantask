@@ -42,7 +42,7 @@ async function llmReflection(input: {
             input: [
                 {
                     role: "system",
-                    content: "Return strict JSON with whatWorked (string[]), whatFailed (string[]), improvements (string[]), confidence (0-1 number).",
+                    content: "Return one JSON object only with whatWorked (string[]), whatFailed (string[]), improvements (string[]), confidence (0-1 number).",
                 },
                 {
                     role: "user",

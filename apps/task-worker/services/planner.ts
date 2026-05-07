@@ -241,11 +241,10 @@ async function requestPlanFromLlm(
     options?: CreateOrRefreshTaskPlanOptions
 ): Promise<{ goal: string; successDefinition: string; steps: ITaskStep[] } | null> {
     const prompt = [
-        "Return strict JSON object with keys: goal, successDefinition, steps.",
+        "Return one JSON object only with keys: goal, successDefinition, steps.",
         "Each step must include: stepId, title, description, kind, dependencies, fallback, successCriteria, toolCandidates, input, output, maxAttempts.",
-        "Use input/output to preserve template-ready execution context between steps.",
-        "Use toolCandidates only from availableTools.",
-        "Plan must be dependency-aware and executable incrementally.",
+        "Keep steps minimal, dependency-aware, and executable one by one.",
+        "Only use tools from availableTools.",
     ].join(" ");
 
     const taskPayload = JSON.stringify({

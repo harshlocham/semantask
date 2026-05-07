@@ -34,6 +34,12 @@ function toChatMessages(input: LLMRequest["input"]): Array<{ role: "assistant" |
     return input;
 }
 
+function shouldFallbackToChat(error: LLMError): boolean {
+    if (error.category === "timeout") return true;
+    if (error.category === "retryable" && typeof error.status === "number" && error.status >= 500) return true;
+    return error.code === "APIConnectionError" || error.code === "ECONNRESET" || error.code === "ETIMEDOUT";
+}
+
 export class OpenAIProvider extends BaseLLMProvider {
     private readonly client: Pick<OpenAI, "responses" | "chat" | "models">;
 
@@ -148,12 +154,23 @@ export class OpenAIProvider extends BaseLLMProvider {
                         { signal } as never
                     );
                 } catch (error) {
-                    const retryableFallback = error instanceof Error && (/404|405|unsupported|not found/i.test(error.message));
-                    if (!retryableFallback) {
-                        throw error;
+                    const normalized = this.normalizeError(error, requestId, timeoutMs);
+                    if (!shouldFallbackToChat(normalized)) {
+                        throw normalized;
                     }
 
                     responseFormat = "chat_completions";
+                    if (this.shouldLogRequests()) {
+                        console.info("llm:downgrade", {
+                            provider: this.config.provider,
+                            model: request.model,
+                            requestId,
+                            from: "responses",
+                            to: "chat_completions",
+                            reason: normalized.category,
+                            status: normalized.status ?? null,
+                        });
+                    }
                     this.recordMetric({ provider: this.config.provider, event: "fallback" });
                     response = await this.client.chat.completions.create(
                         {
@@ -168,6 +185,17 @@ export class OpenAIProvider extends BaseLLMProvider {
                 }
             } else {
                 responseFormat = "chat_completions";
+                if (this.shouldLogRequests()) {
+                    console.info("llm:downgrade", {
+                        provider: this.config.provider,
+                        model: request.model,
+                        requestId,
+                        from: "responses",
+                        to: "chat_completions",
+                        reason: "configured_unsupported",
+                        status: null,
+                    });
+                }
                 this.recordMetric({ provider: this.config.provider, event: "fallback" });
                 response = await this.client.chat.completions.create(
                     {
@@ -182,25 +210,6 @@ export class OpenAIProvider extends BaseLLMProvider {
             }
 
             const llmResponse = this.normalizeResponse(response, request, requestId, responseFormat);
-
-            if (!llmResponse.output_text && llmResponse.responseFormat !== "chat_completions") {
-                const chatResponse = await this.client.chat.completions.create(
-                    {
-                        model: request.model,
-                        messages: toChatMessages(request.input),
-                        temperature: request.temperature,
-                        top_p: request.topP,
-                        max_tokens: request.maxOutputTokens,
-                    },
-                    { signal } as never
-                );
-
-                const chatNormalized = this.normalizeResponse(chatResponse, request, requestId, "chat_completions");
-                if (chatNormalized.output_text) {
-                    this.recordMetric({ provider: this.config.provider, event: "fallback" });
-                    return chatNormalized;
-                }
-            }
 
             if (this.shouldLogRequests()) {
                 console.info("llm:response", {
@@ -287,11 +296,11 @@ export class OpenAIProvider extends BaseLLMProvider {
         }
 
         const status = typeof asError?.status === "number" ? asError.status : undefined;
-        const retryable = status === 429 || (typeof status === "number" && status >= 500) || asError?.name === "APIConnectionError";
+        const retryable = status === 429 || (typeof status === "number" && status >= 500) || asError?.name === "APIConnectionError" || asError?.name === "AbortError";
 
         return new LLMError({
             message: asError?.message ?? "LLM request failed",
-            code: asError?.code ?? (typeof status === "number" ? `HTTP_${status}` : "LLM_REQUEST_FAILED"),
+            code: asError?.code ?? asError?.name ?? (typeof status === "number" ? `HTTP_${status}` : "LLM_REQUEST_FAILED"),
             provider: this.config.provider,
             status,
             retryable,
@@ -304,6 +313,8 @@ export class OpenAIProvider extends BaseLLMProvider {
                             ? "unsupported_capability"
                             : /json|parse|malformed/i.test(asError?.message ?? "")
                                 ? "malformed_response"
+                                    : /auth|api key|invalid prompt|bad request|unprocessable|validation/i.test(asError?.message ?? "")
+                                    ? "non_retryable"
                                 : retryable
                                     ? "retryable"
                                     : "non_retryable",
