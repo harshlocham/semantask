@@ -58,13 +58,13 @@ function getRecipientReferences(params: Record<string, unknown>): string[] {
         toStringArray(params.recipients),
         toStringArray(params.email),
     ];
-    
+
     for (const candidate of candidates) {
         if (candidate.length > 0) {
             return candidate;
         }
     }
-    
+
     return [];
 }
 
