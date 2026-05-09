@@ -1,5 +1,11 @@
 # chat-app
 
+## 2.0.6
+
+### Patch Changes
+
+- 8e3ed9a: Introduce LLM provider abstraction: pluggable providers, shared interfaces, and cleaner configuration.
+
 ## 2.0.5
 
 ### Patch Changes
