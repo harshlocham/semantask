@@ -33,6 +33,9 @@
             ]
         },
         "dev": {
+            "dependsOn": [
+                "^build"
+            ],
             "cache": false
         },
         "start": {

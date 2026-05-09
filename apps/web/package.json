@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "dev": "next dev",
-        "build": "npm run build --workspace=@chat/types && npm run build --workspace=@chat/db && npm run build --workspace=@chat/services && NEXT_IGNORE_INCORRECT_LOCKFILE=1 next build",
+        "build": "npm run build --workspace=@chat/types && npm run build --workspace=@chat/db && npm run build --workspace=@chat/services && cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 next build",
         "start": "next start",
         "lint": "next lint",
         "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -12,6 +12,7 @@
         "test:watch": "jest --config ./jest.config.cjs --watch"
     },
     "devDependencies": {
+        "cross-env": "^7.0.3",
         "@types/jest": "^30.0.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
