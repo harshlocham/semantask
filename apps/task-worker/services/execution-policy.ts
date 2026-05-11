@@ -77,7 +77,12 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
 
         const allowedDomains = getAllowedEmailDomains();
         if (allowedDomains.length > 0) {
-            const externalRecipients = recipients.filter((recipient) => !allowedDomains.includes(emailDomain(recipient)));
+            const externalRecipients = recipients.filter((recipient) => {
+                if (!recipient.includes("@")) {
+                    return false;
+                }
+                return !allowedDomains.includes(emailDomain(recipient));
+            });
             if (externalRecipients.length > 0) {
                 reasons.push("One or more recipients are outside allowed domains.");
             }

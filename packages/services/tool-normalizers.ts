@@ -165,20 +165,19 @@ export function normalizeEmailParams(params: Record<string, unknown>): Normalize
         throw new Error("send_email requires at least one recipient in 'to'.");
     }
 
-    for (const recipient of to) {
-        if (!isValidEmail(recipient)) {
-            throw new Error(`send_email contains invalid recipient email: ${recipient}`);
-        }
-    }
+    const toNormalized = to.map((recipient) =>
+        isValidEmail(recipient) ? recipient.trim().toLowerCase() : recipient.trim()
+    );
 
     const parsedBody = coerceBodyValue(params);
     const explicitSubject = coerceString(params.subject);
     const subject = sanitizeDraftPlaceholders(explicitSubject ?? inferDefaultSubject(parsedBody ?? "Automated Email Update"));
     const body = sanitizeDraftPlaceholders(parsedBody ?? inferDefaultBody(subject));
 
-    // Whitelist only schema-safe send_email fields.
+    // Whitelist only schema-safe send_email fields. Recipients may be names or
+    // aliases until resolveToolParameters maps them to emails.
     return {
-        to,
+        to: toNormalized,
         subject,
         body,
     };

@@ -1,5 +1,6 @@
 import * as dbModule from "@chat/db";
 import ContactModel from "@chat/db/models/Contact";
+import { User } from "@chat/db/models/User";
 
 const connectToDatabase =
     (dbModule as unknown as { connectToDatabase?: () => Promise<unknown> }).connectToDatabase
@@ -31,6 +32,65 @@ export type ContactResolutionResult = {
     }>;
     error?: string;
 };
+
+function escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Resolve a registered app user by exact username (case-insensitive) when no Contact matches.
+ */
+async function tryResolveRegisteredUserByUsername(reference: string): Promise<ContactResolutionResult | null> {
+    const q = reference.trim();
+    if (q.length === 0 || q.length > 128) {
+        return null;
+    }
+
+    await connectToDatabase();
+
+    const users = await User.find({
+        username: new RegExp(`^${escapeRegex(q)}$`, "i"),
+        isDeleted: { $ne: true },
+        status: "active",
+    })
+        .limit(5)
+        .select({ username: 1, email: 1 })
+        .lean();
+
+    const matches: ContactMatch[] = [];
+    for (const row of users) {
+        if (typeof row.username !== "string" || typeof row.email !== "string") {
+            continue;
+        }
+        const name = row.username.trim();
+        const email = row.email.trim().toLowerCase();
+        if (!name || !email) {
+            continue;
+        }
+        matches.push({ name, email });
+    }
+
+    if (matches.length === 0) {
+        return null;
+    }
+
+    if (matches.length === 1) {
+        return {
+            success: true,
+            resolved: {
+                name: matches[0].name,
+                email: matches[0].email,
+                confidence: 0.88,
+            },
+        };
+    }
+
+    return {
+        success: false,
+        ambiguous: matches,
+        error: "Ambiguous user reference.",
+    };
+}
 
 /** RFC 5321 / common practice upper bound; avoids ReDoS on huge inputs. */
 const MAX_EMAIL_LENGTH = 254;
@@ -322,6 +382,11 @@ export async function resolveContactReference(userId: string, reference: string)
                 .filter((item: ContactMatch | null): item is ContactMatch => Boolean(item)),
             error: "Ambiguous contact alias.",
         };
+    }
+
+    const userMatch = await tryResolveRegisteredUserByUsername(trimmedReference);
+    if (userMatch) {
+        return userMatch;
     }
 
     return {

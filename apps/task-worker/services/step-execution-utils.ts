@@ -173,8 +173,8 @@ export function validateToolParameters(tool: ToolLike, params: Record<string, un
         }
 
         for (const recipient of recipients) {
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
-                return `Invalid email address: ${recipient}`;
+            if (typeof recipient !== "string" || recipient.trim().length === 0) {
+                return "send_email requires each recipient to be a non-empty string (email or resolvable name).";
             }
         }
     }
