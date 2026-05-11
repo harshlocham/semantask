@@ -1,6 +1,6 @@
 import type { TaskCheckpoint, TaskExecutionActionType, TaskExecutionHistory, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload, TaskValidationLog } from "@chat/types";
 import { RetryManager } from "./retry-manager.js";
-import * as taskRepo from "@chat/services/repositories/task.repo";
+import { getLatestExecutionTaskAction as getLatestExecutionTaskActionFromRepo } from "../../../packages/services/dist/services/repositories/task.repo.js";
 import * as taskModule from "@chat/db/models/Task";
 import TaskPlanModel from "@chat/db/models/TaskPlan";
 import ToolRegistry from "./tools/tool-registry.js";
@@ -17,6 +17,8 @@ import { rankTools, type ToolRankingInput } from "./tool-ranking.js";
 import { collectPreviousStepOutputs, llmDecisionSchema, normalizeParams, resolveStepTemplates, type PreviousStepOutputs, validateToolParameters } from "./step-execution-utils.js";
 import { createDefaultLLMProvider } from "./llm/index.js";
 import { parseJsonText } from "./llm/response-parser.js";
+import { resolveToolParameters, type ResolveToolParametersResult } from "./resolve-tool-params.js";
+import type { PendingResolution } from "./entity-resolution.service.js";
 
 const INTERNAL_SECRET_HEADER = "x-internal-secret";
 
@@ -39,6 +41,7 @@ type ExecutionActionRecord = {
 type TaskDocumentLike = {
     _id: { toString(): string };
     conversationId: { toString(): string };
+    createdBy?: { toString(): string } | string | null;
     parentTaskId?: { toString(): string } | null;
     lifecycleState?: "planning" | "ready" | "executing" | "waiting_for_approval" | "blocked" | "retry_scheduled" | "paused" | "completed" | "failed";
     sourceMessageIds?: Array<{ toString(): string }>;
@@ -69,6 +72,12 @@ type ActionExecutionResult = {
     adapterSuccess: boolean;
     evidence: unknown;
     error?: string;
+};
+
+type ExecutionOptions = {
+    userId?: string | null;
+    clarificationReply?: string | null;
+    pendingResolution?: PendingResolution | null;
 };
 
 type VerificationOutcome = {
@@ -108,6 +117,8 @@ type IterationContextEntry = {
         error?: string;
     };
 };
+
+type RequestedToolName = "send_email" | "create_github_issue" | "schedule_meeting";
 
 type LoopContext = {
     task: TaskDocumentLike;
@@ -344,7 +355,7 @@ export class AgentRunner {
         this.toolRegistry = options?.toolRegistry ?? this.createDefaultToolRegistry();
         this.taskSuccessRegistry = options?.taskSuccessRegistry ?? createDefaultTaskSuccessRegistry();
         this.internalBaseUrl = options?.internalBaseUrl ?? process.env.SOCKET_SERVER_URL ?? process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:3001";
-        this.getLatestExecutionTaskAction = options?.getLatestExecutionTaskAction ?? resolveGetLatestExecutionTaskAction(taskRepo);
+        this.getLatestExecutionTaskAction = options?.getLatestExecutionTaskAction ?? getLatestExecutionTaskActionFromRepo;
         this.persistentLoopEnabled = options?.persistentLoopEnabled ?? (process.env.TASK_AGENT_PERSISTENT_LOOP_ENABLED === "true");
         this.workerId = options?.workerId ?? process.env.TASK_WORKER_ID ?? `${process.pid}-agent-runner`;
         this.retrieveMemoryFn = options?.retrieveMemoryFn ?? retrieveMemory;
@@ -426,7 +437,7 @@ export class AgentRunner {
         };
     }
 
-    private async pauseForClarification(task: TaskDocumentLike, clarificationQuestion: string, stepId?: string) {
+    private async pauseForClarification(task: TaskDocumentLike, clarificationQuestion: string, stepId?: string, clarificationContext?: unknown) {
         await this.updateTask(task, {
             status: "waiting_for_input",
             lifecycleState: "paused",
@@ -439,10 +450,79 @@ export class AgentRunner {
                     needsClarification: true,
                     clarificationQuestion,
                     stepId: stepId ?? null,
+                    pendingResolution: clarificationContext ?? null,
                 },
                 error: clarificationQuestion,
             },
         });
+    }
+
+    private getTaskUserId(task: TaskDocumentLike): string | null {
+        if (!task.createdBy) {
+            return null;
+        }
+
+        if (typeof task.createdBy === "string") {
+            return task.createdBy;
+        }
+
+        if (typeof task.createdBy.toString === "function") {
+            return task.createdBy.toString();
+        }
+
+        return null;
+    }
+
+    private getPendingResolution(task: TaskDocumentLike): PendingResolution | null {
+        const evidence = task.result?.evidence;
+        if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+            return null;
+        }
+
+        const pending = (evidence as Record<string, unknown>).pendingResolution;
+        if (!pending || typeof pending !== "object" || Array.isArray(pending)) {
+            return null;
+        }
+
+        const candidate = pending as Partial<PendingResolution>;
+        if (candidate.toolName !== "send_email") {
+            return null;
+        }
+
+        if (!candidate.parametersSnapshot || typeof candidate.parametersSnapshot !== "object" || Array.isArray(candidate.parametersSnapshot)) {
+            return null;
+        }
+
+        if (!Array.isArray(candidate.ambiguities) || candidate.ambiguities.length === 0) {
+            return null;
+        }
+
+        return candidate as PendingResolution;
+    }
+
+    private getClarificationPayload(result: ActionExecutionResult): { question: string; pendingResolution: PendingResolution | null } | null {
+        if (!result.evidence || typeof result.evidence !== "object" || Array.isArray(result.evidence)) {
+            return null;
+        }
+
+        const evidence = result.evidence as Record<string, unknown>;
+        const needsClarification = evidence.needsClarification === true;
+        if (!needsClarification) {
+            return null;
+        }
+
+        const question = typeof evidence.clarificationQuestion === "string"
+            ? evidence.clarificationQuestion
+            : "Please clarify the recipient.";
+
+        const pendingResolution = evidence.pendingResolution && typeof evidence.pendingResolution === "object" && !Array.isArray(evidence.pendingResolution)
+            ? evidence.pendingResolution as PendingResolution
+            : null;
+
+        return {
+            question,
+            pendingResolution,
+        };
     }
 
     async resumeTask(taskId: string, userReply: string): Promise<RunTaskOutcome> {
@@ -470,7 +550,10 @@ export class AgentRunner {
         const model = process.env.TASK_AGENT_MODEL || "gpt-4o-mini";
         const confidenceThreshold = this.getConfidenceThreshold();
 
-        const systemPrompt = "Return one JSON object only with keys: tool, confidence, parameters, reasoning, noAction, needsClarification, clarificationQuestion. No extra text.";
+        const systemPrompt = "Return one JSON object only with keys: tool, confidence, parameters, reasoning, noAction, needsClarification, clarificationQuestion. No extra text. Execute at most one tool per iteration. For requests with multiple outcomes (for example email + github issue + meeting), keep selecting the next required tool in later iterations. Do not repeat a tool that already succeeded unless the user explicitly asks for repetition. Set noAction=true only when all requested outcomes are complete. For create_github_issue, always provide a detailed title and body.";
+
+        const requestedOutcomes = Array.from(this.extractRequestedTools(task));
+        const completedOutcomes = Array.from(this.collectCompletedTools(iterationContext));
 
         const userPayload = {
             task: {
@@ -483,6 +566,8 @@ export class AgentRunner {
             },
             executionHistory,
             availableTools,
+            requestedOutcomes,
+            completedOutcomes,
             iterationContext,
         };
 
@@ -616,6 +701,41 @@ Please review this task and take appropriate action.
 This is an automated notification generated by the Task Execution System.
 Reply to confirm receipt or contact support if you have questions.
 `.trim();
+    }
+
+    private extractRequestedTools(task: TaskDocumentLike): Set<RequestedToolName> {
+        const text = `${task.title} ${task.description ?? ""}`.toLowerCase();
+        const requested = new Set<RequestedToolName>();
+
+        if (/\b(email|mail|notify|message)\b/.test(text)) {
+            requested.add("send_email");
+        }
+
+        if (/\b(github|issue|ticket|bug)\b/.test(text)) {
+            requested.add("create_github_issue");
+        }
+
+        if (/\b(meeting|schedule|calendar|invite|sync)\b/.test(text)) {
+            requested.add("schedule_meeting");
+        }
+
+        return requested;
+    }
+
+    private collectCompletedTools(iterationContext: IterationContextEntry[]): Set<string> {
+        const completed = new Set<string>();
+
+        for (const entry of iterationContext) {
+            if (!entry.result?.adapterSuccess) {
+                continue;
+            }
+
+            if (typeof entry.decision.toolName === "string" && entry.decision.toolName.length > 0) {
+                completed.add(entry.decision.toolName);
+            }
+        }
+
+        return completed;
     }
 
     private getDefaultToolInput(toolName: string, task: TaskDocumentLike): Record<string, unknown> {
@@ -990,17 +1110,78 @@ Reply to confirm receipt or contact support if you have questions.
 
                     const selectedToolName = decision.toolName ?? "none";
 
+                    const requestedTools = this.extractRequestedTools(task);
+                    const completedTools = this.collectCompletedTools(iterationContext);
+                    const missingTools = Array.from(requestedTools).filter((toolName) => !completedTools.has(toolName));
+
+                    if (requestedTools.size > 0 && missingTools.length === 0) {
+                        await this.updateTask(task, {
+                            status: "completed",
+                            progress: 100,
+                            result: {
+                                success: true,
+                                confidence: context.verification?.confidence ?? 1,
+                                evidence: {
+                                    decision,
+                                    execution: context.observed?.evidence ?? null,
+                                    iterationContext,
+                                },
+                            },
+                        });
+
+                        await this.appendCheckpoint(task, {
+                            step: "done",
+                            status: "completed",
+                            progress: 100,
+                        });
+
+                        console.log("agent-runner lifecycle:completed", {
+                            taskId,
+                            confidence: context.verification?.confidence ?? 1,
+                        });
+
+                        return {
+                            completed: true,
+                            retryCount: context.retryCount,
+                            maxRetries: context.maxRetries,
+                            result: context.observed,
+                            verification: context.verification,
+                        };
+                    }
+
+                    let effectiveToolName = selectedToolName;
+                    let effectiveToolInput = decision.toolInput;
+
+                    if (typeof selectedToolName === "string" && completedTools.has(selectedToolName) && missingTools.length > 0) {
+                        effectiveToolName = missingTools[0];
+                        effectiveToolInput = {};
+                    }
+
+                    const selectedTool = this.toolRegistry.get(effectiveToolName);
+                    const mergedInput = {
+                        ...this.getDefaultToolInput(effectiveToolName, task),
+                        ...(effectiveToolInput ?? {}),
+                    };
+                    const normalizedInput = normalizeParams(effectiveToolName, mergedInput);
+                    const validationError = selectedTool
+                        ? validateToolParameters(selectedTool, normalizedInput)
+                        : null;
+
+                    if (validationError) {
+                        throw new Error(validationError);
+                    }
+
                     context.attemptPayload = {
                         ...context.attemptPayload,
-                        toolName: selectedToolName,
-                        parameters: decision.toolInput,
+                        toolName: effectiveToolName,
+                        parameters: normalizedInput,
                     };
                     context.action = context.attemptPayload;
 
                     if (decision.reasoning) {
                         console.log("agent-runner step:decide", {
                             taskId,
-                            toolName: selectedToolName,
+                            toolName: effectiveToolName,
                             reasoning: decision.reasoning,
                         });
                     }
@@ -1038,7 +1219,23 @@ Reply to confirm receipt or contact support if you have questions.
                         stepId: context.action.toolName,
                         attempt: context.retryCount + 1,
                         idempotencyKey: this.buildIdempotencyKey(taskId, context.action.toolName, context.retryCount + 1),
+                    }, {
+                        userId: this.getTaskUserId(task),
+                        clarificationReply: typeof task.pausedReason === "string" ? task.pausedReason : null,
+                        pendingResolution: this.getPendingResolution(task),
                     });
+
+                    const clarification = this.getClarificationPayload(executed);
+                    if (clarification) {
+                        await this.pauseForClarification(task, clarification.question, context.action.toolName, clarification.pendingResolution);
+                        return {
+                            completed: false,
+                            retryCount: context.retryCount,
+                            maxRetries: context.maxRetries,
+                            result: executed,
+                            verification: null,
+                        };
+                    }
 
                     await this.appendCheckpoint(task, {
                         step: "execute",
@@ -1143,31 +1340,27 @@ Reply to confirm receipt or contact support if you have questions.
 
                     if (context.verification.success) {
                         await this.updateTask(task, {
-                            status: "completed",
+                            status: "executing",
                             retryCount: context.retryCount,
                             maxRetries: context.maxRetries,
-                            progress: 100,
+                            progress: Math.min(95, 35 + (iteration * 10)),
                             result: {
                                 success: true,
                                 confidence: context.verification.confidence,
                                 evidence: {
-                                    execution: context.observed.evidence,
+                                    lastExecution: context.observed.evidence,
                                     validationLog: context.verification.validationLog,
+                                    iterationContext,
                                 },
                             },
                         });
 
-                        await this.appendCheckpoint(task, {
-                            step: "done",
-                            status: "completed",
-                            progress: 100,
-                        });
                         await this.emitExecutionUpdate(task, {
-                            state: "succeeded",
-                            summary: context.observed.summary,
-                            phase: "finalize",
-                            step: "task_completed",
-                            progress: 100,
+                            state: "running",
+                            summary: "Step succeeded. Evaluating whether more actions are needed.",
+                            phase: "reason",
+                            step: "continue_or_complete",
+                            progress: Math.min(95, 35 + (iteration * 10)),
                             details: {
                                 toolName: context.attemptPayload.toolName,
                                 toolInput: context.attemptPayload.parameters,
@@ -1179,17 +1372,14 @@ Reply to confirm receipt or contact support if you have questions.
                             },
                         });
 
-                        console.log("agent-runner lifecycle:completed", {
+                        console.log("agent-runner lifecycle:step-completed", {
                             taskId,
+                            iteration,
+                            toolName: context.attemptPayload.toolName,
                             confidence: context.verification.confidence,
                         });
-                        return {
-                            completed: true,
-                            retryCount: context.retryCount,
-                            maxRetries: context.maxRetries,
-                            result: context.observed,
-                            verification: context.verification,
-                        };
+
+                        continue;
                     }
 
                     context.retryCount += 1;
@@ -1872,7 +2062,35 @@ Reply to confirm receipt or contact support if you have questions.
                         lastError: null,
                     });
 
-                    let executed = await this.execute(executionPayload);
+                    let executed = await this.execute(executionPayload, {
+                        userId: this.getTaskUserId(latestTask),
+                        clarificationReply,
+                        pendingResolution: this.getPendingResolution(latestTask),
+                    });
+
+                    let clarification = this.getClarificationPayload(executed);
+                    if (clarification) {
+                        await this.updatePlanStepState(taskId, step.stepId, {
+                            state: "blocked",
+                            lastError: clarification.question,
+                            output: {
+                                summary: "Clarification required",
+                                data: {
+                                    clarificationQuestion: clarification.question,
+                                    pendingResolution: clarification.pendingResolution,
+                                },
+                            },
+                        });
+
+                        await this.pauseForClarification(latestTask, clarification.question, step.stepId, clarification.pendingResolution);
+                        return {
+                            completed: false,
+                            retryCount: typeof latestTask.retryCount === "number" ? latestTask.retryCount : 0,
+                            maxRetries: typeof latestTask.maxRetries === "number" ? latestTask.maxRetries : 2,
+                            result: executed,
+                            verification: null,
+                        };
+                    }
 
                     if ((!executed.adapterSuccess || executed.error) && (step.attempts ?? 0) < (step.maxAttempts ?? 3)) {
                         try {
@@ -1939,7 +2157,35 @@ Reply to confirm receipt or contact support if you have questions.
                                             lastError: null,
                                         });
 
-                                        executed = await this.execute(executionPayload);
+                                        executed = await this.execute(executionPayload, {
+                                            userId: this.getTaskUserId(latestTask),
+                                            clarificationReply,
+                                            pendingResolution: this.getPendingResolution(latestTask),
+                                        });
+
+                                        clarification = this.getClarificationPayload(executed);
+                                        if (clarification) {
+                                            await this.updatePlanStepState(taskId, step.stepId, {
+                                                state: "blocked",
+                                                lastError: clarification.question,
+                                                output: {
+                                                    summary: "Clarification required",
+                                                    data: {
+                                                        clarificationQuestion: clarification.question,
+                                                        pendingResolution: clarification.pendingResolution,
+                                                    },
+                                                },
+                                            });
+
+                                            await this.pauseForClarification(latestTask, clarification.question, step.stepId, clarification.pendingResolution);
+                                            return {
+                                                completed: false,
+                                                retryCount: typeof latestTask.retryCount === "number" ? latestTask.retryCount : 0,
+                                                maxRetries: typeof latestTask.maxRetries === "number" ? latestTask.maxRetries : 2,
+                                                result: executed,
+                                                verification: null,
+                                            };
+                                        }
                                     }
                                 }
                             }
@@ -2145,7 +2391,7 @@ Reply to confirm receipt or contact support if you have questions.
         return result;
     }
 
-    private async execute(payload: ExecutionActionRecord): Promise<ActionExecutionResult> {
+    private async execute(payload: ExecutionActionRecord, options?: ExecutionOptions): Promise<ActionExecutionResult> {
         const tool = this.toolRegistry.get(payload.toolName);
         const runId = this.getCurrentRunId();
         const toolTimeoutMs = this.getToolTimeoutMs();
@@ -2170,7 +2416,41 @@ Reply to confirm receipt or contact support if you have questions.
         }
 
         try {
-            const parsedInput = tool.inputSchema.parse(payload.parameters ?? {});
+            const resolution = await resolveToolParameters({
+                toolName: payload.toolName,
+                params: payload.parameters ?? {},
+                userId: options?.userId,
+                clarificationReply: options?.clarificationReply ?? null,
+                pendingResolution: options?.pendingResolution ?? null,
+            });
+
+            if (resolution.status === "clarification_required") {
+                return {
+                    summary: "Execution paused for clarification.",
+                    adapterSuccess: false,
+                    evidence: {
+                        toolName: payload.toolName,
+                        needsClarification: true,
+                        clarificationQuestion: resolution.clarificationQuestion,
+                        pendingResolution: resolution.pendingResolution,
+                    },
+                    error: "clarification_required",
+                };
+            }
+
+            if (resolution.status === "failed") {
+                return {
+                    summary: `Parameter resolution failed for ${payload.toolName}.`,
+                    adapterSuccess: false,
+                    evidence: {
+                        toolName: payload.toolName,
+                        resolutionError: resolution.error,
+                    },
+                    error: resolution.error,
+                };
+            }
+
+            const parsedInput = tool.inputSchema.parse(resolution.params ?? {});
             const startedAt = Date.now();
             const timeoutController = new AbortController();
             const timeoutHandle = setTimeout(() => timeoutController.abort(), toolTimeoutMs);

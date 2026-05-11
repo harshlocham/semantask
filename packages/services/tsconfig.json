@@ -3,6 +3,9 @@
         "baseUrl": ".",
         "ignoreDeprecations": "5.0",
         "paths": {
+            "@chat/db/models/*": [
+                "../db/models/*.ts"
+            ],
             "@/models/*": [
                 "../db/models/*"
             ],
@@ -16,6 +19,12 @@
                 "./repositories/*"
             ],
             "@/lib/validators/*": [
+                "./validators/*"
+            ],
+            "@chat/services/*": [
+                "./*"
+            ],
+            "@chat/services/validators/*": [
                 "./validators/*"
             ],
             "@/server/normalizers/*": [

@@ -74,12 +74,12 @@ class RecordingTool implements Tool {
     }
 }
 
-function createMockTask(): MockTask {
+function createMockTask(overrides?: { title?: string; description?: string }): MockTask {
     const task: MockTask = {
         _id: { toString: () => "task-1" },
         conversationId: { toString: () => "conv-1" },
-        title: "Autonomy test task",
-        description: "Validate autonomous multi-step execution",
+        title: overrides?.title ?? "Autonomy test task",
+        description: overrides?.description ?? "Validate autonomous multi-step execution",
         status: "pending",
         version: 1,
         updatedBy: null,
@@ -203,7 +203,10 @@ test("autonomy: schedules meeting then sends follow-up email via LLM-selected to
         ])
     );
 
-    const task = createMockTask();
+    const task = createMockTask({
+        title: "Schedule team sync and send email summary",
+        description: "Two-step autonomy: meeting then email only.",
+    });
     const runner = new AgentRunner({
         llmRequestFn: createLlmRequestFn(),
         taskModel: {
@@ -277,7 +280,10 @@ test("autonomy: creates GitHub issue then notifies team without predefined plan"
         ])
     );
 
-    const task = createMockTask();
+    const task = createMockTask({
+        title: "Create GitHub issue for bug and email the team",
+        description: "Validate autonomy without a predefined plan.",
+    });
     const runner = new AgentRunner({
         llmRequestFn: createLlmRequestFn(),
         taskModel: {
@@ -359,7 +365,10 @@ test("autonomy: chained tasks adapt after a failed step", async () => {
         ])
     );
 
-    const task = createMockTask();
+    const task = createMockTask({
+        title: "Schedule meeting fallback and email team after sync failure",
+        description: "Chained tools with recovery after a failed step (LLM may try a non-requested tool first).",
+    });
     const runner = new AgentRunner({
         llmRequestFn: createLlmRequestFn(),
         taskModel: {
@@ -369,8 +378,15 @@ test("autonomy: chained tasks adapt after a failed step", async () => {
         taskSuccessRegistry: {
             validate: (toolName: string, _task: unknown, result: { adapterSuccess: boolean }) => ({
                 validator: "autonomy-test",
-                passed: toolName === "send_email" && result.adapterSuccess,
-                checks: [{ name: "goal-achieved", passed: toolName === "send_email" && result.adapterSuccess, details: null }],
+                passed:
+                    (toolName === "send_email" || toolName === "schedule_meeting") && result.adapterSuccess,
+                checks: [
+                    {
+                        name: "goal-achieved",
+                        passed: (toolName === "send_email" || toolName === "schedule_meeting") && result.adapterSuccess,
+                        details: null,
+                    },
+                ],
             }),
         } as any,
         internalBaseUrl: "http://mock-internal",
@@ -427,7 +443,10 @@ test("autonomy: pauses for clarification and resumes with the user's reply", asy
         ])
     );
 
-    const task = createMockTask();
+    const task = createMockTask({
+        title: "Send email to team after clarification",
+        description: "Pause for clarification then complete send_email.",
+    });
     const runner = new AgentRunner({
         llmRequestFn: createLlmRequestFn(),
         taskModel: {

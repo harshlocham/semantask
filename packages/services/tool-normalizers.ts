@@ -94,6 +94,18 @@ function normalizeBodyText(text: string): string {
     return normalizedLines.join("\n").trim();
 }
 
+function sanitizeDraftPlaceholders(text: string): string {
+    return text
+        .replace(/\[\s*your\s+name\s*\]/gi, "Task Agent")
+        .replace(/\[\s*your\s+email\s*\]/gi, "")
+        .replace(/\[\s*please[^\]]*\]/gi, "")
+        .replace(/\[\s*insert[^\]]*\]/gi, "")
+        .replace(/\[\s*to\s+be\s+filled[^\]]*\]/gi, "")
+        .replace(/\[\s*tbd\s*\]/gi, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
 function coerceBodyValue(params: Record<string, unknown>): string | null {
     const bodyKeys = ["body", "content", "message", "text", "notes"];
 
@@ -153,20 +165,19 @@ export function normalizeEmailParams(params: Record<string, unknown>): Normalize
         throw new Error("send_email requires at least one recipient in 'to'.");
     }
 
-    for (const recipient of to) {
-        if (!isValidEmail(recipient)) {
-            throw new Error(`send_email contains invalid recipient email: ${recipient}`);
-        }
-    }
+    const toNormalized = to.map((recipient) =>
+        isValidEmail(recipient) ? recipient.trim().toLowerCase() : recipient.trim()
+    );
 
     const parsedBody = coerceBodyValue(params);
     const explicitSubject = coerceString(params.subject);
-    const subject = explicitSubject ?? inferDefaultSubject(parsedBody ?? "Automated Email Update");
-    const body = parsedBody ?? inferDefaultBody(subject);
+    const subject = sanitizeDraftPlaceholders(explicitSubject ?? inferDefaultSubject(parsedBody ?? "Automated Email Update"));
+    const body = sanitizeDraftPlaceholders(parsedBody ?? inferDefaultBody(subject));
 
-    // Whitelist only schema-safe send_email fields.
+    // Whitelist only schema-safe send_email fields. Recipients may be names or
+    // aliases until resolveToolParameters maps them to emails.
     return {
-        to,
+        to: toNormalized,
         subject,
         body,
     };
