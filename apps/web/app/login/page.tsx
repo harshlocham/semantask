@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import React, { Suspense } from 'react';
+import { useUser } from "@/context/UserContext";
 import { Input } from '@/components/ui/input';
 import { Button } from "@/components/ui/button"
 import ThemeSwitch from "@/components/home/theme-switch";
@@ -48,6 +49,7 @@ function Loginpage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const router = useRouter();
+    const { refreshUser } = useUser();
     const [pendingAction, setPendingAction] = useState<"credentials" | "google" | null>(null);
 
     const isCredentialsLoading = pendingAction === "credentials";
@@ -71,6 +73,11 @@ function Loginpage() {
             if (!res.ok) {
                 const data = await res.json().catch(() => null);
                 throw new Error(data?.error || "Login failed");
+            }
+
+            const me = await refreshUser();
+            if (!me) {
+                throw new Error("Session could not be loaded. Try again.");
             }
 
             toast.success("Welcome back");
