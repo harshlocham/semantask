@@ -1,6 +1,6 @@
 import type { TaskCheckpoint, TaskExecutionActionType, TaskExecutionHistory, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload, TaskValidationLog } from "@chat/types";
 import { RetryManager } from "./retry-manager.js";
-import { getLatestExecutionTaskAction as getLatestExecutionTaskActionFromRepo } from "../../../packages/services/dist/services/repositories/task.repo.js";
+import { getLatestExecutionTaskAction as getLatestExecutionTaskActionFromRepo } from "@chat/services/repositories/task.repo";
 import * as taskModule from "@chat/db/models/Task";
 import TaskPlanModel from "@chat/db/models/TaskPlan";
 import ToolRegistry from "./tools/tool-registry.js";
