@@ -91,7 +91,11 @@ export function registerMessageHandlers(io: IO, socket: Socket, redis: Redis) {
 
         socket.join(conversationRoom(conversationId));
         await setActiveConversation(redis, socket.data.userId, conversationId);
-        socket.emit(SocketEvents.CONVERSATION_JOINED, { conversationId });
+        socket.emit(SocketEvents.CONVERSATION_JOINED, {
+            conversationId,
+            userId: socket.data.userId,
+            at: new Date(),
+        });
     });
 
     socket.on(SocketEvents.CONVERSATION_LEAVE, async (payload: { conversationId: string }) => {
