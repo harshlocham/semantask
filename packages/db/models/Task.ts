@@ -46,6 +46,11 @@ export interface ITask {
     leaseExpiresAt?: Date | null;
     lastHeartbeatAt?: Date | null;
     nextRetryAt?: Date | null;
+    lastRetryReason?: string | null;
+    lastRetryAt?: Date | null;
+    executionRunId?: string | null;
+    executionStartedAt?: Date | null;
+    executionEventSequence?: number;
     blockedReason?: string | null;
     pausedReason?: string | null;
     progress: number;
@@ -143,6 +148,11 @@ const TaskSchema = new Schema<ITask>(
         leaseExpiresAt: { type: Date, default: null, index: true },
         lastHeartbeatAt: { type: Date, default: null, index: true },
         nextRetryAt: { type: Date, default: null, index: true },
+        lastRetryReason: { type: String, trim: true, maxlength: 500, default: null },
+        lastRetryAt: { type: Date, default: null },
+        executionRunId: { type: String, trim: true, maxlength: 80, default: null },
+        executionStartedAt: { type: Date, default: null },
+        executionEventSequence: { type: Number, min: 0, default: 0 },
         blockedReason: { type: String, trim: true, maxlength: 2000, default: null },
         pausedReason: { type: String, trim: true, maxlength: 2000, default: null },
         progress: { type: Number, min: 0, max: 100, default: 0 },
@@ -223,6 +233,9 @@ TaskSchema.index({ parentTaskId: 1, dependencyIds: 1 });
 TaskSchema.index({ status: 1, progress: 1, updatedAt: -1 });
 TaskSchema.index({ lifecycleState: 1, updatedAt: -1 });
 TaskSchema.index({ lifecycleState: 1, leaseExpiresAt: 1 });
+TaskSchema.index({ lifecycleState: 1, nextRetryAt: 1 });
+TaskSchema.index({ leaseOwner: 1, leaseExpiresAt: 1 });
+TaskSchema.index({ executionRunId: 1 }, { sparse: true });
 TaskSchema.index({ sourceMessageIds: 1 });
 TaskSchema.index({ updatedAt: -1 });
 

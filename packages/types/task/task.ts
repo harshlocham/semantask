@@ -122,6 +122,10 @@ export interface TaskRecord {
     leaseExpiresAt?: string | null;
     lastHeartbeatAt?: string | null;
     nextRetryAt?: string | null;
+    lastRetryReason?: string | null;
+    lastRetryAt?: string | null;
+    executionRunId?: string | null;
+    executionStartedAt?: string | null;
     blockedReason?: string | null;
     pausedReason?: string | null;
     progress: number;
