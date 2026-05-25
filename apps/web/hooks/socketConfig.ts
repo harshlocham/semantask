@@ -1,4 +1,11 @@
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const DEFAULT_LOCAL_SOCKET_URL = "http://localhost:3001";
+
+function toLocalSocketUrl(protocol: string | undefined, hostname: string | undefined): string {
+    const resolvedProtocol = protocol === "https:" ? "https:" : "http:";
+    const resolvedHostname = hostname && hostname.trim() ? hostname : "localhost";
+    return `${resolvedProtocol}//${resolvedHostname}:3001`;
+}
 
 /**
  * Browser socket URL resolution.
@@ -7,7 +14,27 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
  */
 export function getClientSocketUrl(): string | undefined {
     const raw = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
-    if (!raw) return undefined;
+    if (!raw) {
+        if (typeof window === "undefined") {
+            return DEFAULT_LOCAL_SOCKET_URL;
+        }
+
+        const current = window.location;
+        const localSocketUrl = toLocalSocketUrl(current.protocol, current.hostname);
+        const currentIsLocal = LOCAL_HOSTS.has(current.hostname);
+        const currentIsProxyPort =
+            current.port === "" || current.port === "80" || current.port === "443";
+
+        if (currentIsLocal && !currentIsProxyPort) {
+            return localSocketUrl;
+        }
+
+        if (!currentIsLocal && !currentIsProxyPort) {
+            return localSocketUrl;
+        }
+
+        return undefined;
+    }
 
     if (typeof window === "undefined") {
         return raw;

@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "target": "ES2017",
     "lib": [
       "dom",
@@ -13,7 +14,7 @@
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
-    "moduleResolution": "bundler",
+    "moduleResolution": "node16",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -32,6 +33,12 @@
       ],
       "@/lib/services/*": [
         "./packages/services/*"
+      ],
+      "@chat/services/*": [
+        "./packages/services/*"
+      ],
+      "@chat/db/models/*": [
+        "./packages/db/models/*.ts"
       ],
       "@/lib/repositories/*": [
         "./packages/services/repositories/*"
@@ -70,5 +77,5 @@
   ],
   "exclude": [
     "node_modules"
-  ],
+  ]
 }

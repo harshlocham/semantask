@@ -1,5 +1,7 @@
 {
     "globalEnv": [
+        "NODE_ENV",
+        "APP_NAME",
         "MONGODB_URI",
         "ACCESS_TOKEN_SECRET",
         "REFRESH_TOKEN_SECRET",
@@ -12,6 +14,8 @@
         "INTERNAL_SECRET",
         "ORIGIN",
         "REDIS_URL",
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN",
         "SOCKET_SERVER_URL",
         "SMTP_*",
         "EMAIL_*",
@@ -23,8 +27,9 @@
                 "^build"
             ],
             "outputs": [
+                "dist/**",
                 ".next/**",
-                "dist/**"
+                "!.next/cache/**"
             ]
         },
         "dev": {
@@ -37,7 +42,23 @@
             ],
             "cache": false
         },
-        "lint": {},
+        "test": {
+            "dependsOn": [
+                "^test"
+            ]
+        },
+        "typecheck": {
+            "dependsOn": [
+                "^build"
+            ],
+            "outputs": []
+        },
+        "lint": {
+            "dependsOn": [
+                "^lint"
+            ],
+            "outputs": []
+        },
         "clean": {
             "cache": false
         }

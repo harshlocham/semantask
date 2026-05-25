@@ -1,45 +1,48 @@
 {
   "name": "chat-app",
-  "version": "0.1.0",
+  "version": "2.0.8",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "packageManager": "npm@10.9.2",
+  "packageManager": "pnpm@10.14.0",
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "start": "turbo run start",
-    "lint": "turbo run lint",
+    "dev": "turbo run dev --filter=./apps/* --filter=./packages/*",
+    "mobile": "pnpm --filter mobile run start:mobile",
+    "task-worker": "pnpm --filter @chat/task-worker dev",
+    "build": "turbo run build --filter=./apps/* --filter=./packages/*",
+    "start": "turbo run start --filter=./apps/* --filter=./packages/*",
+    "lint": "turbo run lint --filter=./apps/* --filter=./packages/*",
+    "test": "turbo run test --filter=./apps/* --filter=./packages/*",
     "clean": "turbo run clean",
+    "clean:artifacts": "find apps packages -type d -name node_modules -prune -o -type d -name dist -prune -exec rm -rf '{}' + && find apps packages -type d -name node_modules -prune -o -type d -name build -prune -exec rm -rf '{}' + && find apps packages -type d -name node_modules -prune -o -type d -name .next -prune -exec rm -rf '{}' + && rm -rf .turbo && find apps packages -type d -name node_modules -prune -o -type f -name '*.tsbuildinfo' -delete",
+    "clean:all": "pnpm run clean:artifacts && find . -type d -name node_modules -prune -exec rm -rf '{}' +",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "echo \"Skipping npm publish for private repository\"",
-    "typecheck": "npx tsc --noEmit && npm run typecheck --workspace @chat/web && npm run typecheck --workspace @chat/socket",
+    "typecheck": "turbo run typecheck --filter=./apps/* --filter=./packages/*",
+    "seed:contacts": "tsx scripts/seed/contacts.ts",
     "ci:verify-artifacts": "bash ./scripts/ci/verify-artifacts.sh",
-    "security:audit": "npm audit --omit=dev --audit-level=high"
+    "security:audit": "pnpm audit --prod --audit-level high"
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
     "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.2",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.3.4",
     "eslint-plugin-import": "^2.32.0",
-    "tailwindcss": "^4.1.11",
-    "tailwindcss-animate": "^1.0.7",
+    "react-is": "^18.0.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "turbo": "^2.8.17",
-    "tw-animate-css": "^1.3.4",
     "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "react": "19.1.0",
+      "react-dom": "19.1.0",
+      "next": "15.5.18"
+    }
   }
 }

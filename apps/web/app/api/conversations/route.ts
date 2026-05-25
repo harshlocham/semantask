@@ -4,6 +4,8 @@ import { User } from "@/models/User";
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import mongoose from "mongoose";
+import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
+import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
 
 
 export async function POST(req: Request) {
@@ -38,7 +40,7 @@ export async function POST(req: Request) {
             });
 
             if (existing) {
-                const populated = await existing.populate("participants", "name email image");
+                const populated = await existing.populate("participants", "username email profilePicture");
                 return NextResponse.json(populated, { status: 200 });
             }
         }
@@ -54,7 +56,22 @@ export async function POST(req: Request) {
             }),
         });
 
-        const populated = await newConversation.populate("participants", "name email image");
+        const populated = await newConversation.populate("participants", "username email profilePicture");
+
+        const participantIds = (newConversation.participants || []).map((participant) => String(participant));
+        const internalResponse = await fetch(`${getInternalSocketServerUrl()}/internal/conversation-created`, {
+            method: "POST",
+            headers: createInternalRequestHeaders(),
+            body: JSON.stringify({
+                conversationId: String(newConversation._id),
+                participantIds,
+            }),
+        });
+
+        if (!internalResponse.ok) {
+            throw new Error("Failed to broadcast conversation creation");
+        }
+
         return NextResponse.json(populated, { status: 201 });
 
     } catch (error) {

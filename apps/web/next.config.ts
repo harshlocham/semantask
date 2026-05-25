@@ -1,35 +1,34 @@
 import type { NextConfig } from "next";
-import { config as loadEnv } from "dotenv";
 import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+import { config as loadDotEnv } from "dotenv";
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const localEnvPath = path.resolve(currentDir, ".env");
-const rootEnvPath = path.resolve(currentDir, "../../.env");
-
-if (existsSync(localEnvPath)) {
-  loadEnv({ path: localEnvPath });
-}
+// Ensure the web app can run from monorepo root env files in Turbo workspaces.
+const rootEnvPath = resolve(process.cwd(), "../../.env");
 if (existsSync(rootEnvPath)) {
-  loadEnv({ path: rootEnvPath });
+  loadDotEnv({ path: rootEnvPath, override: false });
 }
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  //output: 'standalone',
-  transpilePackages: ["@chat/auth"],
+  transpilePackages: ["@chat/auth", "@chat/services", "@chat/db"],
   images: {
-    domains: [
-      "lh3.googleusercontent.com",
-      "ik.imagekit.io"
-    ],
+    domains: ["lh3.googleusercontent.com", "ik.imagekit.io"],
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "ik.imagekit.io", // or your CDN
+        hostname: "ik.imagekit.io",
       },
     ],
+  },
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "@chat/services": resolve(process.cwd(), "../../packages/services"),
+      "@chat/db": resolve(process.cwd(), "../../packages/db"),
+    };
+
+    return config;
   },
 };
 

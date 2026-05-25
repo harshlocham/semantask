@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": [
         "./*"
@@ -14,6 +15,12 @@
       ],
       "@/lib/services/*": [
         "../../packages/services/*"
+      ],
+      "@chat/services/*": [
+        "../../packages/services/*"
+      ],
+      "@chat/db/models/*": [
+        "../../packages/db/models/*"
       ],
       "@/lib/repositories/*": [
         "../../packages/services/repositories/*"

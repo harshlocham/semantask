@@ -1,15 +1,18 @@
 {
   "name": "@chat/auth",
-  "version": "2.0.3",
+  "version": "2.3.2",
   "private": true,
   "type": "module",
   "main": "./index.ts",
   "types": "./index.ts",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run -c vitest.config.ts",
+    "teypecheck": "tsc --noEmit",
     "test:watch": "vitest -c vitest.config.ts"
   },
   "dependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.2"

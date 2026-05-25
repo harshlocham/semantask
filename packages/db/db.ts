@@ -1,7 +1,5 @@
 import mongoose, { Mongoose } from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI as string;
-
 // Extend NodeJS global type
 declare global {
     var mongooseCache: {
@@ -16,9 +14,11 @@ global.mongooseCache = global.mongooseCache || { conn: null, promise: null };
 const cached = global.mongooseCache;
 
 export async function connectToDatabase(): Promise<Mongoose> {
-    if (!MONGODB_URI) {
-    throw new Error("Please define the MONGODB_URI environment variable in your .env file");
-}
+    const mongoUri = process.env.MONGODB_URI as string | undefined;
+
+    if (!mongoUri) {
+        throw new Error("Please define the MONGODB_URI environment variable in your .env file");
+    }
     if (cached.conn) return cached.conn;
 
     if (!cached.promise) {
@@ -28,7 +28,7 @@ export async function connectToDatabase(): Promise<Mongoose> {
             serverSelectionTimeoutMS: 5000,
         };
 
-        cached.promise = mongoose.connect(MONGODB_URI, options);
+        cached.promise = mongoose.connect(mongoUri, options);
     }
 
     try {
@@ -40,18 +40,24 @@ export async function connectToDatabase(): Promise<Mongoose> {
 
     return cached.conn;
 }
-// lib/db.ts (or wherever you keep DB helimport { connect } fropers)
+import { User } from "@chat/db/models/User";
 
-import { User } from "@/models/User";// Path to your user model
+export interface UserFromDatabase {
+    id: string;
+    name: string;
+    email: string;
+    image?: string;
+    role: string;
+}
 
-export async function getUserFromDB(email: string) {
+export async function getUserFromDB(email: string): Promise<UserFromDatabase | undefined> {
     try {
-        await connectToDatabase(); // Ensure DB connection
+        await connectToDatabase();
 
         const user = await User.findOne({ email });
 
         if (!user) {
-            throw new Error('User not found');
+            throw new Error("User not found");
         }
 
         return {
@@ -62,6 +68,6 @@ export async function getUserFromDB(email: string) {
             role: user.role,
         };
     } catch (error) {
-        console.error('Error fetching user from DB:', error);
+        console.error("Error fetching user from DB:", error);
     }
 }

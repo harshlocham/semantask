@@ -1,5 +1,40 @@
 # @chat/auth
 
+## 2.3.2
+
+### Patch Changes
+
+- 6c57198: Fix socket auth and deployment flow for production by normalizing origins, enabling cross-subdomain auth cookies, and binding the socket server to the Render-injected port.
+
+## 2.3.1
+
+### Patch Changes
+
+- 67ff3ac: Publish dedicated chat-socket image with legacy compatibility aliases and add otp stepup-up flow in stepup challenge
+
+## 2.3.0
+
+### Minor Changes
+
+- 2c48736: Add Google OAuth auth-flow reliability fixes in auth and web, including monorepo env loading support, clearer callback failure handling, and improved login fallback behavior
+
+## 2.2.0
+
+### Minor Changes
+
+- e396e5f: Fix realtime message delivery and auth infrastructure
+
+## 2.1.0
+
+### Minor Changes
+
+- 3215a80: Enhanced mobile authentication and chat session management, and standardized monorepo build tooling across shared packages.
+
+  - Added mobile auth support improvements and session flow hardening.
+  - Added explicit build scripts/config for shared packages (auth, db, services, redis, types) to emit dist artifacts consistently.
+  - Improved repository cleanup scripts with safer artifact cleanup and full-reset options.
+  - Updated Turbo build outputs for better Next.js build caching behavior.
+
 ## 2.0.3
 
 ### Patch Changes

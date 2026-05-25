@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
                 status: user.status,
                 profilePicture: user.profilePicture || null,
             },
+            accessToken,
+            refreshToken,
         });
 
         response.headers.append("Set-Cookie", buildAccessTokenCookie(accessToken));

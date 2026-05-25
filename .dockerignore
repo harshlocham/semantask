@@ -1,6 +1,7 @@
 node_modules
 .next
 apps/web/.next
+apps/mobile
 
 apps/socket/dist
 .env

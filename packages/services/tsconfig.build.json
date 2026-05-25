@@ -1,0 +1,17 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmit": false,
+        "rootDir": "..",
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "outDir": "./dist"
+    },
+    "exclude": [
+        "dist",
+        "node_modules",
+        "__tests__",
+        "jest.config.cjs"
+    ]
+}

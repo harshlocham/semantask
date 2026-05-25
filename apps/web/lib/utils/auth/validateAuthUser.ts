@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import mongoose from "mongoose";
 import { authConfig, verifyAccessToken } from "@chat/auth";
 import { connectToDatabase } from "@/lib/Db/db";
@@ -135,17 +135,37 @@ function assertActiveUserState(
 
 function getAccessTokenFromCookieStore(cookieStore: Awaited<ReturnType<typeof cookies>>): string {
     const token = cookieStore.get(authConfig.cookie.accessToken)?.value;
-    if (!token) {
-        throw new UnauthorizedError("Access token is missing", "AUTH_ACCESS_TOKEN_MISSING");
-    }
-    return token;
+    return token || "";
+}
+
+async function getAccessTokenFromAuthorizationHeader(): Promise<string> {
+    const requestHeaders = await headers();
+    const authorization = requestHeaders.get("authorization") || requestHeaders.get("Authorization");
+
+    if (!authorization) return "";
+
+    const [scheme, token] = authorization.split(" ");
+    if (!scheme || !token) return "";
+    if (scheme.toLowerCase() !== "bearer") return "";
+
+    return token.trim();
+}
+
+async function resolveAccessToken(): Promise<string> {
+    const cookieStore = await cookies();
+    const cookieToken = getAccessTokenFromCookieStore(cookieStore);
+    if (cookieToken) return cookieToken;
+
+    const headerToken = await getAccessTokenFromAuthorizationHeader();
+    if (headerToken) return headerToken;
+
+    throw new UnauthorizedError("Access token is missing", "AUTH_ACCESS_TOKEN_MISSING");
 }
 
 export async function validateAuthUser(
     options: ResolveAuthUserOptions = {}
 ): Promise<AuthenticatedUser> {
-    const cookieStore = await cookies();
-    const accessToken = getAccessTokenFromCookieStore(cookieStore);
+    const accessToken = await resolveAccessToken();
 
     let payload: AccessPayload;
     try {

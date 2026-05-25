@@ -1,0 +1,31 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@/models/*": [
+                "../db/models/*"
+            ]
+        },
+        "target": "ES2022",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noEmit": false,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "outDir": "./dist",
+        "types": [
+            "node"
+        ]
+    },
+    "include": [
+        "./**/*.ts"
+    ],
+    "exclude": [
+        "./__tests__/**",
+        "./vitest.config.ts",
+        "./dist/**",
+        "./node_modules/**"
+    ]
+}

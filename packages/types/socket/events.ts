@@ -11,12 +11,14 @@ import type {
     CallRingingPayload,
     CallStatePayload,
     ConversationJoinPayload,
+    ConversationCreatedPayload,
     ConversationJoinedPayload,
     ConversationLeavePayload,
     ConversationLeftPayload,
     ConversationUpdatedPayload,
     DashboardInitPayload,
     DashboardUpdatePayload,
+    MessageSemanticUpdatedPayload,
     MessageDeletePayload,
     MessageDeliveredPayload,
     MessageDeliveredUpdatePayload,
@@ -33,6 +35,10 @@ import type {
     SyncConversationsPayload,
     SyncMessagesPayload,
     SyncStatusPayload,
+    TaskCreatedPayload,
+    TaskExecutionUpdatedPayload,
+    TaskLinkedToMessagePayload,
+    TaskUpdatedPayload,
     TypingPayload,
     UserActivePayload,
     UserIdlePayload,
@@ -55,6 +61,11 @@ export const SocketEvents = {
     MESSAGE_DELETE: "message:delete",
     MESSAGE_UNSEND: "message:unsend",
     MESSAGE_REACTION: "message:reaction",
+    TASK_CREATED: "task:created",
+    TASK_UPDATED: "task:updated",
+    TASK_LINKED_TO_MESSAGE: "task:linked_to_message",
+    TASK_EXECUTION_UPDATED: "task:execution_updated",
+    MESSAGE_SEMANTIC_UPDATED: "message:semantic_updated",
     TYPING_START: "typing:start",
     TYPING_STOP: "typing:stop",
     USER_ONLINE: "user:online",
@@ -77,6 +88,7 @@ export const SocketEvents = {
     CONVERSATION_LEAVE: "conversation:leave",
     CONVERSATION_JOINED: "conversation:joined",
     CONVERSATION_LEFT: "conversation:left",
+    CONVERSATION_CREATED: "conversation:created",
     CONVERSATION_UPDATED: "conversation:updated",
     SYNC_MESSAGES: "sync:messages",
     SYNC_CONVERSATIONS: "sync:conversations",
@@ -108,6 +120,12 @@ export interface ServerToClientEvents {
     [SocketEvents.MESSAGE_UNSEND]: (data: MessageUnsendPayload) => void;
     [SocketEvents.MESSAGE_REACTION]: (data: MessageReactionPayload) => void;
 
+    [SocketEvents.TASK_CREATED]: (data: TaskCreatedPayload) => void;
+    [SocketEvents.TASK_UPDATED]: (data: TaskUpdatedPayload) => void;
+    [SocketEvents.TASK_LINKED_TO_MESSAGE]: (data: TaskLinkedToMessagePayload) => void;
+    [SocketEvents.TASK_EXECUTION_UPDATED]: (data: TaskExecutionUpdatedPayload) => void;
+    [SocketEvents.MESSAGE_SEMANTIC_UPDATED]: (data: MessageSemanticUpdatedPayload) => void;
+
     // Typing
     [SocketEvents.TYPING_START]: (data: TypingPayload) => void;
     [SocketEvents.TYPING_STOP]: (data: TypingPayload) => void;
@@ -134,6 +152,7 @@ export interface ServerToClientEvents {
     // Conversation
     [SocketEvents.CONVERSATION_JOINED]: (data: ConversationJoinedPayload) => void;
     [SocketEvents.CONVERSATION_LEFT]: (data: ConversationLeftPayload) => void;
+    [SocketEvents.CONVERSATION_CREATED]: (data: ConversationCreatedPayload) => void;
     [SocketEvents.CONVERSATION_UPDATED]: (data: ConversationUpdatedPayload) => void;
 
     // Sync

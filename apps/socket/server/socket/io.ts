@@ -2,30 +2,22 @@ import { Server as SocketIOServer } from "socket.io";
 import type { Server as HTTPServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
 import type { RedisAdapterClients } from "./redis.js";
-
-function parseAllowedOrigins(raw: string | undefined): string[] {
-    if (!raw) return [];
-    return raw
-        .split(",")
-        .map((origin) => origin.trim())
-        .filter(Boolean);
-}
+import {
+    isOriginAllowed,
+    parseCommaSeparatedValues,
+} from "./utils/url.js";
 
 export function initIO(
     httpServer: HTTPServer,
     redis: RedisAdapterClients
 ) {
-    const allowedOrigins = parseAllowedOrigins(process.env.ORIGIN);
+    const allowedOrigins = parseCommaSeparatedValues(process.env.ORIGIN);
 
     const io = new SocketIOServer(httpServer, {
         path: "/api/socket",
         cors: {
             origin: (origin, callback) => {
-                if (!origin) {
-                    return callback(null, true);
-                }
-
-                if (allowedOrigins.includes(origin)) {
+                if (isOriginAllowed(origin, allowedOrigins)) {
                     return callback(null, true);
                 }
 
@@ -36,11 +28,8 @@ export function initIO(
         },
         allowRequest: (req, callback) => {
             const originHeader = req.headers.origin;
-            if (!originHeader) {
-                return callback(null, true);
-            }
 
-            return callback(null, allowedOrigins.includes(originHeader));
+            return callback(null, isOriginAllowed(originHeader, allowedOrigins));
         },
         maxHttpBufferSize: 1e6,
         connectTimeout: 10_000,

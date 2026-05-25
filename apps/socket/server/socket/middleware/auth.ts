@@ -45,7 +45,6 @@ function getCookieToken(cookieHeader: string | null): string | null {
 
 function getHandshakeToken(socket: TypedSocket): string | null {
     const auth = (socket.handshake.auth ?? {}) as Record<string, unknown>;
-
     const fromAuth =
         (typeof auth.accessToken === "string" && auth.accessToken) ||
         (typeof auth.token === "string" && auth.token) ||
