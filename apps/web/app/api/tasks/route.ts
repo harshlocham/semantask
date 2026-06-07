@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
         await connectToDatabase();
 
         const body = createTaskBodySchema.parse(await req.json());
-
         const access = await requireConversationAccess(body.conversationId, guard.user);
         if (access.response) return access.response;
 
@@ -94,11 +93,12 @@ export async function POST(req: NextRequest) {
         });
 
         const normalized = normalizeTask(task);
-
         const manualActionParams = {
             titleHint: normalized.title,
             descriptionHint: normalized.description ?? "",
-            content: [normalized.title, normalized.description].filter((part) => typeof part === "string" && part.trim().length > 0).join("\n\n"),
+            content: [normalized.title, normalized.description]
+                .filter((part) => typeof part === "string" && part.trim().length > 0)
+                .join("\n\n"),
         };
 
         try {
@@ -133,6 +133,22 @@ export async function POST(req: NextRequest) {
         }
 
         await enqueueOutboxEvent({
+            topic: "task.execution.requested",
+            dedupeKey: `task.execution.requested:${normalized._id}:manual:${guard.user.id}`,
+            payload: {
+                taskId: normalized._id,
+                conversationId: normalized.conversationId,
+                triggerMessageId: normalized.sourceMessageIds[0] ?? normalized._id,
+                requestedByType: "user",
+                requestedById: guard.user.id,
+                actionType: "none",
+                parameters: manualActionParams,
+                confidence: 1,
+                needsApproval: false,
+            },
+        });
+
+        await enqueueOutboxEvent({
             topic: "task.created",
             dedupeKey: `task.created:${normalized._id}`,
             payload: {
@@ -143,22 +159,6 @@ export async function POST(req: NextRequest) {
                     sourceMessageId: normalized.sourceMessageIds[0] ?? null,
                     createdByType: "user",
                 },
-            },
-        });
-
-        await enqueueOutboxEvent({
-            topic: "task.execution.requested",
-            dedupeKey: `task.execution.requested:${normalized._id}:manual-create:none`,
-            payload: {
-                taskId: normalized._id,
-                conversationId: normalized.conversationId,
-                triggerMessageId: normalized._id,
-                requestedByType: "user",
-                requestedById: guard.user.id,
-                actionType: "none",
-                parameters: manualActionParams,
-                confidence: 1,
-                needsApproval: false,
             },
         });
 

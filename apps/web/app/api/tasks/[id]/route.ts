@@ -11,6 +11,7 @@ import { enqueueOutboxEvent } from "@/lib/services/outbox.service";
 const updateTaskBodySchema = z.object({
     title: z.string().min(3).max(200).optional(),
     description: z.string().max(8000).optional(),
+    status: z.enum(["pending", "executing", "completed", "failed", "partial"]).optional(),
     priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
     assignees: z.array(z.string().min(1)).max(32).optional(),
     dueAt: z.coerce.date().nullable().optional(),
