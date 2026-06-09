@@ -50,10 +50,19 @@ export async function rotateSessionTokenHash(
         {
             $set: {
                 refreshTokenHash,
+                state: "active",
                 lastActiveAt: new Date(),
                 expiresAt: new Date(Date.now() + authConfig.session.refreshTtlMs),
             },
         },
+        { new: true }
+    );
+}
+
+export async function markSessionStepUpPending(id: string): Promise<ISession | null> {
+    return SessionModel.findByIdAndUpdate(
+        id,
+        { $set: { state: "step_up_pending", lastActiveAt: new Date() } },
         { new: true }
     );
 }

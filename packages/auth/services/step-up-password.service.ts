@@ -1,5 +1,5 @@
 import { comparePassword } from "../password/compare";
-import { rotateSessionTokenHash } from "../repositories/session.repo";
+import { revokeSession, rotateSessionTokenHash } from "../repositories/session.repo";
 import { verifySession } from "../session/verify-session";
 import { hashToken } from "../session/token-hash";
 import { generateAccessToken, generateRefreshToken } from "../tokens/generate";
@@ -17,23 +17,33 @@ export async function completePasswordStepUpChallenge({
     password,
     refreshToken,
 }: CompletePasswordStepUpInput) {
+    // Verify the session first so we can authoritatively revoke it if the
+    // challenge turns out to be expired or invalid.
+    const { payload, session } = await verifySession(refreshToken);
+
+    if (session.state !== "step_up_pending") {
+        throw new Error("Session is not pending step-up");
+    }
+
     const challenge = await getChallengeById(challengeId);
     if (!challenge) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge not found");
     }
 
+    if (String(challenge.userId) !== payload.sub) {
+        await revokeSession(payload.sessionId);
+        throw new Error("Challenge user mismatch");
+    }
+
     if (challenge.status !== "pending") {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge is not pending");
     }
 
     if (challenge.expiresAt.getTime() <= Date.now()) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge expired");
-    }
-
-    const { payload } = await verifySession(refreshToken);
-
-    if (String(challenge.userId) !== payload.sub) {
-        throw new Error("Challenge user mismatch");
     }
 
     const user = await User.findById(payload.sub)
@@ -65,12 +75,14 @@ export async function completePasswordStepUpChallenge({
 
     const currentTokenVersion = user.tokenVersion || 0;
     if (payload.tokenVersion !== currentTokenVersion) {
+        await revokeSession(payload.sessionId);
         throw new Error("Token version revoked");
     }
 
     // Single-use guard: only one concurrent verification can flip pending -> verified.
     const verifiedChallenge = await markChallengeVerified(challengeId);
     if (!verifiedChallenge) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge is no longer valid");
     }
 
@@ -81,6 +93,7 @@ export async function completePasswordStepUpChallenge({
         type: "refresh",
     });
 
+    // rotateSessionTokenHash also restores the session state to "active".
     const rotated = await rotateSessionTokenHash(
         payload.sessionId,
         hashToken(nextRefreshToken)
