@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { comparePassword } from "../password/compare";
 import { hashPassword } from "../password/hash";
-import { rotateSessionTokenHash } from "../repositories/session.repo";
+import { revokeSession, rotateSessionTokenHash } from "../repositories/session.repo";
 import { verifySession } from "../session/verify-session";
 import { hashToken } from "../session/token-hash";
 import { generateAccessToken, generateRefreshToken } from "../tokens/generate";
@@ -29,27 +29,36 @@ export async function requestOtpStepUpChallenge({
     challengeId,
     refreshToken,
 }: RequestOtpStepUpInput) {
+    const { payload, session } = await verifySession(refreshToken);
+
+    if (session.state !== "step_up_pending") {
+        throw new Error("Session is not pending step-up");
+    }
+
     const challenge = await getChallengeById(challengeId);
     if (!challenge) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge not found");
     }
 
+    if (String(challenge.userId) !== payload.sub) {
+        await revokeSession(payload.sessionId);
+        throw new Error("Challenge user mismatch");
+    }
+
     if (challenge.status !== "pending") {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge is not pending");
     }
 
     if (challenge.expiresAt.getTime() <= Date.now()) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge expired");
     }
 
     if (challenge.otp?.sentAt && challenge.otp.sentAt.getTime() > Date.now() - OTP_RESEND_COOLDOWN_MS) {
+        // Cooldown is a transient, retryable condition: keep the session pending.
         throw new Error("Please wait before requesting another OTP");
-    }
-
-    const { payload } = await verifySession(refreshToken);
-
-    if (String(challenge.userId) !== payload.sub) {
-        throw new Error("Challenge user mismatch");
     }
 
     const user = await User.findById(payload.sub)
@@ -96,27 +105,35 @@ export async function completeOtpStepUpChallenge({
     otp,
     refreshToken,
 }: CompleteOtpStepUpInput) {
+    const { payload, session } = await verifySession(refreshToken);
+
+    if (session.state !== "step_up_pending") {
+        throw new Error("Session is not pending step-up");
+    }
+
     const challenge = await getChallengeById(challengeId);
     if (!challenge) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge not found");
     }
 
+    if (String(challenge.userId) !== payload.sub) {
+        await revokeSession(payload.sessionId);
+        throw new Error("Challenge user mismatch");
+    }
+
     if (challenge.status !== "pending") {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge is not pending");
     }
 
     if (challenge.expiresAt.getTime() <= Date.now()) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge expired");
     }
 
     if (!challenge.otp?.hash) {
         throw new Error("OTP has not been requested");
-    }
-
-    const { payload } = await verifySession(refreshToken);
-
-    if (String(challenge.userId) !== payload.sub) {
-        throw new Error("Challenge user mismatch");
     }
 
     const user = await User.findById(payload.sub)
@@ -139,16 +156,19 @@ export async function completeOtpStepUpChallenge({
 
     const otpMatches = await comparePassword(otp.trim(), challenge.otp.hash);
     if (!otpMatches) {
+        // Wrong OTP is retryable while the challenge remains valid (TTL-bounded).
         throw new Error("Invalid OTP");
     }
 
     const currentTokenVersion = user.tokenVersion || 0;
     if (payload.tokenVersion !== currentTokenVersion) {
+        await revokeSession(payload.sessionId);
         throw new Error("Token version revoked");
     }
 
     const verifiedChallenge = await markChallengeVerified(challengeId);
     if (!verifiedChallenge) {
+        await revokeSession(payload.sessionId);
         throw new Error("Challenge is no longer valid");
     }
 
@@ -159,6 +179,7 @@ export async function completeOtpStepUpChallenge({
         type: "refresh",
     });
 
+    // rotateSessionTokenHash also restores the session state to "active".
     const rotated = await rotateSessionTokenHash(
         payload.sessionId,
         hashToken(nextRefreshToken)

@@ -1,7 +1,11 @@
 import { verifySession } from "../session/verify-session";
 import { generateAccessToken, generateRefreshToken } from "../tokens/generate";
 import { hashToken } from "../session/token-hash";
-import { revokeSession, rotateSessionTokenHash } from "../repositories/session.repo";
+import {
+    markSessionStepUpPending,
+    revokeSession,
+    rotateSessionTokenHash,
+} from "../repositories/session.repo";
 import { generateDeviceFingerprint, validateSessionFingerprint } from "../session/fingerprint";
 import { AuthStepUpRequiredError } from "../errors/auth-errors";
 import { User } from "@/models/User";
@@ -44,7 +48,10 @@ export const refreshService = async ({
             ip: ipAddress,
             userAgent,
         });
-        await revokeSession(payload.sessionId);
+        // Keep the session alive but gated: step-up completion must be able to
+        // re-verify this same refresh session. Revoking here would make the
+        // challenge impossible to complete.
+        await markSessionStepUpPending(payload.sessionId);
         throw new AuthStepUpRequiredError(
             fingerprint.reasons,
             challenge._id.toString(),
