@@ -6,6 +6,6 @@
  *
  * Factories and mocks (later milestones) will be re-exported here as they land.
  */
-export * from "./env";
-export * from "./ids";
-export * from "./db";
+export * from "./env.js";
+export * from "./ids.js";
+export * from "./db.js";
