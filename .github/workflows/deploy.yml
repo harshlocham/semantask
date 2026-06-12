@@ -311,37 +311,33 @@ jobs:
             echo "Version image does not exist yet: $VERSION_TAG"
           fi
 
-      - name: Build and push deterministic image tags
+      - name: Build and push immutable image tags
         if: steps.image_guard.outputs.should_build == 'true'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/socket.Dockerfile
           push: true
+          # Only immutable per-version and per-commit tags are published here.
+          # The mutable "latest" tag is advanced post-deploy in promote_moving_tags.
           tags: |
             ${{ needs.prepare.outputs.version_tag }}
             ${{ needs.prepare.outputs.sha_tag }}
-            ${{ needs.prepare.outputs.latest_tag }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.prepare.outputs.release_sha }}
             org.opencontainers.image.version=${{ needs.prepare.outputs.release_version }}
           provenance: false
 
-      - name: Publish compatibility aliases for legacy image name
+      - name: Publish immutable compatibility aliases for legacy image name
+        # Mirror only the immutable aliases. The moving legacy "latest" alias is
+        # advanced post-deploy in promote_moving_tags so a failed rollout never
+        # leaves a moving tag pointing at an unverified image.
         run: |
           set -euxo pipefail
           docker buildx imagetools create \
             -t "${{ needs.prepare.outputs.legacy_version_tag }}" \
             -t "${{ needs.prepare.outputs.legacy_sha_tag }}" \
-            -t "${{ needs.prepare.outputs.legacy_latest_tag }}" \
-            "${{ needs.prepare.outputs.version_tag }}"
-
-      - name: Ensure latest points to released version
-        run: |
-          set -euxo pipefail
-          docker buildx imagetools create \
-            -t "${{ needs.prepare.outputs.latest_tag }}" \
             "${{ needs.prepare.outputs.version_tag }}"
 
       - name: Print published image refs
@@ -349,8 +345,8 @@ jobs:
           set -euxo pipefail
           echo "Published immutable tag: ${{ needs.prepare.outputs.version_tag }}"
           echo "Published commit tag:    ${{ needs.prepare.outputs.sha_tag }}"
-          echo "Published moving tag:    ${{ needs.prepare.outputs.latest_tag }}"
           echo "Published legacy tag:    ${{ needs.prepare.outputs.legacy_version_tag }}"
+          echo "Moving 'latest' tags are advanced after a successful deploy."
 
   deploy_staging:
     name: Deploy Staging
@@ -603,6 +599,89 @@ jobs:
               environment_url: "${{ vars.PRODUCTION_APP_URL || '' }}",
               description: "Deployed ${{ needs.prepare.outputs.release_tag }} (${{ needs.prepare.outputs.release_short_sha }}) to production"
             });
+
+  promote_moving_tags:
+    name: Promote Moving Tags
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [prepare, build_image, deploy_staging, deploy_production]
+    # Advance the mutable "latest" aliases only after the rollout they describe has
+    # actually succeeded. This fixes the premature/never-reverted latest pointer:
+    # if a deploy or health check fails, the moving tags are simply left untouched
+    # and keep pointing at the previously verified release.
+    if: >
+      always() &&
+      needs.prepare.outputs.should_deploy == 'true' &&
+      needs.build_image.result == 'success' &&
+      (
+        (
+          (needs.prepare.outputs.target == 'production' || needs.prepare.outputs.target == 'both') &&
+          needs.deploy_production.result == 'success'
+        ) ||
+        (
+          needs.prepare.outputs.target == 'staging' &&
+          needs.deploy_staging.result == 'success'
+        )
+      )
+    concurrency:
+      # Single global lane (deliberately NOT keyed by commit SHA) so that two
+      # different releases deploying at once can never interleave their writes to
+      # the shared moving tags.
+      group: promote-moving-tags
+      cancel-in-progress: false
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.release_sha }}
+
+      - name: Fetch tags
+        run: |
+          set -euxo pipefail
+          git fetch --force --tags
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Advance moving tags only for the newest release
+        run: |
+          set -euxo pipefail
+          RELEASE_TAG="${{ needs.prepare.outputs.release_tag }}"
+          VERSION_TAG="${{ needs.prepare.outputs.version_tag }}"
+          LATEST_TAG="${{ needs.prepare.outputs.latest_tag }}"
+          LEGACY_LATEST_TAG="${{ needs.prepare.outputs.legacy_latest_tag }}"
+
+          # Highest semver tag in the repo, using the same ordering convention as
+          # the prepare/release jobs.
+          HIGHEST_TAG="$(
+            git tag -l 'v[0-9]*' --sort=-v:refname \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$' \
+              | head -n1 \
+              || true
+          )"
+
+          # Guard against moving "latest" backwards when an older tag is (re)deployed
+          # or when a newer release won the concurrency lane first.
+          if [[ "$RELEASE_TAG" != "$HIGHEST_TAG" ]]; then
+            echo "Released $RELEASE_TAG is not the highest release tag (${HIGHEST_TAG:-<none>})."
+            echo "Leaving moving tags unchanged so latest never regresses to an older version."
+            exit 0
+          fi
+
+          docker buildx imagetools create -t "$LATEST_TAG" "$VERSION_TAG"
+          docker buildx imagetools create -t "$LEGACY_LATEST_TAG" "$VERSION_TAG"
+
+          echo "Advanced moving tags to $RELEASE_TAG:"
+          echo "  $LATEST_TAG -> $VERSION_TAG"
+          echo "  $LEGACY_LATEST_TAG -> $VERSION_TAG"
 
   notify_release:
     name: Notify Release Metadata
