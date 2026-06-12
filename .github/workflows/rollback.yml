@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: read
+  packages: write
+  deployments: write
 
 concurrency:
   # Never cancel an in-flight rollback request.
@@ -23,6 +25,12 @@ jobs:
     timeout-minutes: 20
     environment:
       name: production
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      version_tag: ${{ steps.meta.outputs.version_tag }}
+      latest_tag: ${{ steps.meta.outputs.latest_tag }}
+      legacy_latest_tag: ${{ steps.meta.outputs.legacy_latest_tag }}
+      release_sha: ${{ steps.meta.outputs.release_sha }}
 
     steps:
       - name: Validate rollback version input
@@ -34,33 +42,178 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
       - name: Resolve rollback metadata
         id: meta
         run: |
           set -euo pipefail
-          VERSION="${{ github.event.inputs.version }}"
+          RELEASE_TAG="${{ github.event.inputs.version }}"
+          RELEASE_VERSION="${RELEASE_TAG#v}"
           IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/chat-socket"
-          IMAGE_TAG="${IMAGE_NAME}:${VERSION}"
+          LEGACY_IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/chat-services"
+          VERSION_TAG="${IMAGE_NAME}:${RELEASE_VERSION}"
+
+          git fetch --force --tags
+
+          if ! git rev-parse --verify "${RELEASE_TAG}^{commit}" >/dev/null 2>&1; then
+            echo "::error::Git tag not found: $RELEASE_TAG"
+            exit 1
+          fi
+
+          RELEASE_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
 
           {
-            echo "version=${VERSION}"
+            echo "release_tag=${RELEASE_TAG}"
+            echo "release_version=${RELEASE_VERSION}"
             echo "image_name=${IMAGE_NAME}"
-            echo "image_tag=${IMAGE_TAG}"
+            echo "version_tag=${VERSION_TAG}"
+            echo "latest_tag=${IMAGE_NAME}:latest"
+            echo "legacy_latest_tag=${LEGACY_IMAGE_NAME}:latest"
+            echo "release_sha=${RELEASE_SHA}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Simulate rollback deployment
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Verify rollback image exists in registry
         run: |
           set -euo pipefail
-          echo "Rolling back production to ${{ steps.meta.outputs.image_tag }}"
+          VERSION_TAG="${{ steps.meta.outputs.version_tag }}"
+          if ! docker buildx imagetools inspect "$VERSION_TAG" > /dev/null 2>&1; then
+            echo "::error::Rollback image not found in registry: $VERSION_TAG"
+            echo "::error::Cannot roll back to a version that was never built and pushed."
+            exit 1
+          fi
+          echo "Rollback target image verified: $VERSION_TAG"
+
+      - name: Record rollback deployment start
+        id: rollback_start
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const result = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "${{ steps.meta.outputs.release_sha }}",
+              environment: "production",
+              required_contexts: [],
+              auto_merge: false,
+              transient_environment: false,
+              production_environment: true,
+              description: `Rollback production to ${{ steps.meta.outputs.release_tag }}`
+            });
+            core.setOutput("deployment_id", String(result.data.id));
+
+      - name: Roll back production deployment
+        run: |
+          set -euo pipefail
+          echo "Rolling back production to ${{ steps.meta.outputs.version_tag }}"
           # Replace this echo with your real deployment command.
 
+      - name: Health check production after rollback
+        id: rollback_health
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ vars.PRODUCTION_HEALTHCHECK_URL || '' }}" ]]; then
+            echo "PRODUCTION_HEALTHCHECK_URL is not set. Skipping health check."
+            exit 0
+          fi
+          curl -f -L --retry 8 --retry-delay 10 "${{ vars.PRODUCTION_HEALTHCHECK_URL }}"
+
+      - name: Fail when post-rollback health check fails
+        if: steps.rollback_health.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          echo "::error::Production health check failed after rollback to ${{ steps.meta.outputs.release_tag }}."
+          exit 1
+
+      - name: Mark rollback deployment success
+        if: steps.rollback_health.outcome != 'failure'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: Number("${{ steps.rollback_start.outputs.deployment_id }}"),
+              state: "success",
+              environment: "production",
+              environment_url: "${{ vars.PRODUCTION_APP_URL || '' }}",
+              description: "Rolled back production to ${{ steps.meta.outputs.release_tag }}"
+            });
+
+      - name: Mark rollback deployment failure
+        if: failure() && steps.rollback_start.outputs.deployment_id != ''
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: Number("${{ steps.rollback_start.outputs.deployment_id }}"),
+              state: "failure",
+              environment: "production",
+              description: "Rollback to ${{ steps.meta.outputs.release_tag }} failed"
+            });
+
       - name: Rollback summary
+        if: always()
         run: |
           set -euo pipefail
           {
-            echo "### Rollback completed"
+            echo "### Rollback"
             echo ""
-            echo "- Version: ${{ steps.meta.outputs.version }}"
+            echo "- Version: ${{ steps.meta.outputs.release_tag }}"
             echo "- Image: ${{ steps.meta.outputs.image_name }}"
-            echo "- Image tag: ${{ steps.meta.outputs.image_tag }}"
+            echo "- Image tag: ${{ steps.meta.outputs.version_tag }}"
+            echo "- Health check: ${{ steps.rollback_health.outcome }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  restore-moving-tags:
+    name: Restore Moving Tags
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: rollback-production
+    if: needs.rollback-production.result == 'success'
+    concurrency:
+      # Serialize with deploy promote_moving_tags so concurrent deploy/rollback runs
+      # cannot interleave writes to the shared :latest aliases.
+      group: promote-moving-tags
+      cancel-in-progress: false
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Point moving tags at rollback target
+        run: |
+          set -euxo pipefail
+          VERSION_TAG="${{ needs.rollback-production.outputs.version_tag }}"
+          LATEST_TAG="${{ needs.rollback-production.outputs.latest_tag }}"
+          LEGACY_LATEST_TAG="${{ needs.rollback-production.outputs.legacy_latest_tag }}"
+          RELEASE_TAG="${{ needs.rollback-production.outputs.release_tag }}"
+
+          docker buildx imagetools create -t "$LATEST_TAG" "$VERSION_TAG"
+          docker buildx imagetools create -t "$LEGACY_LATEST_TAG" "$VERSION_TAG"
+
+          echo "Restored moving tags to $RELEASE_TAG:"
+          echo "  $LATEST_TAG -> $VERSION_TAG"
+          echo "  $LEGACY_LATEST_TAG -> $VERSION_TAG"

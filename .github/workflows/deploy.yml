@@ -264,7 +264,15 @@ jobs:
           echo "legacy_latest_tag=$LEGACY_IMAGE:latest" >> "$GITHUB_OUTPUT"
           echo "target=$TARGET" >> "$GITHUB_OUTPUT"
 
-          PREVIOUS_TAG="$(git tag -l 'v[0-9]*' --sort=-v:refname | awk -v current="$TAG" '$0 != current { print; exit }')"
+          # Immediate semver predecessor of the release being deployed (next lower tag
+          # in descending sort). Do not use "highest tag != current" — that returns the
+          # newest tag in the repo and would roll forward when redeploying an older release.
+          PREVIOUS_TAG="$(
+            git tag -l 'v[0-9]*' --sort=-v:refname \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$' \
+              | awk -v current="$TAG" 'found { print; exit } $0 == current { found=1 }' \
+              || true
+          )"
           echo "previous_release_tag=${PREVIOUS_TAG:-}" >> "$GITHUB_OUTPUT"
 
           echo "Detected tag: $TAG"
