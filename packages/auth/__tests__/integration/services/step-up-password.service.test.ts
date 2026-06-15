@@ -289,7 +289,7 @@ describe("services/step-up-password.service (db integration)", () => {
         it("enforces single-use: a verified challenge cannot be replayed (req 12)", async () => {
             const { issued, challengeId } = await setupStepUp();
 
-            await completePasswordStepUpChallenge({
+            const first = await completePasswordStepUpChallenge({
                 challengeId,
                 password: PASSWORD,
                 refreshToken: issued.refreshToken,
@@ -297,14 +297,16 @@ describe("services/step-up-password.service (db integration)", () => {
             expect(await challengeStatus(challengeId)).toBe("verified");
 
             // Re-pend the (now active) session to isolate the challenge guard,
-            // then replay the same challenge: it is no longer pending.
+            // then replay the same challenge with the rotated token: it is no
+            // longer pending. (Using the rotated token avoids a token-hash
+            // mismatch when rotation crossed a 1-second boundary.)
             await markSessionStepUpPending(issued.sessionId);
 
             await expect(
                 completePasswordStepUpChallenge({
                     challengeId,
                     password: PASSWORD,
-                    refreshToken: issued.refreshToken,
+                    refreshToken: first.refreshToken,
                 })
             ).rejects.toThrow("Challenge is not pending");
 

@@ -45,6 +45,11 @@ export default defineConfig({
                     // first-run mongodb-memory-server binary download/boot.
                     hookTimeout: 60_000,
                     testTimeout: 30_000,
+                    // Each integration file boots its own in-memory mongod. Bound
+                    // the number of concurrent instances to avoid port/resource
+                    // contention (mongod exit code 48) when many files run at once.
+                    pool: "forks",
+                    poolOptions: { forks: { maxForks: 4, minForks: 1 } },
                     include: [
                         "__tests__/integration/**/*.test.ts",
                         "__tests__/e2e/**/*.test.ts",
