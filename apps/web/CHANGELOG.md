@@ -1,5 +1,29 @@
 # @chat/web
 
+## 4.0.5
+
+### Patch Changes
+
+- 5eece69: Fix authentication and step-up flows:
+  - @chat/auth: Block token refresh while a session is step_up_pending so challenges stay valid through verification
+  - @chat/web: Reset auth bootstrap after login, register, and step-up completion
+  - @chat/web: Prevent duplicate refresh and OTP send requests that caused 429 rate limits
+  - @chat/web: Handle unauthenticated API calls without throwing after bootstrap
+
+- 4a29cb5: Enhance execution lease management and task processing.
+  - Added execution lease validation before task processing begins.
+  - Improved handling of lease contention with a dedicated execution lease busy error.
+  - Refined task action ID generation for more consistent task tracking.
+  - Cleaned up task-related API code and removed unused imports.
+
+- Updated dependencies [9040db3]
+- Updated dependencies [072fafc]
+- Updated dependencies [ac01b5e]
+- Updated dependencies [5eece69]
+- Updated dependencies [4a29cb5]
+  - @chat/auth@2.3.3
+  - @chat/services@2.0.3
+
 ## 4.0.4
 
 ### Patch Changes
