@@ -74,8 +74,9 @@ The outbox is at-least-once. Idempotency is layered on top:
   skipped" result if not seen.
 - **Per-tool idempotency** (agent-runner path):
   `AgentRunner.buildToolIdempotencyKey` is a SHA-256 of
-  `taskId | runId | stepId | toolName | stableStringify(params)`
-  (`agent-runner.ts:2737-2749`).
+  `taskId | stepId | toolName | stableStringify(params)` — **intentionally run-independent**
+  so the same logical tool call dedupes across lease handoffs
+  (`agent-runner.ts:2734-2745`).
   `guardIdempotentToolExecution` queries `TaskActionModel` for an existing row
   with that `idempotencyKey`:
   - If found and `executionState === "succeeded"`: replay the cached
@@ -188,6 +189,7 @@ any non-negative integer.
 |---|---|---|
 | Outbox claim | Worker crashes after `findOneAndUpdate` | Row remains `processing`; reclaim after `stale_processing_cutoff = 5 min`. |
 | Outbox process | `processOneEvent` throws | `markOutboxEventFailed` with exponential delay; after `OUTBOX_MAX_ATTEMPTS=12` → dead-letter. |
+| Outbox process | `ExecutionLeaseBusyError` (lease held by another worker) | `markOutboxEventDeferred` — restores eager `attempts` increment, sets `availableAt` for re-claim; event is **not** completed. |
 | Outbox dedupe | Redis unavailable | `if (!redis) shouldProcess = true`; the worker proceeds without de-dup. This is documented in code at `apps/task-worker/index.ts:1490-1494`. |
 | Lease | Heartbeat lost | `withExecutionLease`'s `setInterval` aborts the AbortController; the runner sees the signal and throws `Execution aborted.`; the outbox path records the failure and re-enqueues. |
 | Lease | Steal by another worker | `acquireTaskLease`'s `$or` includes `{ leaseExpiresAt: { $lt: now } }` so any worker can take over after expiry; the original `release` call is then a no-op due to the `leaseOwner` predicate. |

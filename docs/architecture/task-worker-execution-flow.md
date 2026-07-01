@@ -48,6 +48,7 @@ mechanics live in
 
 | Component | File | Role |
 |---|---|---|
+| Message intelligence | `packages/services/task-intelligence.service.ts` | Regex `classifyMessage()` on `message.created`; updates `Message` semantic fields, may create `Task`. |
 | Outbox loop | `apps/task-worker/index.ts:1602-1656` | Claims and processes outbox events. |
 | Event router | `apps/task-worker/index.ts:1479-1600` | Dispatches to topic-specific handlers. |
 | Lease service | `apps/task-worker/services/lease.service.ts` | `withExecutionLease` wraps a run with mutex + heartbeat. |
@@ -94,11 +95,14 @@ directly to inline `executeXxxAction` adapters in `apps/task-worker/index.ts`.
 [task-worker loop] claimOutboxEvents(workerId, BATCH_SIZE)
    │
    ├── topic = "message.created"
-   │     └─ processMessageTaskIntelligence
-   │            └─ may create/update Task, emits internal bridge calls:
+   │     └─ processMessageTaskIntelligence (task-intelligence.service.ts)
+   │            ├─ classifyMessage() — regex/heuristic ingress (not LLM)
+   │            ├─ update Message.semantic*; upsert Task when task-like
+   │            └─ emits internal bridge calls:
    │                 - /internal/message-semantic-updated
    │                 - /internal/task-created or /internal/task-updated
    │                 - /internal/task-linked-to-message
+   │            (does not write MessageIntent — schema only; see Planned below)
    │
    ├── topic = "task.execution.requested"
    │     └─ processTaskExecutionRequested
@@ -136,9 +140,11 @@ Every emit hits `/internal/*` on the socket server with the shared
    as attempted at the moment it is claimed, before any handler runs.
 2. For each claimed event, `processOneEvent` runs.
 3. On success → `markOutboxEventCompleted`.
-4. On thrown error → if `attempts >= OUTBOX_MAX_ATTEMPTS=12` →
-   `markOutboxEventDeadLetter`, else
-   `markOutboxEventFailed(id, message, computeRetryDelay(attempts))`.
+4. On thrown error:
+   - If `error instanceof ExecutionLeaseBusyError` → `markOutboxEventDeferred`
+     (restores the eager `attempts` increment, sets `availableAt` for re-claim).
+   - Else if `attempts >= OUTBOX_MAX_ATTEMPTS=12` → `markOutboxEventDeadLetter`.
+   - Else → `markOutboxEventFailed(id, message, computeRetryDelay(attempts))`.
 5. The loop sleeps `POLL_INTERVAL_MS=800` ms when no events are claimed.
 
 The eager increment means a worker that successfully processes an event still
@@ -175,6 +181,9 @@ way to enter the autonomous run. It:
    `TASK_LEASE_MS = 30 s`), `lastHeartbeatAt`, `executionRunId`,
    `executionStartedAt`, and resets `executionEventSequence = 0`.
 2. Returns `{ skipped: "lease_busy" }` if the lease cannot be acquired.
+   `processTaskExecutionRequested` calls `assertExecutionLeaseCompleted`, which throws
+   `ExecutionLeaseBusyError`. The outbox loop catches this and **defers** the event via
+   `markOutboxEventDeferred` — the trigger is not completed while another worker holds the lease.
 3. Starts a `setInterval` heartbeat every `leaseMs / 3` (10 s default) that
    calls `heartbeatTaskLease`. If the heartbeat fails or returns null
    (lease lost), an `AbortController` is aborted; the abort signal is
@@ -216,8 +225,9 @@ Three tools ship in the registry by default:
 `AgentRunner.execute(payload, options)` (`agent-runner.ts:2844-2994`) is the
 sole entry point that runs a tool:
 
-1. `guardIdempotentToolExecution(payload)` — see ADR-002 §2 for the unique
-   `TaskAction.idempotencyKey` semantics. Returns cached success or marks the
+1. `guardIdempotentToolExecution(payload)` — see [ADR-002](../decisions/ADR-002-retry-orchestration-strategy.md) §2.
+   `buildToolIdempotencyKey` hashes `taskId | stepId | toolName | stableStringify(params)` — **run-independent**
+   so the same logical tool call dedupes across lease handoffs. Returns cached success or marks the
    in-flight TaskAction.
 2. Looks up the tool; returns a structured failure if missing.
 3. `resolveToolParameters` (`apps/task-worker/services/resolve-tool-params.ts`)
@@ -388,8 +398,9 @@ The combination of layered failure handling means most failures are
   scanner promotes the task on `nextRetryAt` (if `scheduleTaskRetry` ran
   before the crash) or the original `task.execution.requested` outbox row is
   re-claimed (it stays `processing` until the 5-minute stale cutoff). The
-  next worker either steals the lease and continues, or sees the lease still
-  held and bails with `lease_busy`.
+  next worker either steals the lease and continues, or hits `lease_busy` and
+  **defers** the outbox event for retry (`ExecutionLeaseBusyError` →
+  `markOutboxEventDeferred`).
 - **External API throwing**: bubbled up as `Error`, classified by
   `retry-classifier.ts`, and routed through `scheduleTaskRetry`.
 - **LLM returns garbage**: `parseJsonText` + `llmDecisionSchema.safeParse`
@@ -429,9 +440,9 @@ The combination of layered failure handling means most failures are
    the email/meeting/github inline adapters to tools (already implemented in
    the tools/ directory).
 2. `processMessageTaskIntelligence` in `task-intelligence.service.ts` uses
-   regex-based classification (`classifyMessage`); this is intentionally
-   pre-LLM, with `AI_VERSION = "intelligent-v3-preprocess"`. It under-fires
-   for any task phrased without imperative verbs.
+   regex-based classification (`classifyMessage`); this is the **current** ingress path
+   (`AI_VERSION = "intelligent-v3-preprocess"`). **Planned / Future:** LLM classifier
+   (Production Roadmap V1 Phase 2.1). Regex under-fires for task phrasing without imperative verbs.
 3. `executeXxxAction` (legacy) and the tool counterparts (registry) duplicate
    transport logic. A regression in one will not surface in the other.
 4. `Task.iterationCount`, `step.attempts`, `Task.retryCount`,
@@ -448,7 +459,8 @@ The combination of layered failure handling means most failures are
   (e.g. Redis Streams, Kafka, or a partitioned event table) so the
   `Task` document stops carrying the high-frequency write surface.
 - Replace `processMessageTaskIntelligence`'s regex heuristics with an LLM
-  call gated by `confidence` to avoid creating tasks for chit-chat.
+  call gated by `confidence` to avoid creating tasks for chit-chat (Phase 2.1).
+- Persist `MessageIntent` rows from classifier output (Phase 2.3; schema exists, no writer yet).
 - Wire cancellation through the outbox (`task.cancel.requested`) so a user
   click in the UI can stop a long-running run mid-flight.
 

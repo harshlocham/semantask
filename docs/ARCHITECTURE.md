@@ -5,6 +5,26 @@
 > (`pnpm-workspace.yaml`, `turbo.json`, root `package.json`) containing real-time chat plus an
 > AI "task intelligence" layer.
 
+## Architecture Status
+
+| Field | Value |
+|-------|-------|
+| **Verification date** | 2026-07-01 |
+| **Verified against commit** | `cff07cb887d7cde2b48069a3ca2d6da1dd63fca8` |
+| **Roadmap version** | [Production Roadmap V1](./PRODUCTION_ROADMAP_V1.md) — Phase 0.1 |
+
+Statements in this file describe **current runtime behavior** unless labeled **Planned / Future**.
+For accepted design decisions, use the ADRs below instead of duplicating rationale here.
+
+| Topic | ADR |
+|-------|-----|
+| Task lifecycle FSM (dual state, shadow mode) | [ADR-001](./decisions/ADR-001-task-lifecycle-state-machine.md) |
+| Retry orchestration (outbox, task retry, idempotency) | [ADR-002](./decisions/ADR-002-retry-orchestration-strategy.md) |
+| Socket authorization bridge | [ADR-003](./decisions/ADR-003-socket-authorization-bridge.md) |
+
+Deeper flow detail: [`task-worker-execution-flow.md`](./architecture/task-worker-execution-flow.md),
+[`realtime-messaging-system.md`](./architecture/realtime-messaging-system.md).
+
 ## 1. System overview
 
 The product is a multi-client chat application with three runtime services and a set of shared
@@ -64,7 +84,7 @@ flowchart LR
 
     subgraph External["External services"]
         IMAGEKIT["ImageKit<br/>image/file storage"]
-        OPENAI["OpenAI / HuggingFace<br/>LLM classification + agent"]
+        OPENAI["OpenAI / HuggingFace<br/>agent-runner LLM only"]
         GH["GitHub REST API<br/>issues"]
         RESEND["Resend<br/>task emails"]
         SMTP["SMTP via Nodemailer<br/>OTP email"]
@@ -164,33 +184,61 @@ flowchart LR
 
 ## 4. AI task pipeline (`apps/task-worker`)
 
-This is a separate process implementing a **transactional outbox** consumer:
+This is a separate process implementing a **transactional outbox** consumer. See
+[ADR-002](./decisions/ADR-002-retry-orchestration-strategy.md) for retry and idempotency layers and
+[`task-worker-execution-flow.md`](./architecture/task-worker-execution-flow.md) for the full control
+flow.
+
+### Current implementation
 
 - `createMessage` (`packages/services/message.service.ts`) persists the `Message`, updates
   `Conversation.lastMessage`, and writes an `OutboxEvent{topic:"message.created"}` — all inside a
   Mongo transaction (with a no-transaction fallback for standalone Mongo).
 - The worker loop (`apps/task-worker/index.ts`) claims `OutboxEvent`s via
   `@chat/services/outbox.service` and dispatches by topic:
-  - `message.created` → `processMessageTaskIntelligence` (`@chat/services/task-intelligence.service`)
-    classifies the message with an LLM (`services/llm/*`, providers OpenAI / HuggingFace), writing
-    `MessageIntent` and possibly creating a `Task`; results are pushed to the socket via
-    `/internal/message-semantic-updated`, `/internal/task-created`, etc.
-  - `task.execution.requested` / `task.execution.approved` → policy gate
-    (`services/execution-policy.ts`), human-approval handling (`TaskAction`), distributed leases
-    (`services/lease.service.ts` + Redis), and the autonomous `AgentRunner` (`services/agent-runner.ts`).
-  - Action adapters call **GitHub** (`/repos/:repo/issues`), **Resend** (`api.resend.com/emails`), and a
-    **schedule-meeting webhook**, each with verification + fallback webhooks and Redis-based idempotency
-    locks.
+  - **`message.created`** → `processMessageTaskIntelligence`
+    (`packages/services/task-intelligence.service.ts`). Ingress classification is **regex/heuristic**
+    via `classifyMessage()` — not an LLM call. On match (confidence ≥ 0.7), the worker updates
+    `Message.semanticType` / `semanticConfidence` / `linkedTaskIds`, may upsert a `Task`, writes
+    `TaskAction` audit rows, enqueues `task.execution.requested`, and pushes socket events via
+    `/internal/message-semantic-updated`, `/internal/task-created`, etc. (`AI_VERSION =
+    "intelligent-v3-preprocess"`).
+  - **`task.execution.requested`** / **`task.execution.approved`** → policy gate
+    (`apps/task-worker/services/execution-policy.ts`), human-approval handling (`TaskAction`),
+    distributed leases (`apps/task-worker/services/lease.service.ts` + Mongo `Task.leaseOwner`),
+    and the autonomous `AgentRunner` (`apps/task-worker/services/agent-runner.ts`). **LLM providers**
+    (`apps/task-worker/services/llm/*`, OpenAI / HuggingFace / OpenAI-compatible) are used here for
+    planning, step decisions, reflection — not at message ingress.
+  - **Lease-busy defer:** when `withExecutionLease` cannot acquire the mutex,
+    `assertExecutionLeaseCompleted` throws `ExecutionLeaseBusyError`; the outbox loop calls
+    `markOutboxEventDeferred` (restores the claim attempt increment) so the event is re-claimed
+    after backoff — it is **not** completed while busy (`apps/task-worker/index.ts:1641-1649`).
+  - **Run-independent tool idempotency:** `AgentRunner.buildToolIdempotencyKey` hashes
+    `taskId | stepId | toolName | params` (no `runId`), so duplicate tool side effects are suppressed
+    across lease handoffs (`agent-runner.ts:2734-2745`).
+  - Tools call **GitHub**, **Resend**, and a **schedule-meeting webhook** via `ToolRegistry`, with
+    verification registries and `guardIdempotentToolExecution` backed by unique `TaskAction.idempotencyKey`.
 - Reliability: retry scheduler (`services/retry-scheduler.ts`), stuck-task detector
-  (`services/stuck-task-detector.ts`), dead-letter on `OUTBOX_MAX_ATTEMPTS`, and per-event dedupe keys.
+  (`services/stuck-task-detector.ts`), dead-letter on `OUTBOX_MAX_ATTEMPTS`, and per-event Redis dedupe keys.
+
+### Planned / Future
+
+Tracked in [Production Roadmap V1](./PRODUCTION_ROADMAP_V1.md) Phase 2+:
+
+- **LLM message classifier** at ingress (replace `classifyMessage()` regex) — Milestone 2.1.
+- **`MessageIntent` persistence** from classifier output — schema exists at
+  `packages/db/models/MessageIntent.ts` but **no runtime writer** today; Milestone 2.3.
+- Expanded intent taxonomy (`chat`, `incident`, `scheduling`, etc.) — Milestone 2.2.
 
 ## 5. Data layer
 
 - **MongoDB via Mongoose** is the system of record. Models live in `packages/db/models/*`:
   `User`, `Conversation`, `Message`, `Task`, `TaskAction`, `TaskPlan`, `TaskMemory`,
-  `TaskExecutionEvent`, `TaskReflection`, `MessageIntent`, `OutboxEvent`, `OTP`, `StepUpChallenge`,
+  `TaskExecutionEvent`, `TaskReflection`, `OutboxEvent`, `OTP`, `StepUpChallenge`,
   `Devices`, `Contact`, `TempMessage`. Auth-specific collections (`AuthSession`, auth events) are in
   `packages/auth/repositories/*`.
+  - **`MessageIntent`** (`packages/db/models/MessageIntent.ts`) — **schema only**; no production code
+    writes to this collection yet (see Planned / Future in §4).
 - **Redis** (`packages/redis/*`, `apps/socket/server/socket/services/presence.redis.service.ts`):
   presence/heartbeat with TTL, active-conversation tracking, message delivery state, the Socket.IO
   pub/sub adapter, worker idempotency/lease locks, and Upstash-based rate limiting
@@ -205,7 +253,6 @@ erDiagram
     USER }o--o{ CONVERSATION : participates
     CONVERSATION ||--o{ MESSAGE : contains
     MESSAGE ||--o| MESSAGE : repliedTo
-    MESSAGE ||--o| MESSAGE_INTENT : classified_as
     CONVERSATION ||--o{ TASK : has
     USER ||--o{ TASK : creates
     MESSAGE ||--o{ TASK : sourceMessage
@@ -244,13 +291,6 @@ erDiagram
         ObjectId_array linkedTaskIds
         object deliveredTo
         object seenBy
-    }
-    MESSAGE_INTENT {
-        ObjectId _id
-        ObjectId messageId FK
-        string intentType
-        number confidence
-        string extractorVersion
     }
     TASK {
         ObjectId _id
@@ -297,6 +337,10 @@ erDiagram
     }
 ```
 
+> **Note:** `MessageIntent` is defined in Mongoose but omitted from this diagram — it is
+> **Planned / Future** (Phase 2.3). Ingress classification today writes `Message.semanticType` and
+> related fields only.
+
 ## 6. Authentication & authorization
 
 - **Tokens**: short-lived JWT **access token** + **refresh token**, both signed **HS256**
@@ -319,8 +363,9 @@ erDiagram
 
 - **ImageKit** — image/file storage and signed upload auth (`@imagekit/*`,
   `apps/web/app/api/auth/imagekit-auth`, `apps/web/lib/utils/imagekit.ts`).
-- **OpenAI / HuggingFace** — LLM message classification and the agent runner
-  (`apps/task-worker/services/llm/*`).
+- **OpenAI / HuggingFace / OpenAI-compatible** — LLM calls inside `AgentRunner`, planner, and
+  reflection (`apps/task-worker/services/llm/*`). **Not** used for `message.created` ingress
+  classification (regex heuristics in `task-intelligence.service.ts`).
 - **GitHub REST API** — auto-created issues from tasks (`apps/task-worker/index.ts`).
 - **Resend** — outbound task emails; **SMTP/Nodemailer** — OTP delivery from the web app.
 - **Google OAuth** — federated login.
@@ -355,7 +400,6 @@ sequenceDiagram
     participant IntAPI as Web internal authz<br/>/api/internal/socket
     participant Redis as Redis
     participant Worker as task-worker
-    participant LLM as LLM provider
     actor Recv as Recipient client
 
     Note over Sender,SIO: Connection setup
@@ -385,17 +429,22 @@ sequenceDiagram
     Recv->>SIO: MESSAGE_SEEN when viewing
     SIO-->>Sender: MESSAGE_SEEN_UPDATE
 
-    Note over Worker,Recv: 3. Async AI task intelligence
+    Note over Worker,Recv: 3. Async message intelligence (regex ingress)
     Worker->>Mongo: claim OutboxEvent message.created
-    Worker->>LLM: classify message intent
-    Worker->>Mongo: write MessageIntent / Task / TaskAction
-    Worker->>SIO: POST /internal/message-semantic-updated + /internal/task-created
+    Worker->>Worker: classifyMessage() regex heuristics<br/>(task-intelligence.service.ts)
+    Worker->>Mongo: update Message.semantic*; upsert Task / TaskAction if task-like
+    Worker->>Mongo: enqueue task.execution.requested (when task created)
+    Worker->>SIO: POST /internal/message-semantic-updated + task events
     SIO-->>Recv: MESSAGE_SEMANTIC_UPDATED / TASK_CREATED
     SIO-->>Sender: MESSAGE_SEMANTIC_UPDATED / TASK_CREATED
+
+    Note over Worker,Recv: 4. Task execution (separate outbox event; uses LLM in AgentRunner)
 ```
 
 ### Notes / caveats grounded in code
 
+- **Ingress classification is regex-based**, not LLM-based. See `classifyMessage()` in
+  `packages/services/task-intelligence.service.ts` and Planned / Future in §4.
 - The socket server **does not persist messages** — `message.controller.ts` returns a plain object and
   comments that persistence belongs to the web/API layer.
 - Delivery/seen receipts are computed from **Redis presence**, not a DB read, on the hot path

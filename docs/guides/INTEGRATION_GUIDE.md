@@ -1,5 +1,12 @@
 # Integration & Setup Guide
 
+> **Documentation status (2026-07-01):** Parts of this guide predate the current monorepo layout.
+> For accurate architecture and runtime flows, prefer [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md),
+> [`docs/architecture/task-worker-execution-flow.md`](../architecture/task-worker-execution-flow.md),
+> and [`docs/guides/oss-inference-compatibility.md`](./oss-inference-compatibility.md).
+> Supported LLM providers today: `openai`, `openai-compatible`, `huggingface`, `amd-openai-compatible`
+> (see `apps/task-worker/services/llm/provider-factory.ts`) — not Anthropic/Cohere/Together.
+
 ## Quick Start (Production Ready)
 
 ### 1. Environment Setup
@@ -7,10 +14,10 @@
 # Copy environment template
 cp env.sample .env.local
 
-# Configure LLM Provider (choose one)
-export LLM_PROVIDER=openai                    # or: anthropic, cohere, together
-export OPENAI_API_KEY="..."                   # or: ANTHROPIC_API_KEY, etc.
-export LLM_MODEL="gpt-4o-mini"               # or: claude-3.5-sonnet, etc.
+# Configure LLM Provider (choose one — see provider-factory.ts for supported values)
+export LLM_PROVIDER=openai                    # or: openai-compatible, huggingface, amd-openai-compatible
+export OPENAI_API_KEY="..."                   # or HUGGINGFACE_API_KEY / AMD_API_KEY as appropriate
+export LLM_MODEL="gpt-4o-mini"
 
 # Task Agent Timeouts (optional, sensible defaults included)
 export TASK_AGENT_LLM_TIMEOUT_MS=35000        # 35s for LLM calls
@@ -26,9 +33,8 @@ export TASK_AGENT_MAX_ITERATIONS=5            # Limit for predictable demo
 # Terminal 1: Database & Message Queue
 docker-compose up mongo redis
 
-# Terminal 2: Task Worker (with agent)
-cd apps/task-worker
-npm run dev
+# Terminal 2: Task Worker (from repo root)
+pnpm run task-worker
 
 # Terminal 3: Monitor Logs
 tail -f logs/agent-runner.log
@@ -65,21 +71,15 @@ export LLM_MODEL="gpt-4o-mini"  # Fast and capable
 export TASK_AGENT_LLM_TIMEOUT_MS=35000
 ```
 
-### Claude (Anthropic)
-```bash
-export LLM_PROVIDER=anthropic
-export ANTHROPIC_API_KEY="sk-ant-..."
-export LLM_MODEL="claude-3.5-sonnet"
+### Claude (Anthropic) — **not supported**
 
-# Timeout: 40-45s (slightly slower streaming)
-export TASK_AGENT_LLM_TIMEOUT_MS=45000
-```
+Anthropic is **not** implemented in `provider-factory.ts`. Use an OpenAI-compatible proxy if you need Claude behind a unified client.
 
-### Custom/On-Premise (Via AMD)
+### Custom/On-Premise (Via AMD or vLLM)
 ```bash
-export LLM_PROVIDER=openai  # Client SDK
-export OPENAI_API_KEY="..."
-export OPENAI_BASE_URL="https://your-amd-endpoint.com/"
+export LLM_PROVIDER=amd-openai-compatible   # or openai-compatible
+export AMD_API_KEY="..."
+export AMD_BASE_URL="https://your-amd-endpoint.com/v1"
 
 # Adjust timeout for your infrastructure
 export TASK_AGENT_LLM_TIMEOUT_MS=40000
@@ -87,22 +87,24 @@ export TASK_AGENT_LLM_TIMEOUT_MS=40000
 
 ---
 
-## Architecture Overview
+## Architecture Overview (current runtime)
 
 ```
-Task Submission
+POST /api/messages (web)
        ↓
-TaskWorkerService (validates, creates AgentRunner)
+OutboxEvent message.created
        ↓
-AgentRunner (persistent loop)
-       ├─ llm:request → Get plan from LLM
-       ├─ step:execute → Execute tool(s)
-       ├─ step:verify → Check success
-       └─ lifecycle:completed → Update status
+task-worker: classifyMessage() [regex ingress]
+       ↓ (if task-like)
+OutboxEvent task.execution.requested
        ↓
-MongoDB (store result)
-Redis (update subscribers)
+processTaskExecutionRequested → withExecutionLease → AgentRunner
+       ├─ LLM (planner / step decision / reflection) via services/llm/*
+       ├─ ToolRegistry (send_email, schedule_meeting, create_github_issue)
+       └─ execution events → socket /internal/task-execution-updated
 ```
+
+Tasks are created from **chat messages** (or task APIs), not a standalone `TaskWorkerService` class. See [`task-worker-execution-flow.md`](../architecture/task-worker-execution-flow.md).
 
 ### Key Components for Reliability
 - **Agent Runner**: Persistent execution loop with state recovery
@@ -196,16 +198,22 @@ export LLM_MODEL="gpt-4"                   # Use more capable model
 ### Unit Tests
 ```bash
 cd apps/task-worker
-npm test                      # Run all tests
-npm test -- --runInBand tests/agent-runner.test.ts  # Agent tests only
-npm test -- --runInBand tests/llm-provider.test.ts  # Provider tests only
+pnpm test                      # Run all tests
+pnpm test -- tests/agent-runner.test.ts  # Agent tests only
+pnpm test -- tests/llm-provider.test.ts  # Provider tests only
 ```
 
 ### Integration Test (End-to-End)
+
+> **Note:** End-to-end task creation is driven by sending a chat message through the app or
+> `POST /api/messages`, which enqueues `message.created`. Direct `POST /api/tasks` exists but
+> follows a different contract — see `apps/web/app/api/tasks/route.ts`.
+
 ```bash
-# Start services
-docker-compose up mongo redis &
-npm run dev &
+# Start services (MongoDB must be reachable via MONGODB_URI)
+docker compose up redis &
+pnpm run dev &
+```
 
 # Submit task and monitor
 curl -X POST http://localhost:3000/tasks \
