@@ -1,3 +1,7 @@
+# Local / staging Compose stack for web, socket, task-worker, and Redis.
+# MongoDB is NOT included — set MONGODB_URI in .env to an external instance
+# (replica set required for task-worker retry scanner). See:
+#   docs/operations/PRODUCTION_REQUIREMENTS.md
 services:
   nginx:
     image: nginx:1.27-alpine

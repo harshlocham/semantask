@@ -110,8 +110,8 @@ For deeper LLM wiring (vLLM, TGI, HF endpoints, AMD), see [`apps/task-worker/OSS
 
 - **Node.js** 20+
 - **pnpm** 10+ (see `packageManager` in root `package.json`)
-- **MongoDB**
-- **Redis** (recommended for production-like runs)
+- **MongoDB** (replica set for production — see [`docs/operations/PRODUCTION_REQUIREMENTS.md`](docs/operations/PRODUCTION_REQUIREMENTS.md))
+- **Redis** (required for production-like / multi-instance socket and task-worker dedupe)
 
 ## Environment configuration
 
@@ -184,7 +184,7 @@ pnpm run task-worker
 docker compose up --build
 ```
 
-The Compose stack includes **nginx**, **nextapp** (Next.js), **socket**, **task-worker**, and **Redis**. **MongoDB is external** — set `MONGODB_URI` in `.env` to a reachable instance (local or hosted). Suitable for demos, hackathons, and containerized staging.
+The Compose stack includes **nginx**, **nextapp** (Next.js), **socket**, **task-worker**, and **Redis**. **MongoDB is external** — set `MONGODB_URI` in `.env` to a reachable **replica set** for production task-worker retries. See [`docs/operations/PRODUCTION_REQUIREMENTS.md`](docs/operations/PRODUCTION_REQUIREMENTS.md).
 
 ## Troubleshooting
 
