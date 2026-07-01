@@ -24,6 +24,7 @@ For accepted design decisions, use the ADRs below instead of duplicating rationa
 
 Deeper flow detail: [`task-worker-execution-flow.md`](./architecture/task-worker-execution-flow.md),
 [`realtime-messaging-system.md`](./architecture/realtime-messaging-system.md).
+ADR implementation gaps (FIXED / OPEN / DEFERRED): [`adr-implementation-gap-audit.md`](./architecture/adr-implementation-gap-audit.md).
 
 ## 1. System overview
 
