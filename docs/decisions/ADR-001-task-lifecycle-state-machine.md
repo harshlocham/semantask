@@ -130,8 +130,11 @@ Branches:
   `iteration` counter.
 - `ERROR_OCCURRED` with `retryable && retryCount <= maxRetries && nextRetryAt`
   → `retry_scheduled`. Otherwise → `failed`.
-- `RETRY_DUE` → `queued` (the retry scanner is responsible for emitting this and
-  enqueueing the outbox event in the same MongoDB transaction).
+- `RETRY_DUE` → `queued` (the retry scanner is responsible for enqueueing the
+  outbox event in the same MongoDB transaction; it does **not** emit `RETRY_DUE`
+  to the shadow FSM today — see
+  [gap audit §ADR-001 gap #1](../architecture/adr-implementation-gap-audit.md)
+  and Production Roadmap Phase 1.3).
 - `CANCEL_REQUESTED` / `CANCEL_FINALIZED` flow to `cancelling`/`cancelled`. The
   reducer accepts CANCEL_REQUESTED from almost any non-terminal state, but the
   current runtime has no observed callers emitting these events; cancellation is

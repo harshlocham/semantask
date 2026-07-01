@@ -19,9 +19,10 @@ The task-worker performs two qualitatively different kinds of retry:
    without holding a worker.
 
 A third, much shorter-lived retry is the **inline action retry** inside
-`RetryManager.execute`, used by the legacy step-based plan in
-`apps/task-worker/index.ts:1011-1063` and by miscellaneous tool calls inside
-`AgentRunner` that want bounded inline retry.
+`RetryManager.execute`, used by miscellaneous tool calls inside `AgentRunner`
+that want bounded inline retry. The `buildExecutionPlan` / `runExecutionPlan`
+block in `apps/task-worker/index.ts:968-1130` is **dead code** (zero callers);
+see [gap audit P2-8](../architecture/adr-implementation-gap-audit.md).
 
 ADR-002 documents how these three layers compose, what guarantees each layer
 provides, and how idempotency is enforced.
@@ -42,7 +43,10 @@ The web layer enqueues domain events (`message.created`, `task.execution.request
 2. Calls `processOneEvent(event)` per claim.
 3. On success: `markOutboxEventCompleted` clears all lock fields.
 4. On failure:
-   - If `event.attempts >= OUTBOX_MAX_ATTEMPTS` (default 12) →
+   - If `error instanceof ExecutionLeaseBusyError` → `markOutboxEventDeferred`
+     (restores the eager `attempts` increment, sets `availableAt` for re-claim;
+     event is **not** completed — fixed in `f7886b5`).
+   - Else if `event.attempts >= OUTBOX_MAX_ATTEMPTS` (default 12) →
      `markOutboxEventDeadLetter`.
    - Otherwise → `markOutboxEventFailed(id, message, computeRetryDelay(attempts))`
      which sets `status: "failed"` and `availableAt = now + delay`.
@@ -161,9 +165,10 @@ the legacy execution path:
 
 This is intentionally synchronous within a single worker process. It is **not**
 suitable for cross-worker retry; it does not release the lease, does not write
-`nextRetryAt`, and does not interact with the outbox. It is used only by the
-old execution plan in `apps/task-worker/index.ts:968-1107` (the
-`buildExecutionPlan` block) and to emit per-retry execution updates.
+`nextRetryAt`, and does not interact with the outbox. It is used inside
+`AgentRunner` for short inline retries. The `buildExecutionPlan` block in
+`index.ts` that historically referenced `RetryManager` is unreachable dead code
+(Phase 5.1 cleanup).
 
 ## Layered guarantees
 
@@ -173,7 +178,7 @@ Outbox loop                  at-least-once + dedupeKey (Redis) + 12 attempts →
        └─ AgentRunner        in-process iteration loop (max iterations, lease watchdog)
             ├─ scheduleTaskRetry   long-term retry: writes nextRetryAt and returns
             ├─ guardIdempotentToolExecution   per-tool one-shot via TaskAction unique index
-            └─ RetryManager.execute            short-term in-process retry (legacy path only)
+            └─ RetryManager.execute            short-term in-process retry (AgentRunner only; not dead plan path)
 ```
 
 The composition has one important asymmetry: `scheduleTaskRetry` increments
@@ -238,12 +243,12 @@ any non-negative integer.
 
 ## Technical Debt / Limitations
 
-1. The legacy `buildExecutionPlan` path in `apps/task-worker/index.ts` and the
-   new `AgentRunner` path both exist. They have **different retry semantics**:
-   the legacy path uses `RetryManager` inline; the new path schedules retries
-   via `scheduleTaskRetry`. Whether a given execution takes the new path is
-   controlled by `TASK_AGENT_PERSISTENT_LOOP_ENABLED`. The two paths' retry
-   budgets are not unified.
+1. `buildExecutionPlan` / `runExecutionPlan` in `apps/task-worker/index.ts` are
+   **dead code** (zero callers). Live execution uses `AgentRunner.runTask` or
+   `runTaskPersistent`, both scheduling long-term retries via `scheduleTaskRetry`.
+   `TASK_AGENT_PERSISTENT_LOOP_ENABLED` toggles between those two runner modes,
+   not between a legacy plan executor and AgentRunner. Retry budgets between
+   inline `RetryManager` and `scheduleTaskRetry` are not unified.
 2. `RetryManager`'s default schedule `[1000, 2000, 5000]` is hard-coded in
    multiple places (`apps/task-worker/index.ts:70`,
    `apps/task-worker/services/agent-runner.ts:376`,
@@ -279,9 +284,7 @@ any non-negative integer.
 
 - The exact `OutboxEvent` index set is not inspected in this ADR; some claims
   about deduplication depend on `dedupeKey` being uniquely indexed.
-  Confirm by inspecting `packages/db/models/OutboxEvent.ts`.
-- The interaction between
-  `TASK_AGENT_PERSISTENT_LOOP_ENABLED=true` and the legacy `RetryManager`
-  calls inside `processTaskExecutionRequested` is not fully exercised by the
-  default config; the legacy path is the default. Whether the new path is
-  production-ready is a runtime question rather than a code question.
+  **Confirmed** on schema (`OutboxEvent.ts:37`).
+- `TASK_AGENT_PERSISTENT_LOOP_ENABLED` toggles `runTask` vs `runTaskPersistent`
+  inside `AgentRunner`; both are live paths. The separate `buildExecutionPlan`
+  block is dead code — see [gap audit](../architecture/adr-implementation-gap-audit.md).
