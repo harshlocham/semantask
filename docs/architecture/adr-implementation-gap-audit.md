@@ -41,7 +41,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | **P1-4** | Wire `RETRY_DUE` on retry scanner | **OPEN** | [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) | `retry-scheduler.ts` sets `lifecycleState: "ready"` only; FSM unchanged until next `AgentRunner` run |
 | **P1-5** | `deriveLegacy*` at write time (projection) | **DEFERRED** | [Phase 5.2](../PRODUCTION_ROADMAP_V1.md) | `execution-state.ts:143-203`; only referenced in tests today |
 | **P1-6** | Policy/approval early exits — shadow FSM lag | **OPEN** | [Phase 1.2](../PRODUCTION_ROADMAP_V1.md) | `processTaskExecutionRequested` blocked/approval paths (`index.ts:1212-1320`) update legacy only; no `persistShadowExecutionState` for `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` |
-| **P1-7** | Replica-set assumption for retry scanner | **OPEN** (document) | [Phase 0.3](../PRODUCTION_ROADMAP_V1.md), [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) | `retry-scheduler.ts` uses `withTransaction`; standalone Mongo fails each tick |
+| **P1-7** | Replica-set assumption for retry scanner | **OPEN** (documented) | [Phase 0.3](../PRODUCTION_ROADMAP_V1.md) ✓, [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) (standalone fallback) | `retry-scheduler.ts` uses `withTransaction`; see [`PRODUCTION_REQUIREMENTS.md`](../operations/PRODUCTION_REQUIREMENTS.md) |
 | **P2-8** | Dead `buildExecutionPlan` / `runExecutionPlan` | **OPEN** (debt) | [Phase 5.1](../PRODUCTION_ROADMAP_V1.md) | Defined `index.ts:969-1130`; zero callers |
 | **P2-9** | Unify `RetryManager` schedules | **DEFERRED** | Phase 5+ | Hard-coded in `agent-runner.ts`, `retry-manager.ts` |
 | **P2-10** | `RETRY_BUDGET_EXHAUSTED` vs `ERROR_OCCURRED` alignment | **OPEN** (debt) | Phase 1+ | `scheduleTaskRetry` sets legacy `failed` directly |
@@ -144,7 +144,7 @@ Aligned with [Production Roadmap V1](../PRODUCTION_ROADMAP_V1.md). Items marked 
 
 1. ~~**Lease-busy:** defer outbox on `ExecutionLeaseBusyError`~~ — **FIXED** `f7886b5`
 2. ~~**Tool idempotency:** run-independent key~~ — **FIXED** `f7886b5`
-3. **Redis / outbox:** document production requirement — **OPEN** → Phase 0.3 runbook
+3. **Redis / outbox:** document production requirement — **documented** → [`PRODUCTION_REQUIREMENTS.md`](../operations/PRODUCTION_REQUIREMENTS.md) (Phase 0.3)
 
 ### Phase B — Align dual state without flipping authority (ADR-001)
 

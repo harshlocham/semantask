@@ -6,6 +6,8 @@ This repository uses a three-stage release pipeline:
 2. `Release` handles versioning and tag orchestration using Changesets.
 3. `Deploy` builds container images and deploys all runtime services.
 
+> **Before production promotion:** complete the [Production Requirements](../docs/operations/PRODUCTION_REQUIREMENTS.md) pre-deploy checklist (MongoDB replica set, Redis, `INTERNAL_SECRET`, FSM shadow mode, email domain allowlist).
+
 ## Multi-Service Deploy Targets
 
 | Service | Platform | Artifact |
@@ -82,7 +84,7 @@ For active development with no production users, prefer `staging` for manual pro
 3. Add GitHub repository variables:
    - `VERCEL_ORG_ID`
    - `VERCEL_PROJECT_ID`
-4. Configure environment variables in Vercel (MongoDB, Redis, auth secrets, `NEXT_PUBLIC_SOCKET_URL`, etc.).
+4. Configure environment variables in Vercel (MongoDB replica set URI, Redis, auth secrets, `NEXT_PUBLIC_SOCKET_URL`, etc.) — see [`docs/operations/PRODUCTION_REQUIREMENTS.md`](../docs/operations/PRODUCTION_REQUIREMENTS.md).
 
 ### 2. Render (socket)
 
@@ -101,7 +103,7 @@ Required only when `ENABLE_TASK_WORKER_DEPLOY=true`.
 1. Provision a VPS with Docker and Docker Compose.
 2. Create deploy directory (for example `/opt/chat-app`) containing:
    - `deploy/docker-compose.task-worker.yml` (from this repo)
-   - `.env` with worker secrets (not committed)
+   - `.env` with worker secrets (not committed) — see [`docs/operations/PRODUCTION_REQUIREMENTS.md`](../docs/operations/PRODUCTION_REQUIREMENTS.md)
 3. Add the VPS user's SSH public key or configure deploy key access.
 4. Add GitHub secrets/variables:
    - Secret: `VPS_SSH_PRIVATE_KEY`
@@ -115,9 +117,23 @@ Create `staging` and `production` environments in repository settings. Configure
 
 ### 5. First deploy
 
-1. Merge a Changesets Version PR so `Release` creates a `v*` tag.
-2. Run `Deploy` manually with `deploy_target=staging` to validate socket and web deploys (and task worker when enabled).
-3. When ready, use `deploy_target=both` or `production` for production promotion.
+1. Complete the [Production Requirements pre-deploy checklist](../docs/operations/PRODUCTION_REQUIREMENTS.md) for the target environment.
+2. Merge a Changesets Version PR so `Release` creates a `v*` tag.
+3. Run `Deploy` manually with `deploy_target=staging` to validate socket and web deploys (and task worker when enabled).
+4. When ready, use `deploy_target=both` or `production` for production promotion.
+
+## Pre-deploy checklist (production)
+
+| Item | Staging | Production |
+|------|---------|------------|
+| MongoDB replica set (`MONGODB_URI`) | Required if task worker enabled | **Required** |
+| `REDIS_URL` on socket (+ worker, web) | Required for socket | **Required** |
+| `INTERNAL_SECRET` matched across services | Yes | Yes |
+| `TASK_EXECUTION_FSM_SHADOW_MODE` reviewed (default: on) | Yes | Yes |
+| `ALLOWED_EMAIL_DOMAINS` set when email tools enabled | Recommended | **Required** |
+| LLM / Resend / GitHub credentials on worker | If worker enabled | If worker enabled |
+
+Full detail: [`docs/operations/PRODUCTION_REQUIREMENTS.md`](../docs/operations/PRODUCTION_REQUIREMENTS.md).
 
 ## Recommended CI/CD Folder Structure
 

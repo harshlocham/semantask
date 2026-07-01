@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Deploy the task-worker container on a DigitalOcean VPS over SSH.
 #
+# Before running: ensure the VPS .env satisfies docs/operations/PRODUCTION_REQUIREMENTS.md
+#   - MONGODB_URI (replica set)
+#   - REDIS_URL
+#   - INTERNAL_SECRET (same as web + socket)
+#   - SOCKET_SERVER_URL, LLM_*, ALLOWED_EMAIL_DOMAINS (if send_email enabled)
+#
 # Required environment variables:
 #   VPS_HOST                - SSH hostname or IP
 #   VPS_USER                - SSH username
@@ -45,5 +51,6 @@ EOF
 )"
 
 echo "Deploying task-worker to ${VPS_USER}@${VPS_HOST}:${VPS_DEPLOY_PATH}"
+echo "Reminder: verify VPS .env against docs/operations/PRODUCTION_REQUIREMENTS.md"
 ssh "${ssh_opts[@]}" "${VPS_USER}@${VPS_HOST}" bash -s <<< "$remote_script"
 echo "Task-worker deploy completed."
