@@ -51,6 +51,7 @@ export function useTestDb(): { db: () => TestDbHandle } {
 
     beforeAll(async () => {
         server = await MongoMemoryReplSet.create({
+            binary: { version: "7.0.37" },
             replSet: { count: 1, storageEngine: "wiredTiger" },
         });
         const uri = server.getUri();
@@ -63,7 +64,7 @@ export function useTestDb(): { db: () => TestDbHandle } {
         };
 
         await handle.ensureIndexes();
-    });
+    }, 120_000);
 
     afterEach(async () => {
         if (handle) {

@@ -43,13 +43,18 @@ export default defineConfig({
                     setupFiles: [envSetup],
                     // DB-backed and flow specs. Generous timeouts cover the
                     // first-run mongodb-memory-server binary download/boot.
-                    hookTimeout: 60_000,
+                    hookTimeout: 120_000,
                     testTimeout: 30_000,
-                    // Each integration file boots its own in-memory mongod. Bound
-                    // the number of concurrent instances to avoid port/resource
-                    // contention (mongod exit code 48) when many files run at once.
+                    // Each integration file boots its own in-memory mongod. In CI,
+                    // serialize startup to avoid mongodb-memory-server lockfile races
+                    // on the shared binary cache directory.
                     pool: "forks",
-                    poolOptions: { forks: { maxForks: 4, minForks: 1 } },
+                    poolOptions: {
+                        forks: {
+                            maxForks: process.env.CI ? 1 : 4,
+                            minForks: 1,
+                        },
+                    },
                     include: [
                         "__tests__/integration/**/*.test.ts",
                         "__tests__/e2e/**/*.test.ts",
