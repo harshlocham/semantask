@@ -125,7 +125,8 @@ Sub-export points (`package.json` `exports`):
 - **Source of truth for**: `User`, `Conversation`, `Message`,
   `Task`, `TaskAction`, `TaskExecutionEvent`, `TaskMemory`, `TaskPlan`,
   `TaskReflection`, `OutboxEvent`, `OTP`, `StepUpChallenge`,
-  `MessageIntent`, `Contact`, `Devices`, `TempMessage`.
+  `Contact`, `Devices`, `TempMessage`.
+  - `MessageIntent` — **schema only** (no runtime writer; Planned Phase 2.3).
 - **Constraints**: Server-only (`mongoose`). The `package.json` *does*
   list `dexie` — this exists for `apps/mobile` and the web client's
   offline-message cache (`offlineMessages.ts`). The package is therefore

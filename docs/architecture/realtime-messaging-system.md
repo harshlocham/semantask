@@ -177,7 +177,7 @@ push events to connected clients.
 
 There is **no persistence** of the message itself in the socket server. The
 caller (the web app or a client) is expected to have persisted it via
-`POST /api/conversations/:id/messages` *before* emitting. The two writes are
+`POST /api/messages` *before* emitting. The two writes are
 not coupled — a misbehaving client could emit without persisting; receivers
 would briefly see the message, then refresh and see it disappear. This is a
 known correctness boundary documented in the controller header comment.

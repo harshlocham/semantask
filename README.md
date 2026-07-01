@@ -70,7 +70,9 @@ flowchart LR
 4. **Redis** backs coordination, queues, and scalable socket fan-out.
 5. **Socket.IO** streams task and session updates for **real-time observability**.
 
-For deeper LLM wiring (vLLM, TGI, HF endpoints, AMD), see [`apps/task-worker/OSS_INFERENCE_COMPATIBILITY.md`](apps/task-worker/OSS_INFERENCE_COMPATIBILITY.md) and [`LLM_PROVIDER_ARCHITECTURE.md`](LLM_PROVIDER_ARCHITECTURE.md).
+For deeper LLM wiring (vLLM, TGI, HF endpoints, AMD), see [`apps/task-worker/OSS_INFERENCE_COMPATIBILITY.md`](apps/task-worker/OSS_INFERENCE_COMPATIBILITY.md) and [`docs/architecture/LLM_PROVIDER_ARCHITECTURE.md`](docs/architecture/LLM_PROVIDER_ARCHITECTURE.md). For the full system map (verified against runtime), see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+**Ingress note:** new chat messages are classified with **regex heuristics** in the task worker (`packages/services/task-intelligence.service.ts`), not an LLM. LLM providers are used during autonomous **task execution** (`task.execution.requested`).
 
 ## Platform stack
 
@@ -107,7 +109,7 @@ For deeper LLM wiring (vLLM, TGI, HF endpoints, AMD), see [`apps/task-worker/OSS
 ## Prerequisites
 
 - **Node.js** 20+
-- **npm** 10+
+- **pnpm** 10+ (see `packageManager` in root `package.json`)
 - **MongoDB**
 - **Redis** (recommended for production-like runs)
 
@@ -144,13 +146,13 @@ OPENAI_API_KEY=
 1. Install dependencies.
 
 ```bash
-npm install
+pnpm install
 ```
 
 2. Start all workspaces in development mode.
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 3. Open the apps.
@@ -161,20 +163,20 @@ npm run dev
 Run the task worker explicitly when developing agents in isolation:
 
 ```bash
-npm run task-worker
+pnpm run task-worker
 ```
 
 ## Scripts
 
 | Script | Description |
 | --- | --- |
-| `npm run dev` | Development mode for apps and packages via Turborepo |
-| `npm run build` | Production builds across workspaces |
-| `npm run start` | Starts production targets where defined |
-| `npm run lint` | Lint across workspaces |
-| `npm run test` | Tests across workspaces |
-| `npm run task-worker` | Dev mode for the agent/task worker |
-| `npm run clean` | Cleans build artifacts via Turborepo |
+| `pnpm run dev` | Development mode for apps and packages via Turborepo |
+| `pnpm run build` | Production builds across workspaces |
+| `pnpm run start` | Starts production targets where defined |
+| `pnpm run lint` | Lint across workspaces |
+| `pnpm run test` | Tests across workspaces |
+| `pnpm run task-worker` | Dev mode for the agent/task worker |
+| `pnpm run clean` | Cleans build artifacts via Turborepo |
 
 ## Docker
 
@@ -182,7 +184,7 @@ npm run task-worker
 docker compose up --build
 ```
 
-The Compose stack includes **nginx**, **nextapp** (Next.js), **socket**, **task-worker**, **MongoDB**, and **Redis** — suitable for demos, hackathons, and containerized staging.
+The Compose stack includes **nginx**, **nextapp** (Next.js), **socket**, **task-worker**, and **Redis**. **MongoDB is external** — set `MONGODB_URI` in `.env` to a reachable instance (local or hosted). Suitable for demos, hackathons, and containerized staging.
 
 ## Troubleshooting
 
