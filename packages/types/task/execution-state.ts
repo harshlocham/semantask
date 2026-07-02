@@ -173,6 +173,14 @@ export function deriveLegacyLifecycleState(state: ExecutionState): TaskLifecycle
     }
 }
 
+/** True when legacy lifecycle matches the FSM projection (dual-state consistency check). */
+export function taskLifecycleMatchesExecutionProjection(
+    lifecycleState: TaskLifecycleState,
+    executionState: ExecutionState,
+): boolean {
+    return deriveLegacyLifecycleState(executionState) === lifecycleState;
+}
+
 export function deriveLegacyTaskStatus(state: ExecutionState): TaskStatus {
     switch (state.kind) {
         case "queued":
