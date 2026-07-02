@@ -39,9 +39,6 @@ jobs:
     name: Quality (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
-      MONGOMS_PREFER_GLOBAL_PATH: "0"
 
     strategy:
       fail-fast: false
@@ -74,6 +71,11 @@ jobs:
 
       - name: Enable Corepack
         run: corepack enable
+
+      - name: Configure mongodb-memory-server cache
+        run: |
+          echo "MONGOMS_DOWNLOAD_DIR=$RUNNER_TEMP/mongodb-binaries" >> "$GITHUB_ENV"
+          echo "MONGOMS_PREFER_GLOBAL_PATH=0" >> "$GITHUB_ENV"
 
       - name: Use Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
