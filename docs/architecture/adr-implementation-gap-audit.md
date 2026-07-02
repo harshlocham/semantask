@@ -37,7 +37,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 |----|------|--------|-------|----------|
 | **P0-1** | Lease-busy + outbox completion | **FIXED** (`f7886b5`) | — | `index.ts:1641-1649`, `lease.service.ts:104-110`, `dispatch.lease-wrapper.test.ts` |
 | **P0-2** | Tool idempotency includes `runId` | **FIXED** (`f7886b5`) | — | `agent-runner.ts:2734-2745`, `idempotent-tool-execution.test.ts` |
-| **P0-3** | Legacy vs shadow divergence undetected | **OPEN** | [Phase 1.1](../PRODUCTION_ROADMAP_V1.md) | No `state_diverged` logging; `deriveLegacy*` not used at write time |
+| **P0-3** | Legacy vs shadow divergence undetected | **OPEN** (detection in 1.1) | [Phase 1.1](../PRODUCTION_ROADMAP_V1.md) ✓, [Phase 5.2](../PRODUCTION_ROADMAP_V1.md) (enforce) | `TASK_STATE_DIVERGENCE_CHECK=1` logs `state_diverged`; projection at write deferred |
 | **P1-4** | Wire `RETRY_DUE` on retry scanner | **OPEN** | [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) | `retry-scheduler.ts` sets `lifecycleState: "ready"` only; FSM unchanged until next `AgentRunner` run |
 | **P1-5** | `deriveLegacy*` at write time (projection) | **DEFERRED** | [Phase 5.2](../PRODUCTION_ROADMAP_V1.md) | `execution-state.ts:143-203`; only referenced in tests today |
 | **P1-6** | Policy/approval early exits — shadow FSM lag | **OPEN** | [Phase 1.2](../PRODUCTION_ROADMAP_V1.md) | `processTaskExecutionRequested` blocked/approval paths (`index.ts:1212-1320`) update legacy only; no `persistShadowExecutionState` for `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` |
@@ -154,7 +154,7 @@ Aligned with [Production Roadmap V1](../PRODUCTION_ROADMAP_V1.md). Items marked 
 
 ### Phase C — Observability before cutover
 
-7. **Divergence metric** — **OPEN** → Phase 1.1
+7. **Divergence metric** — **shipped** (Phase 1.1): `TASK_STATE_DIVERGENCE_CHECK=1` logs `state_diverged`
 8. **Stuck detector remediation** — **OPEN** → Phase 1.5
 
 ### Phase D — Authoritative FSM (ADR-001 future evolution)

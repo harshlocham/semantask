@@ -10,6 +10,7 @@ import {
 import {
     deriveLegacyLifecycleState,
     deriveLegacyTaskStatus,
+    taskLifecycleMatchesExecutionProjection,
     type ExecutionState,
 } from "@chat/types";
 
@@ -67,6 +68,7 @@ test("execution FSM follows the happy path through finalize", () => {
     });
     assert.equal(succeeded.kind, "succeeded");
     assert.equal(deriveLegacyLifecycleState(succeeded), "completed");
+    assert.equal(taskLifecycleMatchesExecutionProjection("completed", succeeded), true);
     assert.equal(deriveLegacyTaskStatus(succeeded), "completed");
 });
 

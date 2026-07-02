@@ -12,6 +12,10 @@ export interface ExecutionLogFields {
     retryCount?: number;
     category?: string;
     error?: string;
+    lifecycleState?: string;
+    executionStateKind?: string;
+    projectedLifecycleState?: string;
+    source?: string;
     [key: string]: unknown;
 }
 

@@ -16,6 +16,7 @@ import { assertExecutionLeaseCompleted, ExecutionLeaseBusyError, withExecutionLe
 import { startRetryScheduler } from "./services/retry-scheduler.js";
 import { persistExecutionUpdatePayload } from "./services/execution-event.service.js";
 import { logExecution } from "./services/execution-logger.js";
+import { maybeLogTaskStateDivergence } from "./services/state-divergence-check.js";
 import { startStuckTaskDetector } from "./services/stuck-task-detector.js";
 import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
 
@@ -80,6 +81,8 @@ const processMessageTaskIntelligence = processMessageTaskIntelligenceFromService
 
 type TaskModelLike = {
     findById: (id: string) => Promise<{
+        lifecycleState: string | null | undefined;
+        executionState: unknown;
         _id: { toString(): string };
         version: number;
         status: string;
@@ -370,6 +373,14 @@ async function updateTaskLifecycle(input: {
     }
     task.updatedBy = null;
     await task.save();
+
+    maybeLogTaskStateDivergence({
+        taskId: task._id.toString(),
+        lifecycleState: task.lifecycleState,
+        executionState: task.executionState,
+        workerId: WORKER_ID,
+        source: "updateTaskLifecycle",
+    });
 
     const taskUpdatedPayload: TaskUpdatedPayload = {
         taskId: task._id.toString(),

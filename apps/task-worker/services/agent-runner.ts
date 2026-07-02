@@ -17,6 +17,7 @@ import { generateAndStoreReflection } from "./reflection-service.js";
 import { acquireTaskLease, heartbeatTaskLease, releaseTaskLease } from "./task-lease.js";
 import { scheduleTaskRetry } from "./schedule-retry.js";
 import { logExecution } from "./execution-logger.js";
+import { maybeLogTaskStateDivergence } from "./state-divergence-check.js";
 import { assertTransition } from "./task-state-machine.js";
 import { rankTools, type ToolRankingInput } from "./tool-ranking.js";
 import { collectPreviousStepOutputs, llmDecisionSchema, normalizeParams, resolveStepTemplates, type PreviousStepOutputs, validateToolParameters } from "./step-execution-utils.js";
@@ -809,6 +810,17 @@ Reply to confirm receipt or contact support if you have questions.
         return process.env.TASK_EXECUTION_FSM_SHADOW_MODE !== "0";
     }
 
+    private maybeCheckStateDivergence(task: TaskDocumentLike, source: string): void {
+        maybeLogTaskStateDivergence({
+            taskId: task._id.toString(),
+            lifecycleState: task.lifecycleState,
+            executionState: task.executionState,
+            workerId: this.workerId,
+            runId: this.currentRunId ?? undefined,
+            source,
+        });
+    }
+
     private getShadowLeaseExpiresAt(task: TaskDocumentLike): string {
         if (task.leaseExpiresAt instanceof Date) {
             return task.leaseExpiresAt.toISOString();
@@ -857,6 +869,8 @@ Reply to confirm receipt or contact support if you have questions.
             to: result.to.kind,
             ...(result.ok ? {} : { error: result.error.message }),
         });
+
+        this.maybeCheckStateDivergence(task, "persistShadowExecutionState");
     }
 
     private async startShadowExecutionRun(task: TaskDocumentLike, runId: string) {
@@ -3206,6 +3220,11 @@ Reply to confirm receipt or contact support if you have questions.
         };
 
         await this.emitTaskUpdated(task.conversationId.toString(), payload);
+
+        if (patch.lifecycleState !== undefined) {
+            this.maybeCheckStateDivergence(task, "updateTask");
+        }
+
         return task;
     }
 
