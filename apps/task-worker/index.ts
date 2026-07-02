@@ -17,6 +17,7 @@ import { startRetryScheduler } from "./services/retry-scheduler.js";
 import { persistExecutionUpdatePayload } from "./services/execution-event.service.js";
 import { logExecution } from "./services/execution-logger.js";
 import { maybeLogTaskStateDivergence } from "./services/state-divergence-check.js";
+import { emitPolicyShadowState } from "./services/policy-shadow.js";
 import { startStuckTaskDetector } from "./services/stuck-task-detector.js";
 import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
 
@@ -1242,6 +1243,16 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             },
         });
 
+        await emitPolicyShadowState({
+            taskId: payload.taskId,
+            workerId: WORKER_ID,
+            source: "processTaskExecutionRequested.blocked",
+            events: [
+                { type: "POLICY_EVALUATE" },
+                { type: "POLICY_BLOCKED", reason: blockedReason, decidedAt: new Date().toISOString() },
+            ],
+        });
+
         await emitTaskExecutionUpdate({
             taskId: payload.taskId,
             conversationId: payload.conversationId,
@@ -1318,6 +1329,21 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 error: "Approval required before executing this action.",
             },
         });
+
+        await emitPolicyShadowState({
+            taskId: payload.taskId,
+            workerId: WORKER_ID,
+            source: "processTaskExecutionRequested.approval_required",
+            events: [
+                { type: "POLICY_EVALUATE" },
+                {
+                    type: "POLICY_APPROVAL_REQUIRED",
+                    actionType: payload.actionType,
+                    requestedAt: new Date().toISOString(),
+                },
+            ],
+        });
+
         await emitTaskExecutionUpdate({
             taskId: payload.taskId,
             conversationId: payload.conversationId,
