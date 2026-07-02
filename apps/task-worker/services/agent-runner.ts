@@ -894,6 +894,18 @@ Reply to confirm receipt or contact support if you have questions.
             return;
         }
 
+        // A prior request may have parked the shadow FSM in `awaiting_approval`
+        // (see policy-shadow.ts). The approved re-run resumes via APPROVAL_GRANTED.
+        if (isExecutionState(task.executionState) && task.executionState.kind === "awaiting_approval") {
+            await this.persistShadowExecutionState(task, {
+                type: "APPROVAL_GRANTED",
+                runId,
+                workerId: this.workerId,
+                leaseExpiresAt: this.getShadowLeaseExpiresAt(task),
+            });
+            return;
+        }
+
         if (isExecutionState(task.executionState) && task.executionState.kind === "queued") {
             await this.persistShadowExecutionState(task, { type: "POLICY_EVALUATE" });
         }

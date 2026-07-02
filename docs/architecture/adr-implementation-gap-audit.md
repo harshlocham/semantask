@@ -40,7 +40,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | **P0-3** | Legacy vs shadow divergence undetected | **OPEN** (detection in 1.1) | [Phase 1.1](../PRODUCTION_ROADMAP_V1.md) ✓, [Phase 5.2](../PRODUCTION_ROADMAP_V1.md) (enforce) | `TASK_STATE_DIVERGENCE_CHECK=1` logs `state_diverged`; projection at write deferred |
 | **P1-4** | Wire `RETRY_DUE` on retry scanner | **OPEN** | [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) | `retry-scheduler.ts` sets `lifecycleState: "ready"` only; FSM unchanged until next `AgentRunner` run |
 | **P1-5** | `deriveLegacy*` at write time (projection) | **DEFERRED** | [Phase 5.2](../PRODUCTION_ROADMAP_V1.md) | `execution-state.ts:143-203`; only referenced in tests today |
-| **P1-6** | Policy/approval early exits — shadow FSM lag | **OPEN** | [Phase 1.2](../PRODUCTION_ROADMAP_V1.md) | `processTaskExecutionRequested` blocked/approval paths (`index.ts:1212-1320`) update legacy only; no `persistShadowExecutionState` for `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` |
+| **P1-6** | Policy/approval early exits — shadow FSM lag | **FIXED** (flagged) | [Phase 1.2](../PRODUCTION_ROADMAP_V1.md) ✓ | `emitPolicyShadowState` (`policy-shadow.ts`) emits `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` and aligns `lifecycleState` on the blocked/approval early returns when `TASK_POLICY_SHADOW_EMIT=1`; approved re-run resumes via `APPROVAL_GRANTED` in `startShadowExecutionRun` |
 | **P1-7** | Replica-set assumption for retry scanner | **OPEN** (documented) | [Phase 0.3](../PRODUCTION_ROADMAP_V1.md) ✓, [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) (standalone fallback) | `retry-scheduler.ts` uses `withTransaction`; see [`PRODUCTION_REQUIREMENTS.md`](../operations/PRODUCTION_REQUIREMENTS.md) |
 | **P2-8** | Dead `buildExecutionPlan` / `runExecutionPlan` | **OPEN** (debt) | [Phase 5.1](../PRODUCTION_ROADMAP_V1.md) | Defined `index.ts:969-1130`; zero callers |
 | **P2-9** | Unify `RetryManager` schedules | **DEFERRED** | Phase 5+ | Hard-coded in `agent-runner.ts`, `retry-manager.ts` |
@@ -81,7 +81,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | # | Gap | Status | Notes |
 |---|-----|--------|-------|
 | 1 | **`RETRY_DUE` not emitted by retry scanner** | **OPEN** (P1-4) | `runRetryScannerOnce` promotes `lifecycleState: "ready"` and enqueues outbox; FSM stays stale until next `AgentRunner` emissions. Unit tests cover `RETRY_DUE`; production scanner does not. |
-| 2 | **Policy / approval paths — no shadow FSM on early return** | **OPEN** (P1-6) | `processTaskExecutionRequested` (`index.ts:1212-1320`) updates legacy lifecycle only for blocked / approval_pending. |
+| 2 | **Policy / approval paths — no shadow FSM on early return** | **FIXED** (P1-6, flagged) | `emitPolicyShadowState` emits `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` and aligns `lifecycleState` on the blocked / approval_pending early returns under `TASK_POLICY_SHADOW_EMIT=1`. |
 | 3 | **`iteration` (FSM) vs `Task.iterationCount`** | **OPEN** (debt) | Independent counters; footgun during clarification resume. |
 
 ### ADR-001 accuracy: high
