@@ -2,8 +2,10 @@ import mongoose from "mongoose";
 import TaskModel, { type ITask } from "@chat/db/models/Task";
 import * as dbModule from "@chat/db";
 import { enqueueOutboxEvent } from "@chat/services/outbox.service";
+import { isMongoTransactionUnsupported } from "@chat/services/mongo-transaction";
 import type { TaskExecutionActionType } from "@chat/types";
 import * as taskRepo from "@chat/services/repositories/task.repo";
+import { emitRetryDueShadowState } from "./retry-shadow.js";
 
 const connectToDatabase =
     (dbModule as unknown as { connectToDatabase?: () => Promise<unknown> }).connectToDatabase
@@ -32,6 +34,94 @@ function buildRetryPayload(task: ITask): Record<string, unknown> {
     };
 }
 
+const RETRY_CANDIDATE_FILTER = (now: Date) => ({
+    lifecycleState: "retry_scheduled" as const,
+    nextRetryAt: { $lte: now },
+    $or: [
+        { leaseOwner: null },
+        { leaseExpiresAt: { $lt: now } },
+    ],
+});
+
+async function claimRetryCandidate(now: Date, session?: mongoose.ClientSession): Promise<ITask | null> {
+    return TaskModel.findOneAndUpdate(
+        RETRY_CANDIDATE_FILTER(now),
+        {
+            $set: {
+                lifecycleState: "ready",
+                lastRetryAt: now,
+            },
+        },
+        {
+            sort: { nextRetryAt: 1 },
+            new: true,
+            session,
+        },
+    ).exec();
+}
+
+async function enqueueRetryForCandidate(
+    candidate: ITask,
+    workerId: string,
+    now: Date,
+    session?: mongoose.ClientSession,
+): Promise<void> {
+    const retryCount = candidate.retryCount ?? 0;
+
+    await enqueueOutboxEvent({
+        topic: "task.execution.requested",
+        dedupeKey: `task.execution.requested:${candidate._id.toString()}:retry:${retryCount}`,
+        payload: buildRetryPayload(candidate),
+        session,
+    });
+
+    await taskRepo.createTaskAction({
+        taskId: candidate._id.toString(),
+        conversationId: candidate.conversationId.toString(),
+        actorType: "system",
+        actorId: null,
+        actionType: "none",
+        toolName: null,
+        messageId: candidate.sourceMessageIds?.[0]?.toString() ?? null,
+        parameters: { retryCount },
+        executionState: "queued",
+        summary: `Autonomous retry #${retryCount} enqueued.`,
+        error: null,
+        patch: { before: null, after: { retryCount, lastRetryReason: candidate.lastRetryReason } },
+        reason: candidate.lastRetryReason ?? "Scheduled retry",
+        idempotencyKey: `task.execution.requested:${candidate._id.toString()}:retry:${retryCount}:action`,
+    }).catch((error: unknown) => {
+        const maybeMongo = error as { code?: number };
+        if (maybeMongo?.code !== 11000) {
+            throw error;
+        }
+    });
+
+    console.info("task-worker retry.enqueued", {
+        workerId,
+        taskId: candidate._id.toString(),
+        retryCount,
+        runId: candidate.executionRunId ?? null,
+    });
+
+    await emitRetryDueShadowState({
+        taskId: candidate._id.toString(),
+        queuedAt: now.toISOString(),
+        workerId,
+        source: "runRetryScannerOnce",
+    });
+}
+
+async function promoteAndEnqueueRetry(workerId: string, now: Date, session?: mongoose.ClientSession): Promise<number> {
+    const candidate = await claimRetryCandidate(now, session);
+    if (!candidate) {
+        return 0;
+    }
+
+    await enqueueRetryForCandidate(candidate, workerId, now, session);
+    return 1;
+}
+
 export async function runRetryScannerOnce(workerId: string): Promise<number> {
     await connectToDatabase();
 
@@ -40,72 +130,18 @@ export async function runRetryScannerOnce(workerId: string): Promise<number> {
 
     try {
         let enqueued = 0;
-        await session.withTransaction(async () => {
-            const candidate = await TaskModel.findOneAndUpdate(
-                {
-                    lifecycleState: "retry_scheduled",
-                    nextRetryAt: { $lte: now },
-                    $or: [
-                        { leaseOwner: null },
-                        { leaseExpiresAt: { $lt: now } },
-                    ],
-                },
-                {
-                    $set: {
-                        lifecycleState: "ready",
-                        lastRetryAt: now,
-                    },
-                },
-                {
-                    sort: { nextRetryAt: 1 },
-                    new: true,
-                    session,
-                }
-            ).exec();
 
-            if (!candidate) {
-                return;
+        try {
+            await session.withTransaction(async () => {
+                enqueued = await promoteAndEnqueueRetry(workerId, now, session);
+            });
+        } catch (error) {
+            if (!isMongoTransactionUnsupported(error)) {
+                throw error;
             }
 
-            const retryCount = candidate.retryCount ?? 0;
-            await enqueueOutboxEvent({
-                topic: "task.execution.requested",
-                dedupeKey: `task.execution.requested:${candidate._id.toString()}:retry:${retryCount}`,
-                payload: buildRetryPayload(candidate),
-                session,
-            });
-
-            await taskRepo.createTaskAction({
-                taskId: candidate._id.toString(),
-                conversationId: candidate.conversationId.toString(),
-                actorType: "system",
-                actorId: null,
-                actionType: "none",
-                toolName: null,
-                messageId: candidate.sourceMessageIds?.[0]?.toString() ?? null,
-                parameters: { retryCount },
-                executionState: "queued",
-                summary: `Autonomous retry #${retryCount} enqueued.`,
-                error: null,
-                patch: { before: null, after: { retryCount, lastRetryReason: candidate.lastRetryReason } },
-                reason: candidate.lastRetryReason ?? "Scheduled retry",
-                idempotencyKey: `task.execution.requested:${candidate._id.toString()}:retry:${retryCount}:action`,
-            }).catch((error: unknown) => {
-                const maybeMongo = error as { code?: number };
-                if (maybeMongo?.code !== 11000) {
-                    throw error;
-                }
-            });
-
-            console.info("task-worker retry.enqueued", {
-                workerId,
-                taskId: candidate._id.toString(),
-                retryCount,
-                runId: candidate.executionRunId ?? null,
-            });
-
-            enqueued = 1;
-        });
+            enqueued = await promoteAndEnqueueRetry(workerId, now);
+        }
 
         return enqueued;
     } finally {

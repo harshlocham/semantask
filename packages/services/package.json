@@ -40,6 +40,11 @@
             "types": "./dist/services/tool-normalizers.d.ts",
             "default": "./dist/services/tool-normalizers.js"
         },
+        "./mongo-transaction": {
+            "import": "./dist/services/mongo-transaction.js",
+            "types": "./dist/services/mongo-transaction.d.ts",
+            "default": "./dist/services/mongo-transaction.js"
+        },
         "./validators/*": {
             "import": "./dist/validators/*.js",
             "types": "./dist/validators/*.d.ts",

@@ -5,6 +5,7 @@ import { Conversation } from "@chat/db/models/Conversation";
 import Message, { IMessagePopulated } from "@chat/db/models/Message";
 import { connectToDatabase } from "@chat/db";
 import { enqueueOutboxEvent } from "./outbox.service";
+import { isMongoTransactionUnsupported } from "./mongo-transaction";
 //import { socket } from "@/lib/socket/socketClient";
 
 export async function createMessage(data: CreateMessageInput, senderId: string) {
@@ -107,13 +108,7 @@ export async function createMessage(data: CreateMessageInput, senderId: string) 
             });
         });
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const transactionUnsupported =
-            message.includes("Transaction numbers are only allowed")
-            || message.includes("replica set")
-            || message.includes("standalone");
-
-        if (!transactionUnsupported) {
+        if (!isMongoTransactionUnsupported(error)) {
             throw error;
         }
 
