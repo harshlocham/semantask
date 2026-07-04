@@ -1,5 +1,5 @@
-import * as dbModule from "@chat/db";
-import TaskMemoryModel from "@chat/db/models/TaskMemory";
+import * as dbModule from "@semantask/db";
+import TaskMemoryModel from "@semantask/db/models/TaskMemory";
 
 const connectToDatabase =
     (dbModule as unknown as { connectToDatabase?: () => Promise<unknown> }).connectToDatabase

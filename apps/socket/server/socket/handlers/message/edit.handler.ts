@@ -1,6 +1,6 @@
 // src/server/socket/handlers/message/edit.handler.ts
 import { Server, Socket } from "socket.io";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 import { authorizeMessageAction } from "../../services/message-action-authorization.js";
 
 

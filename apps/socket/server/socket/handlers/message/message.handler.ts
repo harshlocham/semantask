@@ -7,7 +7,7 @@ import {
     type MessageSeenUpdatePayload,
     type ServerToClientEvents,
     SocketEvents,
-} from "@chat/types";
+} from "@semantask/types";
 import { authorizeConversationAccess } from "../../services/conversation-access-authorization.js";
 import {
     clearActiveConversation,

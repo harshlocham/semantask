@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { getSocket } from "@/lib/socket/socketClient";
 import useChatStore from "@/store/chat-store";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 
 const HEARTBEAT_MS = 4_000;
 

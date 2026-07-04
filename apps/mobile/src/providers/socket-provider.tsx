@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import type { Socket } from "socket.io-client";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { usePresenceStore } from "@/store/presence-store";

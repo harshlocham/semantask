@@ -6,7 +6,7 @@ import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import { requireConversationAccess } from "@/lib/utils/auth/requireConversationAccess";
 import { updateMessageSemanticState } from "@/lib/repositories/task.repo";
 import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
-import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
+import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 const semanticOverrideSchema = z.object({
     semanticType: z.enum(["chat", "task", "decision", "reminder", "unknown"]),

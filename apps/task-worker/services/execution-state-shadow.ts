@@ -3,8 +3,8 @@ import type {
     ExecutionState,
     ExecutionStateHistoryEntry,
     ExecutionStateKind,
-} from "@chat/types";
-import { isTerminalExecutionState } from "@chat/types";
+} from "@semantask/types";
+import { isTerminalExecutionState } from "@semantask/types";
 import { reduceExecutionState } from "./execution-state-machine.js";
 
 const SHADOW_HISTORY_LIMIT = 100;

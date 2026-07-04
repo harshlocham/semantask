@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 
 export function LeaveHandler(io: Server, socket: Socket) {
     socket.on(SocketEvents

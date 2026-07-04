@@ -3,7 +3,7 @@
  * Handles parallel fetching of critical startup data
  */
 
-import { ClientUser, ClientConversation } from "@chat/types";
+import { ClientUser, ClientConversation } from "@semantask/types";
 import { recordApiTiming } from "./performance";
 import { getMe, getConversations } from "@/lib/utils/api";
 

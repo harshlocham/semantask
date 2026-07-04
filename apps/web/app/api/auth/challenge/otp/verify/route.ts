@@ -6,7 +6,7 @@ import {
     buildRefreshTokenCookie,
     completeOtpStepUpChallenge,
     logAuthEventBestEffort,
-} from "@chat/auth";
+} from "@semantask/auth";
 
 type ChallengeOtpVerifyBody = {
     challengeId?: unknown;

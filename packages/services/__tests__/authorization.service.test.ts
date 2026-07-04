@@ -6,25 +6,25 @@ import {
     canAccessConversation,
 } from "../authorization.service";
 
-jest.mock("@chat/db", () => ({
+jest.mock("@semantask/db", () => ({
     connectToDatabase: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("@chat/db/models/Conversation", () => ({
+jest.mock("@semantask/db/models/Conversation", () => ({
     Conversation: {
         findById: jest.fn(),
     },
 }));
 
-jest.mock("@chat/db/models/Task", () => ({
+jest.mock("@semantask/db/models/Task", () => ({
     __esModule: true,
     default: {
         findById: jest.fn(),
     },
 }));
 
-import { Conversation } from "@chat/db/models/Conversation";
-import TaskModel from "@chat/db/models/Task";
+import { Conversation } from "@semantask/db/models/Conversation";
+import TaskModel from "@semantask/db/models/Task";
 
 const userId = new Types.ObjectId().toString();
 const otherUserId = new Types.ObjectId().toString();

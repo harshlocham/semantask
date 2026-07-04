@@ -7,8 +7,8 @@ import { ImageIcon, Users, VideoIcon } from "lucide-react";
 import { getAvatarUrl } from "@/lib/utils/imagekit";
 import { useUser } from "@/context/UserContext";
 import useChatStore from "@/store/chat-store";
-import { ClientConversation } from "@chat/types";
-import { ClientUser } from "@chat/types";
+import { ClientConversation } from "@semantask/types";
+import { ClientUser } from "@semantask/types";
 
 
 type ConversationProps = {

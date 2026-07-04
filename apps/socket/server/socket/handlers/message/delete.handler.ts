@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 import { authorizeMessageAction } from "../../services/message-action-authorization.js";
 
 export function DeleteHandler(io: Server, socket: Socket) {

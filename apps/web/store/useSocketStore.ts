@@ -3,8 +3,8 @@
 
 import { create } from "zustand";
 import { getSocket } from "@/lib/socket/socketClient";
-import { MessageEditPayload, SocketEvents } from "@chat/types";
-import type { MessageDTO } from "@chat/types";
+import { MessageEditPayload, SocketEvents } from "@semantask/types";
+import type { MessageDTO } from "@semantask/types";
 import useChatStore from "./chat-store";
 
 interface SocketState {

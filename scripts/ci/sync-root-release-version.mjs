@@ -48,14 +48,14 @@ const newSection = `## ${newVersion}
 
 `;
 
-if (!changelog.startsWith("# chat-app\n\n")) {
+if (!changelog.startsWith("# semantask\n\n")) {
   console.error("Unexpected CHANGELOG.md format; cannot append root release entry.");
   process.exit(1);
 }
 
 fs.writeFileSync(
   changelogPath,
-  changelog.replace("# chat-app\n\n", `# chat-app\n\n${newSection}`),
+  changelog.replace("# semantask\n\n", `# semantask\n\n${newSection}`),
 );
 
 console.log(

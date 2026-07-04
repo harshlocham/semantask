@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
-import TaskModel, { type ITask } from "@chat/db/models/Task";
-import * as dbModule from "@chat/db";
-import { enqueueOutboxEvent } from "@chat/services/outbox.service";
-import type { TaskExecutionActionType } from "@chat/types";
-import * as taskRepo from "@chat/services/repositories/task.repo";
+import TaskModel, { type ITask } from "@semantask/db/models/Task";
+import * as dbModule from "@semantask/db";
+import { enqueueOutboxEvent } from "@semantask/services/outbox.service";
+import type { TaskExecutionActionType } from "@semantask/types";
+import * as taskRepo from "@semantask/services/repositories/task.repo";
 
 const connectToDatabase =
     (dbModule as unknown as { connectToDatabase?: () => Promise<unknown> }).connectToDatabase

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/Db/db";
 import { requireAdminUser } from "@/lib/utils/auth/requireAdminUser";
-import { listAuthEvents, type AdminAuthEventGroup } from "@chat/auth";
+import { listAuthEvents, type AdminAuthEventGroup } from "@semantask/auth";
 
 const ADMIN_EVENT_TYPES: AdminAuthEventGroup[] = ["LOGIN", "REFRESH", "REVOKE", "STEP_UP"];
 

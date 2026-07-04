@@ -1,5 +1,5 @@
-import * as dbModule from "@chat/db";
-import TaskReflectionModel from "@chat/db/models/TaskReflection";
+import * as dbModule from "@semantask/db";
+import TaskReflectionModel from "@semantask/db/models/TaskReflection";
 import { writeLongTermMemory, writeShortTermMemory } from "./memory-service.js";
 import { createDefaultLLMProvider } from "./llm/index.js";
 import { parseJsonResponse } from "./llm/response-parser.js";

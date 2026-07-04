@@ -1,4 +1,4 @@
-# AgentMesh Ai — Architecture
+# Semantask — Architecture
 
 > Grounded in the actual code in this repository. File paths are cited throughout so each
 > component can be traced back to source. This is a **pnpm + Turborepo monorepo**
@@ -34,11 +34,11 @@ workspace packages:
 
 | Layer | Workspace | Tech | Source |
 |-------|-----------|------|--------|
-| Web client + API | `apps/web` (`@chat/web`) | Next.js 15 App Router, React 19, Zustand, SWR, socket.io-client, Dexie | `apps/web/package.json` |
+| Web client + API | `apps/web` (`@semantask/web`) | Next.js 15 App Router, React 19, Zustand, SWR, socket.io-client, Dexie | `apps/web/package.json` |
 | Mobile client | `apps/mobile` (`mobile`) | Expo / React Native 0.81, React Navigation, TanStack Query, socket.io-client, Zustand | `apps/mobile/package.json` |
-| Realtime server | `apps/socket` (`@chat/socket`) | Express 5 + Socket.IO 4, `@socket.io/redis-adapter`, JWT | `apps/socket/index.ts`, `apps/socket/server/socket/index.ts` |
-| Async worker | `apps/task-worker` (`@chat/task-worker`) | Node worker loop, Mongoose, OpenAI / HuggingFace | `apps/task-worker/index.ts` |
-| Shared packages | `packages/*` | `@chat/types`, `@chat/auth`, `@chat/db`, `@chat/services`, `@chat/redis` | `packages/*/package.json` |
+| Realtime server | `apps/socket` (`@semantask/socket`) | Express 5 + Socket.IO 4, `@socket.io/redis-adapter`, JWT | `apps/socket/index.ts`, `apps/socket/server/socket/index.ts` |
+| Async worker | `apps/task-worker` (`@semantask/task-worker`) | Node worker loop, Mongoose, OpenAI / HuggingFace | `apps/task-worker/index.ts` |
+| Shared packages | `packages/*` | `@semantask/types`, `@semantask/auth`, `@semantask/db`, `@semantask/services`, `@semantask/redis` | `packages/*/package.json` |
 
 Infra (`docker-compose.yml`) wires these behind an **nginx** reverse proxy with **Redis** and
 expects an external **MongoDB**:
@@ -66,13 +66,13 @@ flowchart LR
 
     NGINX["nginx reverse proxy<br/>port 80"]
 
-    subgraph WebTier["apps/web — @chat/web"]
+    subgraph WebTier["apps/web — @semantask/web"]
         NEXTUI["React UI + stores<br/>components, hooks, store"]
         NEXTAPI["Next.js API routes<br/>app/api/*"]
         INTAUTH["Internal socket authz API<br/>app/api/internal/socket/*"]
     end
 
-    subgraph RealtimeTier["apps/socket — @chat/socket"]
+    subgraph RealtimeTier["apps/socket — @semantask/socket"]
         IO["Socket.IO server<br/>path /api/socket"]
         INTHTTP["Internal HTTP bridge<br/>/internal/* INTERNAL_SECRET"]
     end
@@ -197,7 +197,7 @@ flow.
   `Conversation.lastMessage`, and writes an `OutboxEvent{topic:"message.created"}` — all inside a
   Mongo transaction (with a no-transaction fallback for standalone Mongo).
 - The worker loop (`apps/task-worker/index.ts`) claims `OutboxEvent`s via
-  `@chat/services/outbox.service` and dispatches by topic:
+  `@semantask/services/outbox.service` and dispatches by topic:
   - **`message.created`** → `processMessageTaskIntelligence`
     (`packages/services/task-intelligence.service.ts`). Ingress classification is **regex/heuristic**
     via `classifyMessage()` — not an LLM call. On match (confidence ≥ 0.7), the worker updates

@@ -1,8 +1,8 @@
 import "./test-env.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ExecutionState } from "@chat/types";
-import { taskLifecycleMatchesExecutionProjection } from "@chat/types";
+import type { ExecutionState } from "@semantask/types";
+import { taskLifecycleMatchesExecutionProjection } from "@semantask/types";
 import {
     detectTaskStateDivergence,
     isTaskStateDivergenceCheckEnabled,

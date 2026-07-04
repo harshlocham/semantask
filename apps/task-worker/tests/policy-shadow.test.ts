@@ -1,7 +1,7 @@
 import "./test-env.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ExecutionEvent, ExecutionState } from "@chat/types";
+import type { ExecutionEvent, ExecutionState } from "@semantask/types";
 import {
     appendShadowHistory,
     createQueuedShadowState,
@@ -9,7 +9,7 @@ import {
     resolveCurrentShadowState,
     type ShadowExecutionStateHistoryEntry,
 } from "../services/execution-state-shadow.js";
-import { deriveLegacyLifecycleState } from "@chat/types";
+import { deriveLegacyLifecycleState } from "@semantask/types";
 
 /**
  * These tests exercise the pure shadow-transition sequences used by

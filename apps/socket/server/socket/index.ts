@@ -9,7 +9,7 @@ import { registerMessageHandlers } from "./handlers/message/message.handler.js";
 import { deliveredHandler } from "./handlers/delivery/delivered.handler.js";
 import { SeenHandler } from "./handlers/delivery/seen.handler.js";
 import { cleanupStaleActiveUsers } from "./services/presence.redis.service.js";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 
 import { typingHandler } from "./handlers/typing/typing.handler.js";
 import type { Socket } from "socket.io";

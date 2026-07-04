@@ -34,10 +34,10 @@
       "@/lib/services/*": [
         "./packages/services/*"
       ],
-      "@chat/services/*": [
+      "@semantask/services/*": [
         "./packages/services/*"
       ],
-      "@chat/db/models/*": [
+      "@semantask/db/models/*": [
         "./packages/db/models/*.ts"
       ],
       "@/lib/repositories/*": [

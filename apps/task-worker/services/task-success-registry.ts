@@ -1,4 +1,4 @@
-import type { TaskExecutionActionType, TaskValidationLog } from "@chat/types";
+import type { TaskExecutionActionType, TaskValidationLog } from "@semantask/types";
 
 type TaskLike = {
     _id: { toString(): string };

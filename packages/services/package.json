@@ -1,5 +1,5 @@
 {
-    "name": "@chat/services",
+    "name": "@semantask/services",
     "version": "2.0.3",
     "type": "module",
     "main": "./dist/index.js",
@@ -67,8 +67,8 @@
         "ts-jest": "^29.4.4"
     },
     "dependencies": {
-        "@chat/db": "workspace:*",
-        "@chat/types": "workspace:*",
+        "@semantask/db": "workspace:*",
+        "@semantask/types": "workspace:*",
         "zod": "^4.0.5"
     }
 }

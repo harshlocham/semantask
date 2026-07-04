@@ -2,7 +2,7 @@ import { Server as IOServer } from "socket.io";
 import {
     ServerToClientEvents,
     ClientToServerEvents,
-} from "@chat/types";
+} from "@semantask/types";
 
 type TypedIOServer = IOServer<
     ClientToServerEvents,

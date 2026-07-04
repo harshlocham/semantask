@@ -5,7 +5,7 @@ import {
     type ServerToClientEvents,
     type ClientToServerEvents,
     SocketEvents,
-} from "@chat/types";
+} from "@semantask/types";
 import {
     getMessageDeliveryState,
     setMessageDeliveryState,

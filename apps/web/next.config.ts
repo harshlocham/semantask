@@ -10,7 +10,7 @@ if (existsSync(rootEnvPath)) {
 }
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@chat/auth", "@chat/services", "@chat/db"],
+  transpilePackages: ["@semantask/auth", "@semantask/services", "@semantask/db"],
   images: {
     domains: ["lh3.googleusercontent.com", "ik.imagekit.io"],
     remotePatterns: [
@@ -24,8 +24,8 @@ const nextConfig: NextConfig = {
     config.resolve = config.resolve || {};
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      "@chat/services": resolve(process.cwd(), "../../packages/services"),
-      "@chat/db": resolve(process.cwd(), "../../packages/db"),
+      "@semantask/services": resolve(process.cwd(), "../../packages/services"),
+      "@semantask/db": resolve(process.cwd(), "../../packages/db"),
     };
 
     return config;

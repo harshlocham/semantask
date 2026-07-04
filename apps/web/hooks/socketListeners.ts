@@ -1,4 +1,4 @@
-import { SocketEvents, type MessageSemanticUpdatedPayload, type TaskCreatedPayload, type TaskExecutionUpdatedPayload, type TaskLinkedToMessagePayload, type TaskUpdatedPayload } from "@chat/types";
+import { SocketEvents, type MessageSemanticUpdatedPayload, type TaskCreatedPayload, type TaskExecutionUpdatedPayload, type TaskLinkedToMessagePayload, type TaskUpdatedPayload } from "@semantask/types";
 import useChatStore from "@/store/chat-store";
 import useTaskStore from "@/store/task-store";
 import type { TypedSocket } from "@/hooks/socketClient";

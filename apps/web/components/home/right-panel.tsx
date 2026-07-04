@@ -5,7 +5,7 @@ import MessageList from "../chat/message-list";
 import TaskPanel from "../chat/task-panel";
 import ChatPlaceHolder from "@/components/home/chat-placeholder";
 import useChatStore from "@/store/chat-store";
-import { ClientUser } from "@chat/types";
+import { ClientUser } from "@semantask/types";
 import { getAvatarUrl } from "@/lib/utils/imagekit";
 import TypingIndicator from "./typing-indicator";
 import ChatHeader from "../chat/chat-header";

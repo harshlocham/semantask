@@ -1,4 +1,4 @@
-import type { TaskLifecycleState } from "@chat/db/models/Task";
+import type { TaskLifecycleState } from "@semantask/db/models/Task";
 
 export type TaskStateTransitionReason =
     | "plan_created"
