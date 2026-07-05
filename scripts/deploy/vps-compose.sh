@@ -20,7 +20,9 @@ if [[ ! -f .env ]]; then
 fi
 
 echo "Building and starting Semantask stack..."
-docker compose up -d --build
+export NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-}"
+docker compose build --no-cache nextapp
+docker compose up -d
 
 echo "Reloading nginx (picks up config + fresh upstream DNS)..."
 docker compose restart nginx

@@ -7,20 +7,13 @@ import {
     logAuthEventBestEffort,
     loginWithGoogleCode,
 } from "@semantask/auth";
+import { getGoogleOAuthBaseUrl } from "@/lib/utils/auth/googleOAuthBaseUrl";
 
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 const GOOGLE_CALLBACK_COOKIE = "google_oauth_callback";
 
-function getAppBaseUrl(req: NextRequest): string {
-    return (
-        process.env.APP_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        req.nextUrl.origin
-    );
-}
-
 function getRedirectUri(req: NextRequest): string {
-    return `${getAppBaseUrl(req)}/api/auth/google/callback`;
+    return `${getGoogleOAuthBaseUrl(req)}/api/auth/google/callback`;
 }
 
 function cleanupOAuthCookies(response: NextResponse) {
