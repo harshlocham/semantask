@@ -1,5 +1,11 @@
 # semantask
 
+## 2.0.9
+
+### Patch Changes
+
+- Workspace release: @semantask/auth, @semantask/db, @semantask/redis, @semantask/services, @semantask/socket, @semantask/task-worker, @semantask/types, @semantask/web, mobile (see package changelogs for details)
+
 ## 2.0.8
 
 ### Patch Changes

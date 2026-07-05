@@ -1,6 +1,6 @@
 {
     "name": "@semantask/web",
-    "version": "4.0.5",
+    "version": "5.0.0",
     "private": true,
     "scripts": {
         "dev": "next dev",
