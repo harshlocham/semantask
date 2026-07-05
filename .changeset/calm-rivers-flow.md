@@ -1,6 +1,6 @@
 ---
-"@chat/task-worker": patch
-"@chat/services": patch
+"@semantask/task-worker": patch,
+"@semantask/services": patch
 ---
 
 ## Runtime
