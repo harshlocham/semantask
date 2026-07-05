@@ -1,5 +1,11 @@
 # semantask
 
+## 2.0.10
+
+### Patch Changes
+
+- Workspace release: @semantask/services, @semantask/task-worker, @semantask/web (see package changelogs for details)
+
 ## 2.0.9
 
 ### Patch Changes

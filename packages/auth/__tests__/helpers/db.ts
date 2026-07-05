@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
-import { MongoMemoryReplSet } from "mongodb-memory-server";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, inject } from "vitest";
 
 export interface TestDbHandle {
     /** Connection string of the in-memory server. */
@@ -35,27 +34,24 @@ async function syncRegisteredIndexes(): Promise<void> {
 }
 
 /**
- * Wire an in-memory MongoDB instance into a test file's lifecycle.
+ * Wire the shared in-memory MongoDB instance into a test file's lifecycle.
  *
- * Registers `beforeAll` (boot + connect + build indexes), `afterEach`
- * (truncate collections), and `afterAll` (disconnect + stop) hooks. Returns an
- * accessor so individual tests can reach the live handle (e.g. for `uri` or to
- * force `ensureIndexes()` after registering a model mid-file).
+ * A single replica set is booted once via Vitest `globalSetup`; each file
+ * connects in `beforeAll`, truncates between tests, and disconnects in
+ * `afterAll` without stopping the shared server.
  *
  * Usage (in an integration test file):
  *   const { db } = useTestDb();
  */
 export function useTestDb(): { db: () => TestDbHandle } {
-    let server: MongoMemoryReplSet | undefined;
     let handle: TestDbHandle | undefined;
 
     beforeAll(async () => {
-        server = await MongoMemoryReplSet.create({
-            binary: { version: "7.0.37" },
-            replSet: { count: 1, storageEngine: "wiredTiger" },
-        });
-        const uri = server.getUri();
-        await mongoose.connect(uri);
+        const uri = inject("testMongoUri");
+
+        if (mongoose.connection.readyState === 0) {
+            await mongoose.connect(uri);
+        }
 
         handle = {
             uri,
@@ -64,7 +60,7 @@ export function useTestDb(): { db: () => TestDbHandle } {
         };
 
         await handle.ensureIndexes();
-    }, 120_000);
+    });
 
     afterEach(async () => {
         if (handle) {
@@ -73,10 +69,10 @@ export function useTestDb(): { db: () => TestDbHandle } {
     });
 
     afterAll(async () => {
-        await mongoose.disconnect();
-        if (server) {
-            await server.stop();
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.disconnect();
         }
+        handle = undefined;
     });
 
     return {

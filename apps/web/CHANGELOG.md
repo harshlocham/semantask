@@ -1,5 +1,12 @@
 # @semantask/web
 
+## 5.0.1
+
+### Patch Changes
+
+- Updated dependencies [4818bb5]
+  - @semantask/services@3.0.1
+
 ## 5.0.0
 
 ### Major Changes

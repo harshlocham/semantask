@@ -10,6 +10,7 @@ const alias = {
 
 // Loaded before every test file: applies test env defaults (JWT secrets, etc.).
 const envSetup = path.resolve(__dirname, "./__tests__/helpers/env.ts");
+const integrationGlobalSetup = path.resolve(__dirname, "./__tests__/helpers/global-setup.ts");
 
 export default defineConfig({
     resolve: { alias },
@@ -41,20 +42,16 @@ export default defineConfig({
                     environment: "node",
                     globals: true,
                     setupFiles: [envSetup],
+                    globalSetup: [integrationGlobalSetup],
                     // DB-backed and flow specs. Generous timeouts cover the
                     // first-run mongodb-memory-server binary download/boot.
-                    hookTimeout: 120_000,
+                    hookTimeout: 180_000,
                     testTimeout: 30_000,
-                    // Each integration file boots its own in-memory mongod. In CI,
-                    // serialize startup to avoid mongodb-memory-server lockfile races
-                    // on the shared binary cache directory.
+                    // A single shared repl set is booted in globalSetup. Run
+                    // integration files serially via CLI flags in package.json
+                    // (--no-file-parallelism --max-workers=1) so afterEach
+                    // collection clears do not race across files.
                     pool: "forks",
-                    poolOptions: {
-                        forks: {
-                            maxForks: process.env.CI ? 1 : 4,
-                            minForks: 1,
-                        },
-                    },
                     include: [
                         "__tests__/integration/**/*.test.ts",
                         "__tests__/e2e/**/*.test.ts",

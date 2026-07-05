@@ -7,8 +7,9 @@
   "types": "./index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run -c vitest.config.ts",
-    "test:integration": "vitest run -c vitest.config.ts --project integration",
+    "test": "vitest run -c vitest.config.ts --project unit && vitest run -c vitest.config.ts --project integration --no-file-parallelism --max-workers=1",
+    "test:integration": "vitest run -c vitest.config.ts --project integration --no-file-parallelism --max-workers=1",
+    "test:download-mongo": "node --import tsx ./__tests__/helpers/download-mongo-binary.mts",
     "teypecheck": "tsc --noEmit",
     "test:watch": "vitest -c vitest.config.ts"
   },
