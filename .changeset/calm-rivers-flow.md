@@ -1,5 +1,5 @@
 ---
-"@semantask/task-worker": patch,
+"@semantask/task-worker": patch
 "@semantask/services": patch
 ---
 
