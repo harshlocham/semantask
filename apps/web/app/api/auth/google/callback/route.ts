@@ -7,7 +7,10 @@ import {
     logAuthEventBestEffort,
     loginWithGoogleCode,
 } from "@semantask/auth";
-import { getGoogleOAuthBaseUrl } from "@/lib/utils/auth/googleOAuthBaseUrl";
+import {
+    buildAppRedirectUrl,
+    getGoogleOAuthBaseUrl,
+} from "@/lib/utils/auth/googleOAuthBaseUrl";
 
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 const GOOGLE_CALLBACK_COOKIE = "google_oauth_callback";
@@ -96,7 +99,7 @@ export async function GET(req: NextRequest) {
             userAgent,
             reason: "rate_limited",
         });
-        const loginRedirect = new URL("/login", req.url);
+        const loginRedirect = buildAppRedirectUrl(req, "/login");
         loginRedirect.searchParams.set("error", "too_many_google_oauth_attempts");
         return NextResponse.redirect(loginRedirect);
     }
@@ -108,7 +111,7 @@ export async function GET(req: NextRequest) {
     const callbackCookie = req.cookies.get(GOOGLE_CALLBACK_COOKIE)?.value;
     const callbackUrl = callbackCookie ? decodeURIComponent(callbackCookie) : "/";
 
-    const loginRedirect = new URL("/login", req.url);
+    const loginRedirect = buildAppRedirectUrl(req, "/login");
 
     if (!code || !state || !storedState || state !== storedState) {
         await logAuthEventBestEffort({
@@ -147,7 +150,7 @@ export async function GET(req: NextRequest) {
         });
 
         const safeRedirect = callbackUrl.startsWith("/") ? callbackUrl : "/";
-        const response = NextResponse.redirect(new URL(safeRedirect, req.url));
+        const response = NextResponse.redirect(buildAppRedirectUrl(req, safeRedirect));
         cleanupOAuthCookies(response);
         response.headers.append("Set-Cookie", buildAccessTokenCookie(accessToken));
         response.headers.append("Set-Cookie", buildRefreshTokenCookie(refreshToken));
@@ -155,12 +158,11 @@ export async function GET(req: NextRequest) {
         return response;
     } catch (error) {
         const message = error instanceof Error ? error.message : "google_oauth_failed";
-        if (process.env.NODE_ENV !== "production") {
-            console.error("[auth][google-callback]", {
-                message,
-                redirectUri: getRedirectUri(req),
-            });
-        }
+        console.error("[auth][google-callback]", {
+            message,
+            redirectUri: getRedirectUri(req),
+            publicOrigin: getGoogleOAuthBaseUrl(req),
+        });
         await logAuthEventBestEffort({
             eventType: "google_oauth_failed",
             outcome: "failure",
