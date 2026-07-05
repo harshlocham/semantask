@@ -1,15 +1,15 @@
 import "./test-env.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ExecutionEvent, ExecutionState } from "@chat/types";
+import type { ExecutionEvent, ExecutionState } from "@semantask/types";
 import {
     appendShadowHistory,
     reduceShadowExecutionEvent,
     resolveCurrentShadowState,
     type ShadowExecutionStateHistoryEntry,
 } from "../services/execution-state-shadow.js";
-import { deriveLegacyLifecycleState } from "@chat/types";
-import { isMongoTransactionUnsupported } from "@chat/services/mongo-transaction";
+import { deriveLegacyLifecycleState } from "@semantask/types";
+import { isMongoTransactionUnsupported } from "@semantask/services/mongo-transaction";
 
 test("isMongoTransactionUnsupported detects standalone Mongo errors", () => {
     assert.equal(

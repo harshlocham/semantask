@@ -1,6 +1,6 @@
-import TaskModel from "@chat/db/models/Task";
-import type { ExecutionState, TaskLifecycleState } from "@chat/types";
-import { deriveLegacyLifecycleState } from "@chat/types";
+import TaskModel from "@semantask/db/models/Task";
+import type { ExecutionState, TaskLifecycleState } from "@semantask/types";
+import { deriveLegacyLifecycleState } from "@semantask/types";
 import {
     appendShadowHistory,
     reduceShadowExecutionEvent,
