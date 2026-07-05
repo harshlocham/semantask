@@ -46,7 +46,11 @@ fi
 corepack enable
 pnpm install --frozen-lockfile
 
+# Avoid reusing a prior preview build artifact from the runner workspace.
+rm -rf .vercel/output
+
 npx --yes vercel@latest pull --yes --environment="$vercel_env" --token="$VERCEL_TOKEN"
+echo "Running: vercel build ${build_args[*]:-}"
 npx --yes vercel@latest build "${build_args[@]}" --token="$VERCEL_TOKEN"
 npx --yes vercel@latest deploy --prebuilt "${deploy_args[@]}" --token="$VERCEL_TOKEN"
 
