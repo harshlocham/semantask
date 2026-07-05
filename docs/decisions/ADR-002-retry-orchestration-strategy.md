@@ -142,13 +142,20 @@ default 5 s) calling `runRetryScannerOnce` per tick
    `nextRetryAt` to drain oldest-first.
 3. `enqueueOutboxEvent("task.execution.requested")` with a deterministic
    `dedupeKey = "task.execution.requested:<taskId>:retry:<retryCount>"` —
-   appends in the same transaction.
+   appended in the same transaction when supported.
 4. `createTaskAction({ executionState: "queued", ... })` with an idempotency
    key keyed on the retry count, so an accidental re-run scanner does not
-   create a duplicate audit row (the `code: 11000` swallow path is explicit).
+   duplicate audit rows (duplicate key `11000` is swallowed).
+5. On standalone Mongo (no replica set), `withTransaction` fails and the
+   scanner falls back to the same promote+enqueue steps without a session
+   (mirrors `message.service.ts` via `isMongoTransactionUnsupported`).
+6. When `TASK_RETRY_SHADOW_EMIT=1`, `emitRetryDueShadowState` applies
+   `RETRY_DUE` so the shadow FSM moves to `queued` (projects to `ready`).
 
-Because steps 2 + 3 + 4 sit inside one transaction, a partial failure rolls
-back the lifecycle transition and the next scan retries. The task therefore
+Because steps 2 + 3 + 4 sit inside one transaction when supported, a partial
+failure rolls back the lifecycle transition and the next scan retries. On
+standalone Mongo the fallback path has weaker atomicity (same trade-off as
+message create). The task therefore
 appears in the outbox **once per `retryCount` value**.
 
 ### 5. Inline retry inside RetryManager
@@ -233,10 +240,10 @@ any non-negative integer.
 - The lease is held in the `Task` document, indexed by
   `{ leaseOwner: 1, leaseExpiresAt: 1 }` and partially indexed for run-owned
   executions via `executionState.kind`. Lease acquisition is O(1) per task.
-- The retry scanner's `withTransaction` requires a replica-set MongoDB; the
-  worker assumes this without checking. A single-node MongoDB will return
-  `Transaction numbers are only allowed on a replica set member or mongos` and
-  the scanner will fail every 5 s.
+- The retry scanner prefers `withTransaction` for atomic promote+enqueue; on
+  standalone Mongo it falls back to non-transactional steps via
+  `isMongoTransactionUnsupported` (Phase 1.3). Production should still use a
+  replica set for stronger guarantees.
 - `Redis` is optional but recommended. Without it, event-level deduplication
   degrades to "the outbox does not double-deliver inside `attempts <
   OUTBOX_MAX_ATTEMPTS`", which is materially weaker.
