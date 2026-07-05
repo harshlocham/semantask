@@ -1,5 +1,18 @@
 # mobile
 
+## 3.0.0
+
+### Major Changes
+
+- fe46888: Rebrand from chat-app / @chat to Semantask / @semantask.
+  - Product name: AgentMesh AI → Semantask
+  - npm scope: @chat/_ → @semantask/_
+  - Default MongoDB database: chat-app → semantask
+  - VPS deploy path example: /opt/chat-app → /opt/semantask
+
+  Breaking for anyone still importing @chat/\* or using the old DB/deploy paths.
+  Existing Mongo data in `chat-app` is unchanged; update MONGODB_URI or migrate data.
+
 ## 2.1.1
 
 ### Patch Changes
@@ -21,7 +34,6 @@
 ### Major Changes
 
 - 3215a80: Enhanced mobile authentication and chat session management, and standardized monorepo build tooling across shared packages.
-
   - Added mobile auth support improvements and session flow hardening.
   - Added explicit build scripts/config for shared packages (auth, db, services, redis, types) to emit dist artifacts consistently.
   - Improved repository cleanup scripts with safer artifact cleanup and full-reset options.

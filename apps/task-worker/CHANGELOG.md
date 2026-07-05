@@ -1,5 +1,87 @@
 # @semantask/task-worker
 
+## 3.0.0
+
+### Major Changes
+
+- fe46888: Rebrand from chat-app / @chat to Semantask / @semantask.
+  - Product name: AgentMesh AI → Semantask
+  - npm scope: @chat/_ → @semantask/_
+  - Default MongoDB database: chat-app → semantask
+  - VPS deploy path example: /opt/chat-app → /opt/semantask
+
+  Breaking for anyone still importing @chat/\* or using the old DB/deploy paths.
+  Existing Mongo data in `chat-app` is unchanged; update MONGODB_URI or migrate data.
+
+### Patch Changes
+
+- 3842f81: ## Runtime
+
+  Introduced feature-flagged task state divergence detection to compare the legacy lifecycle state with the projected shadow execution state.
+
+  The implementation is observability-only and does not modify runtime behavior unless `TASK_STATE_DIVERGENCE_CHECK=1` is enabled.
+
+  ### Added
+  - Projection comparison helper
+  - State divergence detector
+  - Structured divergence logging
+  - Worker integration hooks
+  - Feature flag support
+  - Unit tests
+
+  ### Updated
+  - Production runbook
+  - Environment documentation
+  - Architecture gap audit
+
+  ### Compatibility
+
+  No breaking changes.
+
+  No database migrations.
+
+  No API changes.
+
+  No socket protocol changes.
+
+  Feature disabled by default.
+
+- 7d2f690: ## Runtime
+
+  Aligned the shadow execution FSM with the legacy lifecycle on the policy early-return paths of `processTaskExecutionRequested`.
+
+  When `TASK_POLICY_SHADOW_EMIT=1` (and FSM shadow mode is on), the blocked and approval-required paths now emit `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` shadow events and write an aligned legacy `lifecycleState` (the FSM projection), so dual-state stays consistent instead of leaving the shadow FSM stale.
+
+  ### Added
+  - `emitPolicyShadowState` helper (policy-shadow.ts)
+  - `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` shadow emission on policy early returns
+  - `APPROVAL_GRANTED` resume in `startShadowExecutionRun` for approved re-runs
+  - Feature flag `TASK_POLICY_SHADOW_EMIT`
+  - Unit tests
+
+  ### Updated
+  - Production runbook
+  - Environment documentation
+  - Architecture gap audit (P1-6)
+
+  ### Compatibility
+
+  No breaking changes.
+
+  No database migrations.
+
+  No API changes.
+
+  No socket protocol changes.
+
+  Feature disabled by default.
+
+- Updated dependencies [3842f81]
+- Updated dependencies [fe46888]
+  - @semantask/types@2.0.0
+  - @semantask/services@3.0.0
+  - @semantask/db@3.0.0
+
 ## 2.0.6
 
 ### Patch Changes
