@@ -516,6 +516,7 @@ jobs:
     timeout-minutes: 30
     needs: [prepare, build_image_socket, build_image_task_worker]
     if: >
+      always() &&
       needs.prepare.outputs.should_deploy == 'true' &&
       needs.build_image_socket.result == 'success' &&
       (needs.build_image_task_worker.result == 'success' || needs.build_image_task_worker.result == 'skipped') &&
