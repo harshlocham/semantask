@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createGoogleOAuthState } from "@semantask/auth";
+import { getGoogleOAuthBaseUrl } from "@/lib/utils/auth/googleOAuthBaseUrl";
 
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 const GOOGLE_CALLBACK_COOKIE = "google_oauth_callback";
-
-function getAppBaseUrl(req: NextRequest): string {
-    return (
-        process.env.APP_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        req.nextUrl.origin
-    );
-}
 
 function getGoogleClientId(): string {
     return process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
@@ -37,7 +30,7 @@ function buildGoogleOAuthAuthorizeUrl(input: {
 export async function GET(req: NextRequest) {
     try {
         const callbackUrl = req.nextUrl.searchParams.get("callbackUrl") || "/";
-        const baseUrl = getAppBaseUrl(req);
+        const baseUrl = getGoogleOAuthBaseUrl(req);
         const redirectUri = `${baseUrl}/api/auth/google/callback`;
         const googleClientId = getGoogleClientId();
 
