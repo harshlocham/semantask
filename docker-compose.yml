@@ -28,8 +28,11 @@ services:
     env_file:
       - .env
     environment:
+      NODE_ENV: production
       REDIS_URL: redis://redis:6379
-      ORIGIN: http://localhost
+      ORIGIN: ${ORIGIN:-http://localhost}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+      APP_URL: ${APP_URL:-}
       SOCKET_SERVER_URL: http://socket:3001
     depends_on:
       - socket
@@ -54,7 +57,7 @@ services:
     environment:
       NODE_ENV: production
       INTERNAL_SECRET: ${INTERNAL_SECRET}
-      ORIGIN: http://localhost
+      ORIGIN: ${ORIGIN:-http://localhost}
       REDIS_URL: redis://redis:6379
       WEB_SERVER_URL: http://nextapp:3000
     healthcheck:
