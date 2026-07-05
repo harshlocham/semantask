@@ -77,6 +77,15 @@ jobs:
           echo "MONGOMS_DOWNLOAD_DIR=$RUNNER_TEMP/mongodb-binaries" >> "$GITHUB_ENV"
           echo "MONGOMS_PREFER_GLOBAL_PATH=0" >> "$GITHUB_ENV"
 
+      - name: Restore MongoDB memory server binaries
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/mongodb-binaries
+          key: ${{ runner.os }}-mongo-binaries-7.0.37-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-mongo-binaries-7.0.37-
+            ${{ runner.os }}-mongo-binaries-
+
       - name: Use Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -91,6 +100,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Pre-download MongoDB memory server binary
+        run: pnpm --filter @semantask/auth run test:download-mongo
+
       - name: Build shared packages
         run: pnpm exec turbo run build --filter=./packages/*
 
