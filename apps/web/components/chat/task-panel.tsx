@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import type { TaskExecutionEventRecord, TaskRecord, TaskStatus } from "@chat/types";
+import type { TaskExecutionEventRecord, TaskRecord, TaskStatus } from "@semantask/types";
 import { authenticatedFetch } from "@/lib/utils/api";
 import { getSocket } from "@/hooks/socketClient";
 import { useTaskExecution } from "@/hooks/useTaskExecution";

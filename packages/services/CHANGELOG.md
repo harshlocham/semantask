@@ -1,4 +1,4 @@
-# @chat/services
+# @semantask/services
 
 ## 2.0.3
 
@@ -21,7 +21,7 @@
 
 - 51f6a45: Hardened realtime authorization and internal communication architecture across the platform. Refactored the socket server into a transport-only layer using secure internal web authorization bridges, centralized conversation/task ACL enforcement, server-resolved participant fan-out, and mandatory INTERNAL_SECRET validation. Added shared authorization services for REST and socket flows, removed client-trusted recipient authorization paths, restricted unsafe task status mutations, and improved overall security consistency for realtime messaging and task execution.
 - Updated dependencies [51f6a45]
-  - @chat/db@2.0.3
+  - @semantask/db@2.0.3
 
 ## 2.0.1
 
@@ -29,8 +29,8 @@
 
 - e3ad385: The system has been fully implemented to support multi-step execution with strict safety and hallucination prevention.d it can self-heal a failed tool execution by asking the LLM for a corrected decision before falling back to normal retry behavior. The planner now preserves step input/output from LLM plans and explicitly asks for template-ready step context
 - Updated dependencies [e3ad385]
-  - @chat/types@1.3.1
-  - @chat/db@2.0.2
+  - @semantask/types@1.3.1
+  - @semantask/db@2.0.2
 
 ## 2.0.0
 
@@ -41,8 +41,8 @@
 ### Patch Changes
 
 - Updated dependencies [8a4de46]
-  - @chat/db@2.0.0
-  - @chat/types@1.3.0
+  - @semantask/db@2.0.0
+  - @semantask/types@1.3.0
 
 ## 1.1.0
 
@@ -57,7 +57,7 @@
 ### Patch Changes
 
 - Updated dependencies [3215a80]
-  - @chat/types@1.1.0
+  - @semantask/types@1.1.0
 
 ## 1.0.3
 
@@ -65,14 +65,14 @@
 
 - 86f8cfe: Refactor CI/CD to use Changesets-native package tags for deployment
   - Removed root `v*` tag creation logic from release workflow
-  - Updated deploy workflow to trigger on Changesets tags (`@chat/services@*`)
+  - Updated deploy workflow to trigger on Changesets tags (`@semantask/services@*`)
   - Implemented strict tag parsing and validation
   - Added package-specific deployment gating
   - Improved Docker tagging and metadata extraction
   - Enforced PAT usage for reliable workflow chaining
 
 - Updated dependencies [86f8cfe]
-  - @chat/types@1.0.3
+  - @semantask/types@1.0.3
 
 ## 1.0.2
 
@@ -84,7 +84,7 @@
   - This resolves the issue where release workflow created only package-scoped tags but deploy workflow needed root tags
 
 - Updated dependencies [86f8cfe]
-  - @chat/types@1.0.2
+  - @semantask/types@1.0.2
 
 ## 1.0.1
 
@@ -100,4 +100,4 @@
   These fixes ensure the automated release pipeline correctly creates version tags and the deployment workflow is properly triggered, enabling end-to-end CI/CD automation for the monorepo.
 
 - Updated dependencies [3b307d2]
-  - @chat/types@1.0.1
+  - @semantask/types@1.0.1

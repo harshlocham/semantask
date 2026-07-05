@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
-import TaskModel from "@chat/db/models/Task";
-import * as dbModule from "@chat/db";
-import type { TaskExecutionUpdatedPayload } from "@chat/types";
+import TaskModel from "@semantask/db/models/Task";
+import * as dbModule from "@semantask/db";
+import type { TaskExecutionUpdatedPayload } from "@semantask/types";
 import { classifyExecutionError } from "./retry-classifier.js";
 
 const connectToDatabase =

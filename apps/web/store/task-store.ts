@@ -9,7 +9,7 @@ import type {
     TaskLinkedToMessagePayload,
     TaskRecord,
     TaskUpdatedPayload,
-} from "@chat/types";
+} from "@semantask/types";
 
 interface TaskLinkState {
     taskId: string;

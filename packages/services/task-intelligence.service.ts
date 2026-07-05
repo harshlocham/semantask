@@ -3,9 +3,9 @@ import {
     type TaskCreatedPayload,
     type TaskLinkedToMessagePayload,
     type TaskUpdatedPayload,
-} from "@chat/types";
-import MessageModel from "@chat/db/models/Message";
-import TaskModel from "@chat/db/models/Task";
+} from "@semantask/types";
+import MessageModel from "@semantask/db/models/Message";
+import TaskModel from "@semantask/db/models/Task";
 import {
     buildTaskActionIdempotencyKey,
     createTaskAction,
@@ -14,7 +14,7 @@ import {
     upsertTaskByDedupeKey,
     updateMessageSemanticState,
 } from "./repositories/task.repo";
-import { connectToDatabase } from "@chat/db";
+import { connectToDatabase } from "@semantask/db";
 import { enqueueOutboxEvent } from "./outbox.service";
 
 const AI_VERSION = "intelligent-v3-preprocess";

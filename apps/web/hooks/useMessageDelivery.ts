@@ -7,7 +7,7 @@ import {
     MessageDeliveredUpdatePayload,
     MessageSeenUpdatePayload,
     SocketEvents,
-} from "@chat/types";
+} from "@semantask/types";
 import useChatStore from "@/store/chat-store";
 import { markDelivered } from "@/lib/services/delivery.service";
 import { markSeen } from "@/lib/services/seen.service";

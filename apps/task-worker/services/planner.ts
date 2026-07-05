@@ -1,6 +1,6 @@
-import * as dbModule from "@chat/db";
-import TaskPlanModel, { type ITaskStep } from "@chat/db/models/TaskPlan";
-import type { PlannerContext } from "@chat/types";
+import * as dbModule from "@semantask/db";
+import TaskPlanModel, { type ITaskStep } from "@semantask/db/models/TaskPlan";
+import type { PlannerContext } from "@semantask/types";
 import { createDefaultLLMProvider } from "./llm/index.js";
 import { parseJsonText } from "./llm/response-parser.js";
 

@@ -5,7 +5,7 @@ import {
     buildExpiredCookie,
     logAuthEventBestEffort,
     logoutService,
-} from "@chat/auth";
+} from "@semantask/auth";
 
 export async function POST(req: NextRequest) {
     const xForwardedFor = req.headers.get("x-forwarded-for") || "";

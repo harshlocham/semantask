@@ -2,7 +2,7 @@ import type {
     ExecutionEvent,
     ExecutionState,
     ExecutionStateKind,
-} from "@chat/types";
+} from "@semantask/types";
 
 export class InvalidExecutionTransitionError extends Error {
     constructor(from: ExecutionStateKind, eventType: ExecutionEvent["type"], detail?: string) {

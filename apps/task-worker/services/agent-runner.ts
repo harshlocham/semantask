@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import mongoose from "mongoose";
-import type { ExecutionEvent, ExecutionState, TaskCheckpoint, TaskExecutionActionType, TaskExecutionHistory, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload, TaskValidationLog } from "@chat/types";
+import type { ExecutionEvent, ExecutionState, TaskCheckpoint, TaskExecutionActionType, TaskExecutionHistory, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload, TaskValidationLog } from "@semantask/types";
 import { RetryManager } from "./retry-manager.js";
-import { createTaskAction, getLatestExecutionTaskAction as getLatestExecutionTaskActionFromRepo } from "@chat/services/repositories/task.repo";
-import TaskActionModel from "@chat/db/models/TaskAction";
-import * as taskModule from "@chat/db/models/Task";
-import TaskPlanModel from "@chat/db/models/TaskPlan";
+import { createTaskAction, getLatestExecutionTaskAction as getLatestExecutionTaskActionFromRepo } from "@semantask/services/repositories/task.repo";
+import TaskActionModel from "@semantask/db/models/TaskAction";
+import * as taskModule from "@semantask/db/models/Task";
+import TaskPlanModel from "@semantask/db/models/TaskPlan";
 import ToolRegistry from "./tools/tool-registry.js";
 import TaskSuccessRegistry, { createDefaultTaskSuccessRegistry } from "./task-success-registry.js";
 import { CreateIssueTool } from "./tools/create-issue.tool.js";
@@ -35,7 +35,7 @@ import {
     shouldResetShadowRunState,
 } from "./execution-state-shadow.js";
 
-import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
+import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 type TaskModelLike = {
     findById: (id: string) => Promise<TaskDocumentLike | null>;

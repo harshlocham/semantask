@@ -1,4 +1,4 @@
-import type { ClientConversation, ClientUser, UIMessage } from "@chat/types";
+import type { ClientConversation, ClientUser, UIMessage } from "@semantask/types";
 import {
     AuthSessionPendingError,
     isStepUpResponse,

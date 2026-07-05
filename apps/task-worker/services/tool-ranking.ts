@@ -1,4 +1,4 @@
-import type { TaskExecutionActionType } from "@chat/types";
+import type { TaskExecutionActionType } from "@semantask/types";
 
 export type ToolRankingInput = {
     toolName: Exclude<TaskExecutionActionType, "none">;

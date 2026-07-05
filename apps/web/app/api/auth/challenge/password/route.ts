@@ -5,7 +5,7 @@ import {
     buildRefreshTokenCookie,
     completePasswordStepUpChallenge,
     logAuthEventBestEffort,
-} from "@chat/auth";
+} from "@semantask/auth";
 
 type ChallengePasswordBody = {
     challengeId?: unknown;

@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import { ClientUser } from "@chat/types";
+import { ClientUser } from "@semantask/types";
 
 type ChatBubbleAvatarProps = {
     sender: ClientUser;

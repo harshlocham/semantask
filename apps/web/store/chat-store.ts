@@ -1,7 +1,7 @@
 // src/store/chat-store.ts
 import { create } from "zustand";
-import { ClientConversation } from "@chat/types";
-import { UIMessage } from "@chat/types";
+import { ClientConversation } from "@semantask/types";
+import { UIMessage } from "@semantask/types";
 interface ChatStore {
     selectedConversationId: string | null;
     currentUserId: string | null;

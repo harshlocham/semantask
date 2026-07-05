@@ -1,5 +1,5 @@
-import type { TaskRecord } from "@chat/types";
-import type { ITask } from "@chat/db/models/Task";
+import type { TaskRecord } from "@semantask/types";
+import type { ITask } from "@semantask/db/models/Task";
 
 export function normalizeTask(doc: ITask): TaskRecord {
     return {

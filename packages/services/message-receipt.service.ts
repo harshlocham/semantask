@@ -1,6 +1,6 @@
 import mongoose, { Types } from "mongoose";
-import Message from "@chat/db/models/Message";
-import { connectToDatabase } from "@chat/db";
+import Message from "@semantask/db/models/Message";
+import { connectToDatabase } from "@semantask/db";
 
 function toObjectId(id: string) {
     return new Types.ObjectId(id);

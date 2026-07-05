@@ -1,9 +1,9 @@
 import { Types } from "mongoose";
 import { createHash } from "node:crypto";
-import { connectToDatabase } from "@chat/db";
-import TaskModel, { ITask } from "@chat/db/models/Task";
-import TaskActionModel, { ITaskAction } from "@chat/db/models/TaskAction";
-import MessageModel, { IMessage } from "@chat/db/models/Message";
+import { connectToDatabase } from "@semantask/db";
+import TaskModel, { ITask } from "@semantask/db/models/Task";
+import TaskActionModel, { ITaskAction } from "@semantask/db/models/TaskAction";
+import MessageModel, { IMessage } from "@semantask/db/models/Message";
 import type { CreateTaskActionInput, CreateTaskInput, LinkMessageToTaskInput, UpdateTaskInput } from "../validators/task.schema";
 
 const toObjectId = (value: string) => new Types.ObjectId(value);

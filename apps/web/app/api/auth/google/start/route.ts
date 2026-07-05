@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createGoogleOAuthState } from "@chat/auth";
+import { createGoogleOAuthState } from "@semantask/auth";
 
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 const GOOGLE_CALLBACK_COOKIE = "google_oauth_callback";

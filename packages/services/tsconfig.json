@@ -3,7 +3,7 @@
         "baseUrl": ".",
         "ignoreDeprecations": "5.0",
         "paths": {
-            "@chat/db/models/*": [
+            "@semantask/db/models/*": [
                 "../db/models/*.ts"
             ],
             "@/models/*": [
@@ -21,10 +21,10 @@
             "@/lib/validators/*": [
                 "./validators/*"
             ],
-            "@chat/services/*": [
+            "@semantask/services/*": [
                 "./*"
             ],
-            "@chat/services/validators/*": [
+            "@semantask/services/validators/*": [
                 "./validators/*"
             ],
             "@/server/normalizers/*": [

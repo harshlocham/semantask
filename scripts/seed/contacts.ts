@@ -1,6 +1,6 @@
 import "dotenv/config";
 import mongoose from "mongoose";
-import { createContact } from "@chat/services/contact.service";
+import { createContact } from "@semantask/services/contact.service";
 
 type SeedContact = {
     name: string;

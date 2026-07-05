@@ -4,7 +4,7 @@ import {
     assertTaskAccess,
     AuthorizationError,
     type ConversationAccessOptions,
-} from "@chat/services/authorization.service";
+} from "@semantask/services/authorization.service";
 import type { AuthUser } from "@/lib/utils/auth/getAuthUser";
 
 type AccessGuardResult =

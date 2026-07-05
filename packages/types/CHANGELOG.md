@@ -1,4 +1,4 @@
-# @chat/types
+# @semantask/types
 
 ## 1.3.2
 
@@ -42,7 +42,7 @@
 - 86f8cfe: Refactor CI/CD to use Changesets-native package tags for deployment
 
   - Removed root `v*` tag creation logic from release workflow
-  - Updated deploy workflow to trigger on Changesets tags (`@chat/services@*`)
+  - Updated deploy workflow to trigger on Changesets tags (`@semantask/services@*`)
   - Implemented strict tag parsing and validation
   - Added package-specific deployment gating
   - Improved Docker tagging and metadata extraction

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
-import * as dbModule from "@chat/db";
-import ContactModel from "@chat/db/models/Contact";
-import { User } from "@chat/db/models/User";
+import * as dbModule from "@semantask/db";
+import ContactModel from "@semantask/db/models/Contact";
+import { User } from "@semantask/db/models/User";
 
 function isContactResolutionDebugEnabled(): boolean {
     return process.env.CONTACT_RESOLUTION_DEBUG === "1"

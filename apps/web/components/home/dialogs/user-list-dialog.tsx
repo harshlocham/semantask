@@ -18,8 +18,8 @@ import { getMe, getUsers, createConversation } from "@/lib/utils/api";
 import { useEffect, useRef, useState } from "react";
 import { UserItem } from "./UserItem";
 import { upload } from "@imagekit/next";
-import { ClientUser } from "@chat/types";
-import { ClientConversation } from "@chat/types";
+import { ClientUser } from "@semantask/types";
+import { ClientConversation } from "@semantask/types";
 import { getImageKitUploadAuth } from "@/lib/utils/imagekit";
 
 const UserListDialog = () => {

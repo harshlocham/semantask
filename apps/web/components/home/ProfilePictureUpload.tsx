@@ -7,7 +7,7 @@ import { Camera } from "lucide-react";
 import toast from "react-hot-toast";
 import UserAvatar from "./UserAvatar";
 import { useUser } from "@/context/UserContext";
-import { ClientUser } from "@chat/types";
+import { ClientUser } from "@semantask/types";
 import { authenticatedFetch } from "@/lib/utils/api";
 interface ProfilePictureUploadProps {
     onUpdate?: (imageUrl: string) => void;

@@ -8,7 +8,7 @@ import {
     buildRefreshTokenCookie,
     logAuthEventBestEffort,
     refreshService,
-} from "@chat/auth";
+} from "@semantask/auth";
 
 type RequestContext = {
     ipAddress: string;

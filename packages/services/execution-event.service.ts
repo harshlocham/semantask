@@ -1,11 +1,11 @@
-import TaskModel from "@chat/db/models/Task";
+import TaskModel from "@semantask/db/models/Task";
 import TaskExecutionEventModel, {
     type ITaskExecutionEvent,
     type TaskExecutionEventPhase,
     type TaskExecutionEventType,
-} from "@chat/db/models/TaskExecutionEvent";
-import type { TaskExecutionUpdatedPayload } from "@chat/types";
-import { connectToDatabase } from "@chat/db";
+} from "@semantask/db/models/TaskExecutionEvent";
+import type { TaskExecutionUpdatedPayload } from "@semantask/types";
+import { connectToDatabase } from "@semantask/db";
 
 async function allocateSequence(taskId: string, runId: string): Promise<number> {
     const updated = await TaskModel.findOneAndUpdate(

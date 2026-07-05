@@ -1,4 +1,4 @@
-jest.mock("@chat/types/utils/internal-bridge-auth", () => ({
+jest.mock("@semantask/types/utils/internal-bridge-auth", () => ({
     INTERNAL_SECRET_HEADER: "x-internal-secret",
     getInternalSecret: () => "test-secret",
     hasValidInternalSecret: (provided: string | null | undefined) => provided === "test-secret",
@@ -8,12 +8,12 @@ class MockAuthorizationError extends Error {
     code = "FORBIDDEN";
 }
 
-jest.mock("@chat/services/authorization.service", () => ({
+jest.mock("@semantask/services/authorization.service", () => ({
     assertConversationAccess: jest.fn(),
     AuthorizationError: MockAuthorizationError,
 }));
 
-import { assertConversationAccess } from "@chat/services/authorization.service";
+import { assertConversationAccess } from "@semantask/services/authorization.service";
 import { POST } from "../app/api/internal/socket/authorize-conversation-access/route";
 
 describe("POST /api/internal/socket/authorize-conversation-access", () => {

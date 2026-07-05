@@ -1,14 +1,14 @@
-# @chat/web
+# @semantask/web
 
 ## 4.0.5
 
 ### Patch Changes
 
 - 5eece69: Fix authentication and step-up flows:
-  - @chat/auth: Block token refresh while a session is step_up_pending so challenges stay valid through verification
-  - @chat/web: Reset auth bootstrap after login, register, and step-up completion
-  - @chat/web: Prevent duplicate refresh and OTP send requests that caused 429 rate limits
-  - @chat/web: Handle unauthenticated API calls without throwing after bootstrap
+  - @semantask/auth: Block token refresh while a session is step_up_pending so challenges stay valid through verification
+  - @semantask/web: Reset auth bootstrap after login, register, and step-up completion
+  - @semantask/web: Prevent duplicate refresh and OTP send requests that caused 429 rate limits
+  - @semantask/web: Handle unauthenticated API calls without throwing after bootstrap
 
 - 4a29cb5: Enhance execution lease management and task processing.
   - Added execution lease validation before task processing begins.
@@ -21,8 +21,8 @@
 - Updated dependencies [ac01b5e]
 - Updated dependencies [5eece69]
 - Updated dependencies [4a29cb5]
-  - @chat/auth@2.3.3
-  - @chat/services@2.0.3
+  - @semantask/auth@2.3.3
+  - @semantask/services@2.0.3
 
 ## 4.0.4
 
@@ -30,7 +30,7 @@
 
 - 51f6a45: Hardened realtime authorization and internal communication architecture across the platform. Refactored the socket server into a transport-only layer using secure internal web authorization bridges, centralized conversation/task ACL enforcement, server-resolved participant fan-out, and mandatory INTERNAL_SECRET validation. Added shared authorization services for REST and socket flows, removed client-trusted recipient authorization paths, restricted unsafe task status mutations, and improved overall security consistency for realtime messaging and task execution.
 - Updated dependencies [51f6a45]
-  - @chat/services@2.0.2
+  - @semantask/services@2.0.2
 
 ## 4.0.3
 
@@ -39,7 +39,7 @@
 - 5a2cba8: - Socket: register message:send handlers; broadcast online status on connect; remove duplicate join/leave handlers
   - Web: connect socket after login/register without reload; stop disconnecting on tab visibility changes
   - Mobile: reconnect on app foreground instead of disconnecting in background
-  - Task worker: use @chat/services package imports so production start resolves modules correctly
+  - Task worker: use @semantask/services package imports so production start resolves modules correctly
   - Root: Next 15.5.18 override, uuid 14, ESLint config baseDirectory for apps/web
 
 ## 4.0.2
@@ -48,7 +48,7 @@
 
 - 6c57198: Fix socket auth and deployment flow for production by normalizing origins, enabling cross-subdomain auth cookies, and binding the socket server to the Render-injected port.
 - Updated dependencies [6c57198]
-  - @chat/auth@2.3.2
+  - @semantask/auth@2.3.2
 
 ## 4.0.1
 
@@ -56,7 +56,7 @@
 
 - 67ff3ac: Publish dedicated chat-socket image with legacy compatibility aliases and add otp stepup-up flow in stepup challenge
 - Updated dependencies [67ff3ac]
-  - @chat/auth@2.3.1
+  - @semantask/auth@2.3.1
 
 ## 4.0.0
 
@@ -67,8 +67,8 @@
 ### Patch Changes
 
 - Updated dependencies [8a4de46]
-  - @chat/services@2.0.0
-  - @chat/types@1.3.0
+  - @semantask/services@2.0.0
+  - @semantask/types@1.3.0
 
 ## 3.1.0
 
@@ -79,4 +79,4 @@
 ### Patch Changes
 
 - Updated dependencies [2c48736]
-  - @chat/auth@2.3.0
+  - @semantask/auth@2.3.0

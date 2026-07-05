@@ -1,5 +1,5 @@
-import type { ExecutionState, TaskLifecycleState } from "@chat/types";
-import { deriveLegacyLifecycleState, taskLifecycleMatchesExecutionProjection } from "@chat/types";
+import type { ExecutionState, TaskLifecycleState } from "@semantask/types";
+import { deriveLegacyLifecycleState, taskLifecycleMatchesExecutionProjection } from "@semantask/types";
 import { isExecutionState } from "./execution-state-shadow.js";
 import { logExecution } from "./execution-logger.js";
 

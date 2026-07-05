@@ -139,12 +139,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - name: Build shared types package
-        run: pnpm --filter @chat/types build
+        run: pnpm --filter @semantask/types build
       - run: pnpm run build
 
       - name: Start web app
         run: |
-          pnpm --filter @chat/web start &
+          pnpm --filter @semantask/web start &
           sleep 10
 
       - name: Check web health
@@ -180,14 +180,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - name: Build shared types package
-        run: pnpm --filter @chat/types build
+        run: pnpm --filter @semantask/types build
 
       - name: Build web app
-        run: pnpm --filter @chat/web build
+        run: pnpm --filter @semantask/web build
 
       - name: Start web app
         run: |
-          pnpm --filter @chat/web start &
+          pnpm --filter @semantask/web start &
           sleep 10
 
       - name: Wait for web health

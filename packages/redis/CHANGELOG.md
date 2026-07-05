@@ -1,4 +1,4 @@
-# @chat/redis
+# @semantask/redis
 
 ## 1.1.0
 
@@ -14,7 +14,7 @@
 ### Patch Changes
 
 - Updated dependencies [3215a80]
-  - @chat/types@1.1.0
+  - @semantask/types@1.1.0
 
 ## 1.0.3
 
@@ -23,14 +23,14 @@
 - 86f8cfe: Refactor CI/CD to use Changesets-native package tags for deployment
 
   - Removed root `v*` tag creation logic from release workflow
-  - Updated deploy workflow to trigger on Changesets tags (`@chat/services@*`)
+  - Updated deploy workflow to trigger on Changesets tags (`@semantask/services@*`)
   - Implemented strict tag parsing and validation
   - Added package-specific deployment gating
   - Improved Docker tagging and metadata extraction
   - Enforced PAT usage for reliable workflow chaining
 
 - Updated dependencies [86f8cfe]
-  - @chat/types@1.0.3
+  - @semantask/types@1.0.3
 
 ## 1.0.2
 
@@ -43,7 +43,7 @@
   - This resolves the issue where release workflow created only package-scoped tags but deploy workflow needed root tags
 
 - Updated dependencies [86f8cfe]
-  - @chat/types@1.0.2
+  - @semantask/types@1.0.2
 
 ## 1.0.1
 
@@ -60,4 +60,4 @@
   These fixes ensure the automated release pipeline correctly creates version tags and the deployment workflow is properly triggered, enabling end-to-end CI/CD automation for the monorepo.
 
 - Updated dependencies [3b307d2]
-  - @chat/types@1.0.1
+  - @semantask/types@1.0.1

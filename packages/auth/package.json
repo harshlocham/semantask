@@ -1,5 +1,5 @@
 {
-  "name": "@chat/auth",
+  "name": "@semantask/auth",
   "version": "2.3.3",
   "private": true,
   "type": "module",

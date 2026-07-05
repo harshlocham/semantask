@@ -1,6 +1,6 @@
 import { cookies, headers } from "next/headers";
 import mongoose from "mongoose";
-import { authConfig, verifyAccessToken } from "@chat/auth";
+import { authConfig, verifyAccessToken } from "@semantask/auth";
 import { connectToDatabase } from "@/lib/Db/db";
 import { User } from "@/models/User";
 import { ForbiddenError, UnauthorizedError } from "@/lib/utils/auth/authErrors";

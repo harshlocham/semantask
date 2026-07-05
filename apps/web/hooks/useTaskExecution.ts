@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { TaskExecutionEventRecord, TaskExecutionUpdatedPayload } from "@chat/types";
+import type { TaskExecutionEventRecord, TaskExecutionUpdatedPayload } from "@semantask/types";
 import useTaskStore from "@/store/task-store";
 
 const EMPTY_EXECUTION_EVENTS: TaskExecutionEventRecord[] = [];
