@@ -5,7 +5,7 @@ import { getPaginatedMessages } from "@/lib/repositories/message.repo";
 import { normalizeMessage } from "@/server/normalizers/message.normalizer";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import { requireConversationAccess } from "@/lib/utils/auth/requireConversationAccess";
-import { AuthorizationError } from "@chat/services/authorization.service";
+import { AuthorizationError } from "@semantask/services/authorization.service";
 
 export async function POST(req: NextRequest) {
     try {

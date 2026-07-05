@@ -7,7 +7,7 @@ import ThemeSwitch from "./theme-switch";
 import UserListDialog from "./dialogs/user-list-dialog";
 import UserProfile from "./userProfile";
 import useChatStore from "@/store/chat-store";
-import { ClientUser, ClientConversation } from "@chat/types";
+import { ClientUser, ClientConversation } from "@semantask/types";
 import VirtualConversationList from "../sidebar/VirtualConversationList";
 import { socket } from "@/lib/socket/socketClient";
 import { useRouter } from "next/navigation";

@@ -8,7 +8,7 @@ import {
     CallEndPayload,
     CallRingingPayload,
     SocketEvents,
-} from "@chat/types";
+} from "@semantask/types";
 
 type IO = IOServer<ClientToServerEvents, ServerToClientEvents>;
 type Socket = import("socket.io").Socket<

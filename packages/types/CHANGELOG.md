@@ -1,4 +1,50 @@
-# @chat/types
+# @semantask/types
+
+## 2.0.0
+
+### Major Changes
+
+- fe46888: Rebrand from chat-app / @chat to Semantask / @semantask.
+  - Product name: AgentMesh AI → Semantask
+  - npm scope: @chat/_ → @semantask/_
+  - Default MongoDB database: chat-app → semantask
+  - VPS deploy path example: /opt/chat-app → /opt/semantask
+
+  Breaking for anyone still importing @chat/\* or using the old DB/deploy paths.
+  Existing Mongo data in `chat-app` is unchanged; update MONGODB_URI or migrate data.
+
+### Patch Changes
+
+- 3842f81: ## Runtime
+
+  Introduced feature-flagged task state divergence detection to compare the legacy lifecycle state with the projected shadow execution state.
+
+  The implementation is observability-only and does not modify runtime behavior unless `TASK_STATE_DIVERGENCE_CHECK=1` is enabled.
+
+  ### Added
+  - Projection comparison helper
+  - State divergence detector
+  - Structured divergence logging
+  - Worker integration hooks
+  - Feature flag support
+  - Unit tests
+
+  ### Updated
+  - Production runbook
+  - Environment documentation
+  - Architecture gap audit
+
+  ### Compatibility
+
+  No breaking changes.
+
+  No database migrations.
+
+  No API changes.
+
+  No socket protocol changes.
+
+  Feature disabled by default.
 
 ## 1.3.2
 
@@ -29,7 +75,6 @@
 ### Minor Changes
 
 - 3215a80: Enhanced mobile authentication and chat session management, and standardized monorepo build tooling across shared packages.
-
   - Added mobile auth support improvements and session flow hardening.
   - Added explicit build scripts/config for shared packages (auth, db, services, redis, types) to emit dist artifacts consistently.
   - Improved repository cleanup scripts with safer artifact cleanup and full-reset options.
@@ -40,9 +85,8 @@
 ### Patch Changes
 
 - 86f8cfe: Refactor CI/CD to use Changesets-native package tags for deployment
-
   - Removed root `v*` tag creation logic from release workflow
-  - Updated deploy workflow to trigger on Changesets tags (`@chat/services@*`)
+  - Updated deploy workflow to trigger on Changesets tags (`@semantask/services@*`)
   - Implemented strict tag parsing and validation
   - Added package-specific deployment gating
   - Improved Docker tagging and metadata extraction
@@ -53,7 +97,6 @@
 ### Patch Changes
 
 - 86f8cfe: Fix release workflow to create root version tags for deploy trigger
-
   - **release.yml**: Add step to create root repository version tag (v\*) based on highest package version
   - **deploy.yml compatibility**: Root v\* tags now enable proper deployment workflow triggering
   - This resolves the issue where release workflow created only package-scoped tags but deploy workflow needed root tags
@@ -63,7 +106,6 @@
 ### Patch Changes
 
 - 3b307d2: Fix CI/CD release and deployment pipeline configuration
-
   - **release.yml**: Fix publish step to actually create git tags using `npx changeset tag` instead of echo fallback
   - **release.yml**: Add robust token fallback (`CHANGESETS_GITHUB_TOKEN || GITHUB_TOKEN`) for private repo releases
   - **deploy.yml**: Relax actor gate to allow repository owner to trigger deployments from token-based releases

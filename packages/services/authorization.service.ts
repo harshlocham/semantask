@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
-import { connectToDatabase } from "@chat/db";
-import { Conversation } from "@chat/db/models/Conversation";
-import TaskModel from "@chat/db/models/Task";
+import { connectToDatabase } from "@semantask/db";
+import { Conversation } from "@semantask/db/models/Conversation";
+import TaskModel from "@semantask/db/models/Task";
 
 export type AuthorizationRole = "user" | "moderator" | "admin";
 

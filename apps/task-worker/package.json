@@ -1,6 +1,6 @@
 {
-    "name": "@chat/task-worker",
-    "version": "2.0.6",
+    "name": "@semantask/task-worker",
+    "version": "3.0.0",
     "private": true,
     "type": "module",
     "scripts": {
@@ -11,9 +11,9 @@
         "test": "INTERNAL_SECRET=test-internal-secret tsx --test tests/**/*.test.ts"
     },
     "dependencies": {
-        "@chat/db": "workspace:*",
-        "@chat/services": "workspace:*",
-        "@chat/types": "workspace:*",
+        "@semantask/db": "workspace:*",
+        "@semantask/services": "workspace:*",
+        "@semantask/types": "workspace:*",
         "dotenv": "^17.2.3",
         "openai": "^4.11.0",
         "ioredis": "^5.10.0",

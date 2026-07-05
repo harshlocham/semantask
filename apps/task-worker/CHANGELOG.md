@@ -1,4 +1,86 @@
-# @chat/task-worker
+# @semantask/task-worker
+
+## 3.0.0
+
+### Major Changes
+
+- fe46888: Rebrand from chat-app / @chat to Semantask / @semantask.
+  - Product name: AgentMesh AI → Semantask
+  - npm scope: @chat/_ → @semantask/_
+  - Default MongoDB database: chat-app → semantask
+  - VPS deploy path example: /opt/chat-app → /opt/semantask
+
+  Breaking for anyone still importing @chat/\* or using the old DB/deploy paths.
+  Existing Mongo data in `chat-app` is unchanged; update MONGODB_URI or migrate data.
+
+### Patch Changes
+
+- 3842f81: ## Runtime
+
+  Introduced feature-flagged task state divergence detection to compare the legacy lifecycle state with the projected shadow execution state.
+
+  The implementation is observability-only and does not modify runtime behavior unless `TASK_STATE_DIVERGENCE_CHECK=1` is enabled.
+
+  ### Added
+  - Projection comparison helper
+  - State divergence detector
+  - Structured divergence logging
+  - Worker integration hooks
+  - Feature flag support
+  - Unit tests
+
+  ### Updated
+  - Production runbook
+  - Environment documentation
+  - Architecture gap audit
+
+  ### Compatibility
+
+  No breaking changes.
+
+  No database migrations.
+
+  No API changes.
+
+  No socket protocol changes.
+
+  Feature disabled by default.
+
+- 7d2f690: ## Runtime
+
+  Aligned the shadow execution FSM with the legacy lifecycle on the policy early-return paths of `processTaskExecutionRequested`.
+
+  When `TASK_POLICY_SHADOW_EMIT=1` (and FSM shadow mode is on), the blocked and approval-required paths now emit `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` shadow events and write an aligned legacy `lifecycleState` (the FSM projection), so dual-state stays consistent instead of leaving the shadow FSM stale.
+
+  ### Added
+  - `emitPolicyShadowState` helper (policy-shadow.ts)
+  - `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` shadow emission on policy early returns
+  - `APPROVAL_GRANTED` resume in `startShadowExecutionRun` for approved re-runs
+  - Feature flag `TASK_POLICY_SHADOW_EMIT`
+  - Unit tests
+
+  ### Updated
+  - Production runbook
+  - Environment documentation
+  - Architecture gap audit (P1-6)
+
+  ### Compatibility
+
+  No breaking changes.
+
+  No database migrations.
+
+  No API changes.
+
+  No socket protocol changes.
+
+  Feature disabled by default.
+
+- Updated dependencies [3842f81]
+- Updated dependencies [fe46888]
+  - @semantask/types@2.0.0
+  - @semantask/services@3.0.0
+  - @semantask/db@3.0.0
 
 ## 2.0.6
 
@@ -17,7 +99,7 @@
 
 - Updated dependencies [072fafc]
 - Updated dependencies [4a29cb5]
-  - @chat/services@2.0.3
+  - @semantask/services@2.0.3
 
 ## 2.0.5
 
@@ -25,8 +107,8 @@
 
 - 51f6a45: Hardened realtime authorization and internal communication architecture across the platform. Refactored the socket server into a transport-only layer using secure internal web authorization bridges, centralized conversation/task ACL enforcement, server-resolved participant fan-out, and mandatory INTERNAL_SECRET validation. Added shared authorization services for REST and socket flows, removed client-trusted recipient authorization paths, restricted unsafe task status mutations, and improved overall security consistency for realtime messaging and task execution.
 - Updated dependencies [51f6a45]
-  - @chat/services@2.0.2
-  - @chat/db@2.0.3
+  - @semantask/services@2.0.2
+  - @semantask/db@2.0.3
 
 ## 2.0.4
 
@@ -35,7 +117,7 @@
 - 5a2cba8: - Socket: register message:send handlers; broadcast online status on connect; remove duplicate join/leave handlers
   - Web: connect socket after login/register without reload; stop disconnecting on tab visibility changes
   - Mobile: reconnect on app foreground instead of disconnecting in background
-  - Task worker: use @chat/services package imports so production start resolves modules correctly
+  - Task worker: use @semantask/services package imports so production start resolves modules correctly
   - Root: Next 15.5.18 override, uuid 14, ESLint config baseDirectory for apps/web
 
 ## 2.0.3
@@ -50,7 +132,7 @@
 
 - dc73990: task-worker: unify LLM boundary, preserve step IO, add self-heal and clarification flows; redact policy decisions and improve execution updates
 - Updated dependencies [dc73990]
-  - @chat/types@1.3.2
+  - @semantask/types@1.3.2
 
 ## 2.0.1
 
@@ -58,9 +140,9 @@
 
 - e3ad385: The system has been fully implemented to support multi-step execution with strict safety and hallucination prevention.d it can self-heal a failed tool execution by asking the LLM for a corrected decision before falling back to normal retry behavior. The planner now preserves step input/output from LLM plans and explicitly asks for template-ready step context
 - Updated dependencies [e3ad385]
-  - @chat/services@2.0.1
-  - @chat/types@1.3.1
-  - @chat/db@2.0.2
+  - @semantask/services@2.0.1
+  - @semantask/types@1.3.1
+  - @semantask/db@2.0.2
 
 ## 2.0.0
 
@@ -71,6 +153,6 @@
 ### Patch Changes
 
 - Updated dependencies [8a4de46]
-  - @chat/services@2.0.0
-  - @chat/db@2.0.0
-  - @chat/types@1.3.0
+  - @semantask/services@2.0.0
+  - @semantask/db@2.0.0
+  - @semantask/types@1.3.0

@@ -12,7 +12,7 @@ import {
     deriveLegacyTaskStatus,
     taskLifecycleMatchesExecutionProjection,
     type ExecutionState,
-} from "@chat/types";
+} from "@semantask/types";
 
 const queued: ExecutionState = {
     kind: "queued",

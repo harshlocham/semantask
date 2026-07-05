@@ -9,9 +9,9 @@ COPY apps/socket ./apps/socket
 COPY packages ./packages
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @chat/types build
-RUN pnpm --filter @chat/socket build
+RUN pnpm --filter @semantask/types build
+RUN pnpm --filter @semantask/socket build
 
 EXPOSE 3001
 
-CMD ["pnpm", "--filter", "@chat/socket", "start"]
+CMD ["pnpm", "--filter", "@semantask/socket", "start"]

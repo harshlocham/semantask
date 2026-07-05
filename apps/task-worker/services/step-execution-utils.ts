@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as toolNormalizers from "@chat/services/tool-normalizers";
+import * as toolNormalizers from "@semantask/services/tool-normalizers";
 
 const TEMPLATE_PATTERN = /{{\s*([^}]+)\s*}}/g;
 const DRAFT_PLACEHOLDER_PATTERN = /\[(?:\s*(?:your|please|insert|to be filled|tbd)[^\]]*)\]/i;

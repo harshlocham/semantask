@@ -1,13 +1,13 @@
 {
-  "name": "chat-app",
-  "version": "2.0.8",
+  "name": "semantask",
+  "version": "2.0.9",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "dev": "turbo run dev --filter=./apps/* --filter=./packages/*",
     "mobile": "pnpm --filter mobile run start:mobile",
-    "task-worker": "pnpm --filter @chat/task-worker dev",
+    "task-worker": "pnpm --filter @semantask/task-worker dev",
     "build": "turbo run build --filter=./apps/* --filter=./packages/*",
     "start": "turbo run start --filter=./apps/* --filter=./packages/*",
     "lint": "turbo run lint --filter=./apps/* --filter=./packages/*",

@@ -6,7 +6,7 @@ import {
     authConfig,
     logAuthEventBestEffort,
     requestOtpStepUpChallenge,
-} from "@chat/auth";
+} from "@semantask/auth";
 
 type ChallengeOtpSendBody = {
     challengeId?: unknown;

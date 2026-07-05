@@ -1,5 +1,5 @@
-import type { MessageDTO } from "@chat/types";
-import { IMessagePopulated } from "@chat/db/models/Message";
+import type { MessageDTO } from "@semantask/types";
+import { IMessagePopulated } from "@semantask/db/models/Message";
 
 type Stringable = { toString(): string };
 type ReactionUser = string | (Stringable & { _id?: string | Stringable });

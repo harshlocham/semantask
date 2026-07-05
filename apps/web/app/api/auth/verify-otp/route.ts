@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/Db/db";
-import { verifyOtpAndRegisterService } from "@chat/auth";
+import { verifyOtpAndRegisterService } from "@semantask/auth";
 
 export async function POST(req: Request) {
     try {

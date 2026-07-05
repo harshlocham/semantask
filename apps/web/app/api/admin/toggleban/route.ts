@@ -3,7 +3,7 @@ import { User } from "@/models/User";
 import { connectToDatabase } from "@/lib/Db/db";
 import { requireAdminUser } from "@/lib/utils/auth/requireAdminUser";
 import { clearCachedUserState } from "@/lib/utils/auth/userStateCache";
-import { revokeUserAuthSessions } from "@chat/auth";
+import { revokeUserAuthSessions } from "@semantask/auth";
 
 export async function PATCH(req: Request) {
     const guard = await requireAdminUser();

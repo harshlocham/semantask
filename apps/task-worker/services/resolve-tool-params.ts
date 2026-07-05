@@ -1,4 +1,4 @@
-import * as contactService from "@chat/services/contact.service";
+import * as contactService from "@semantask/services/contact.service";
 import {
     applyClarificationSelection,
     buildAmbiguousContactQuestion,

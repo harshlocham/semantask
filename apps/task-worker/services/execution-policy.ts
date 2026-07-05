@@ -1,4 +1,4 @@
-import type { TaskExecutionActionType } from "@chat/types";
+import type { TaskExecutionActionType } from "@semantask/types";
 
 type RequestedPayload = {
     actionType: TaskExecutionActionType;

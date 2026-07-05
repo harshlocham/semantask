@@ -1,8 +1,10 @@
 <div align="center">
 
-# AgentMesh AI
+# Semantask
 
-**Autonomous AI task execution and orchestration — production-grade, multi-provider, observable.**
+**Autonomous task execution from conversation — production-grade, multi-provider, observable.**
+
+[semantask.com](https://semantask.com)
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 [![Turborepo](https://img.shields.io/badge/monorepo-Turborepo-EF4444)](https://turbo.build/)
@@ -13,7 +15,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/agentmesh-dashboard.png" alt="AgentMesh AI dashboard with conversations and Task Orchestration panel showing live execution steps" width="920" />
+  <img src="docs/screenshots/semantask-dashboard.png" alt="Semantask dashboard with conversations and Task Orchestration panel showing live execution steps" width="920" />
   <br />
   <sub>Task-triggered workflows with live <strong>Task Orchestration</strong> — async execution, step visibility, and run metadata.</sub>
 </p>
@@ -22,11 +24,11 @@
 
 ## Overview
 
-**AgentMesh AI** coordinates long-running agent work across **OpenAI-compatible APIs**, **Hugging Face** inference (Inference API and OpenAI-compatible endpoints), and **AMD-hosted OpenAI-compatible** inference — behind a single **provider abstraction** in the task worker. Jobs run **asynchronously** with **leases**, **retries**, and bounded timeouts; progress and outcomes surface through **real-time channels** for operational visibility.
+**Semantask** coordinates long-running agent work across **OpenAI-compatible APIs**, **Hugging Face** inference (Inference API and OpenAI-compatible endpoints), and **AMD-hosted OpenAI-compatible** inference — behind a single **provider abstraction** in the task worker. Jobs run **asynchronously** with **leases**, **retries**, and bounded timeouts; progress and outcomes surface through **real-time channels** for operational visibility.
 
 Use it as a hackathon-grade reference architecture or as a starting point for open-source agent orchestration on a familiar Node.js + MongoDB + Redis foundation.
 
-## Why AgentMesh
+## Why Semantask
 
 | Theme | What you get |
 | --- | --- |
@@ -123,7 +125,7 @@ Copy [`env.sample`](env.sample) to `.env` at the repository root and adjust for 
 
 ```env
 # Core (abbreviated — see env.sample for full list)
-MONGODB_URI=mongodb://localhost:27017/chat-app
+MONGODB_URI=mongodb://localhost:27017/semantask
 NEXTAUTH_SECRET=replace_with_a_strong_secret
 NEXTAUTH_URL=http://localhost:3000
 INTERNAL_SECRET=replace_with_shared_internal_secret

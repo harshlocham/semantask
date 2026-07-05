@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ClientUser } from "@chat/types";
+import { ClientUser } from "@semantask/types";
 
 interface Props {
     user: ClientUser;

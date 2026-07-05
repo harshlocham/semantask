@@ -1,6 +1,6 @@
 import { Server, Socket } from "socket.io";
 import { RedisAdapterClients } from "../../redis.js";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 
 const PRESENCE_KEY = "active_users";
 const MESSAGE_COUNT_KEY = "total_messages_today";

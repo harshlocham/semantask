@@ -9,11 +9,11 @@ import {
     SocketEvents,
     type TypingPayload,
     // SocketEvents,
-} from "@chat/types";
+} from "@semantask/types";
 import useChatStore from "@/store/chat-store";
 import { registerTaskSocketListeners } from "@/hooks/socketListeners";
-import { isMessageDTO } from "@chat/types/utils/message.guard";
-import { UIMessage } from "@chat/types";
+import { isMessageDTO } from "@semantask/types/utils/message.guard";
+import { UIMessage } from "@semantask/types";
 import { getClientSocketUrl } from "@/lib/socket/socketConfig";
 
 let socketInstance: Socket<ServerToClientEvents, ClientToServerEvents> | null =

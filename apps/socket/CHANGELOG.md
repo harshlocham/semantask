@@ -1,4 +1,23 @@
-# @chat/socket
+# @semantask/socket
+
+## 4.0.0
+
+### Major Changes
+
+- fe46888: Rebrand from chat-app / @chat to Semantask / @semantask.
+  - Product name: AgentMesh AI → Semantask
+  - npm scope: @chat/_ → @semantask/_
+  - Default MongoDB database: chat-app → semantask
+  - VPS deploy path example: /opt/chat-app → /opt/semantask
+
+  Breaking for anyone still importing @chat/\* or using the old DB/deploy paths.
+  Existing Mongo data in `chat-app` is unchanged; update MONGODB_URI or migrate data.
+
+### Patch Changes
+
+- Updated dependencies [3842f81]
+- Updated dependencies [fe46888]
+  - @semantask/types@2.0.0
 
 ## 3.0.4
 
@@ -13,7 +32,7 @@
 - 5a2cba8: - Socket: register message:send handlers; broadcast online status on connect; remove duplicate join/leave handlers
   - Web: connect socket after login/register without reload; stop disconnecting on tab visibility changes
   - Mobile: reconnect on app foreground instead of disconnecting in background
-  - Task worker: use @chat/services package imports so production start resolves modules correctly
+  - Task worker: use @semantask/services package imports so production start resolves modules correctly
   - Root: Next 15.5.18 override, uuid 14, ESLint config baseDirectory for apps/web
 
 ## 3.0.2
@@ -37,4 +56,4 @@
 ### Patch Changes
 
 - Updated dependencies [8a4de46]
-  - @chat/types@1.3.0
+  - @semantask/types@1.3.0

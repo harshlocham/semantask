@@ -6,7 +6,7 @@ import {
     ClientToServerEvents,
     ServerToClientEvents,
     SocketEvents,
-} from "@chat/types";
+} from "@semantask/types";
 import {
     getActiveUsers,
     refreshPresence,

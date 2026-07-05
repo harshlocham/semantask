@@ -1,9 +1,9 @@
 'use server';
 import { CreateMessageInput } from "./validators/message.schema";
 import mongoose, { Types } from "mongoose";
-import { Conversation } from "@chat/db/models/Conversation";
-import Message, { IMessagePopulated } from "@chat/db/models/Message";
-import { connectToDatabase } from "@chat/db";
+import { Conversation } from "@semantask/db/models/Conversation";
+import Message, { IMessagePopulated } from "@semantask/db/models/Message";
+import { connectToDatabase } from "@semantask/db";
 import { enqueueOutboxEvent } from "./outbox.service";
 import { isMongoTransactionUnsupported } from "./mongo-transaction";
 //import { socket } from "@/lib/socket/socketClient";

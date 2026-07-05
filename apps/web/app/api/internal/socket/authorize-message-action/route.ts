@@ -6,7 +6,7 @@ import {
     getInternalSecret,
     hasValidInternalSecret,
     INTERNAL_SECRET_HEADER,
-} from "@chat/types/utils/internal-bridge-auth";
+} from "@semantask/types/utils/internal-bridge-auth";
 
 type MessageAction = "edit" | "delete";
 

@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import {
     assertConversationAccess,
     AuthorizationError,
-} from "@chat/services/authorization.service";
+} from "@semantask/services/authorization.service";
 import {
     getInternalSecret,
     hasValidInternalSecret,
     INTERNAL_SECRET_HEADER,
-} from "@chat/types/utils/internal-bridge-auth";
+} from "@semantask/types/utils/internal-bridge-auth";
 
 type AuthorizeConversationAccessBody = {
     userId?: string;

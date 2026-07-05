@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "2.1.1",
+  "version": "3.0.0",
   "main": "index.ts",
   "scripts": {
     "start:mobile": "expo start",
@@ -38,7 +38,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@chat/types": "workspace:*",
+    "@semantask/types": "workspace:*",
     "@types/react": "~19.1.0",
     "babel-plugin-module-resolver": "^5.0.3",
     "typescript": "~5.9.2"

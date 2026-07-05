@@ -14,8 +14,8 @@ import { useOfflineStore } from '@/store/offline-store';
 import { useNetworkStatus } from '@/lib/hooks/useNetworkStatus';
 import { useRateLimitHandler } from "@/lib/hooks/useRateLimitHandler";
 import useSocketStore from "@/store/useSocketStore";
-import { UIMessage } from "@chat/types";
-import { SocketEvents } from "@chat/types";
+import { UIMessage } from "@semantask/types";
+import { SocketEvents } from "@semantask/types";
 import { useUser } from "@/context/UserContext";
 
 // 🧠 Small debounce util

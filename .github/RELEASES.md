@@ -101,7 +101,7 @@ For active development with no production users, prefer `staging` for manual pro
 
 Required only when `ENABLE_TASK_WORKER_DEPLOY=true`.
 1. Provision a VPS with Docker and Docker Compose.
-2. Create deploy directory (for example `/opt/chat-app`) containing:
+2. Create deploy directory (for example `/opt/semantask`) containing:
    - `deploy/docker-compose.task-worker.yml` (from this repo)
    - `.env` with worker secrets (not committed) — see [`docs/operations/PRODUCTION_REQUIREMENTS.md`](../docs/operations/PRODUCTION_REQUIREMENTS.md)
 3. Add the VPS user's SSH public key or configure deploy key access.

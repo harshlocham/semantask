@@ -5,7 +5,7 @@ import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import { requireConversationAccess } from "@/lib/utils/auth/requireConversationAccess";
 import { markMessageDelivered } from "@/lib/services/message-receipt.service";
 import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
-import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
+import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 export async function PATCH(
     req: NextRequest,

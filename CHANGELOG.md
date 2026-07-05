@@ -1,4 +1,10 @@
-# chat-app
+# semantask
+
+## 2.0.9
+
+### Patch Changes
+
+- Workspace release: @semantask/auth, @semantask/db, @semantask/redis, @semantask/services, @semantask/socket, @semantask/task-worker, @semantask/types, @semantask/web, mobile (see package changelogs for details)
 
 ## 2.0.8
 
@@ -13,7 +19,7 @@
 - 5a2cba8: - Socket: register message:send handlers; broadcast online status on connect; remove duplicate join/leave handlers
   - Web: connect socket after login/register without reload; stop disconnecting on tab visibility changes
   - Mobile: reconnect on app foreground instead of disconnecting in background
-  - Task worker: use @chat/services package imports so production start resolves modules correctly
+  - Task worker: use @semantask/services package imports so production start resolves modules correctly
   - Root: Next 15.5.18 override, uuid 14, ESLint config baseDirectory for apps/web
 
 ## 2.0.6

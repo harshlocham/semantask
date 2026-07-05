@@ -2,7 +2,7 @@ import { connectToDatabase } from "@/lib/Db/db";
 import { sendOtpEmail } from "@/lib/utils/sendOtp";
 import { NextRequest, NextResponse } from "next/server";
 import { authRateLimiter } from "@/lib/utils/rateLimiter";
-import { sendEmailOtpService } from "@chat/auth";
+import { sendEmailOtpService } from "@semantask/auth";
 
 export async function POST(req: NextRequest) {
     try {

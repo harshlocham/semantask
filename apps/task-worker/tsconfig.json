@@ -3,15 +3,15 @@
     "compilerOptions": {
         "baseUrl": "../..",
         "paths": {
-            "@chat/services/*": [
+            "@semantask/services/*": [
                 "packages/services/*",
                 "packages/services/dist/services/*"
             ],
-            "@chat/services/*.js": [
+            "@semantask/services/*.js": [
                 "packages/services/*.js",
                 "packages/services/dist/services/*.js"
             ],
-            "@chat/db/models/*": [
+            "@semantask/db/models/*": [
                 "packages/db/models/*.ts",
                 "packages/db/models/*.js"
             ]

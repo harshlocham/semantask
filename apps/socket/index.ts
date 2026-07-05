@@ -7,12 +7,12 @@ import http from "http";
 import cors from "cors";
 import { initSocket } from "./server/socket/index.js";
 import { emitToConversation, emitToUser } from "./server/socket/emit.js";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 import {
     getInternalSecret,
     hasValidInternalSecret,
     INTERNAL_SECRET_HEADER,
-} from "@chat/types/utils/internal-bridge-auth";
+} from "@semantask/types/utils/internal-bridge-auth";
 import {
     isOriginAllowed,
     parseCommaSeparatedValues,

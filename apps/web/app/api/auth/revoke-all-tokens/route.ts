@@ -6,7 +6,7 @@ import {
     authConfig,
     buildExpiredCookie,
     logAuthEventBestEffort,
-} from "@chat/auth";
+} from "@semantask/auth";
 import { clearCachedUserState } from "@/lib/utils/auth/userStateCache";
 import { enforceAuthRateLimit, authRateLimitResponse } from "@/lib/utils/rateLimiter";
 

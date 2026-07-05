@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import { ClientConversation } from "@chat/types";
-import { ClientMessage } from "@chat/types";
+import { ClientConversation } from "@semantask/types";
+import { ClientMessage } from "@semantask/types";
 import { socket } from "@/lib/socket/socketClient";
-import { SocketEvents } from "@chat/types";
+import { SocketEvents } from "@semantask/types";
 
 interface ChatStore {
     selectedConversation: ClientConversation | null;

@@ -1,7 +1,7 @@
 // context/UserContext.tsx
 "use client";
 
-import { ClientUser } from "@chat/types";
+import { ClientUser } from "@semantask/types";
 import { createContext, useContext, useMemo, useEffect, useRef, useState } from "react";
 import { isAuthSessionPendingError, isPublicAuthRoute } from "@/lib/utils/auth/client-session";
 import { recordApiTiming } from "@/lib/utils/performance";

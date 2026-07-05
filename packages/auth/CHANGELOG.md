@@ -1,4 +1,17 @@
-# @chat/auth
+# @semantask/auth
+
+## 3.0.0
+
+### Major Changes
+
+- fe46888: Rebrand from chat-app / @chat to Semantask / @semantask.
+  - Product name: AgentMesh AI → Semantask
+  - npm scope: @chat/_ → @semantask/_
+  - Default MongoDB database: chat-app → semantask
+  - VPS deploy path example: /opt/chat-app → /opt/semantask
+
+  Breaking for anyone still importing @chat/\* or using the old DB/deploy paths.
+  Existing Mongo data in `chat-app` is unchanged; update MONGODB_URI or migrate data.
 
 ## 2.3.3
 
@@ -10,10 +23,10 @@
   - Ensured session state is restored to "active" upon successful token rotation.
 - ac01b5e: Significantly expand auth test coverage with new integration and E2E suites covering login, refresh, token revocation, password management, step-up authentication, OAuth flows, and auth lifecycle scenarios. Add reusable testing infrastructure and factories for future auth testing.
 - 5eece69: Fix authentication and step-up flows:
-  - @chat/auth: Block token refresh while a session is step_up_pending so challenges stay valid through verification
-  - @chat/web: Reset auth bootstrap after login, register, and step-up completion
-  - @chat/web: Prevent duplicate refresh and OTP send requests that caused 429 rate limits
-  - @chat/web: Handle unauthenticated API calls without throwing after bootstrap
+  - @semantask/auth: Block token refresh while a session is step_up_pending so challenges stay valid through verification
+  - @semantask/web: Reset auth bootstrap after login, register, and step-up completion
+  - @semantask/web: Prevent duplicate refresh and OTP send requests that caused 429 rate limits
+  - @semantask/web: Handle unauthenticated API calls without throwing after bootstrap
 
 ## 2.3.2
 
@@ -55,7 +68,7 @@
 
 - 86f8cfe: Refactor CI/CD to use Changesets-native package tags for deployment
   - Removed root `v*` tag creation logic from release workflow
-  - Updated deploy workflow to trigger on Changesets tags (`@chat/services@*`)
+  - Updated deploy workflow to trigger on Changesets tags (`@semantask/services@*`)
   - Implemented strict tag parsing and validation
   - Added package-specific deployment gating
   - Improved Docker tagging and metadata extraction

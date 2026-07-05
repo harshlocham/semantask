@@ -144,7 +144,7 @@ importers:
         specifier: ^5.0.12
         version: 5.0.13(@types/react@19.1.17)(immer@11.1.8)(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0))
     devDependencies:
-      '@chat/types':
+      '@semantask/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@types/react':
@@ -159,12 +159,12 @@ importers:
 
   apps/socket:
     dependencies:
-      '@chat/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       '@imagekit/nodejs':
         specifier: ^7.3.0
         version: 7.6.1
+      '@semantask/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.6)
@@ -207,13 +207,13 @@ importers:
 
   apps/task-worker:
     dependencies:
-      '@chat/db':
+      '@semantask/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@chat/services':
+      '@semantask/services':
         specifier: workspace:*
         version: link:../../packages/services
-      '@chat/types':
+      '@semantask/types':
         specifier: workspace:*
         version: link:../../packages/types
       dotenv:
@@ -237,15 +237,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@chat/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
-      '@chat/services':
-        specifier: workspace:*
-        version: link:../../packages/services
-      '@chat/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       '@imagekit/javascript':
         specifier: ^5.2.2
         version: 5.4.0
@@ -270,6 +261,15 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.3
         version: 1.2.4(@types/react@19.2.14)(react@19.1.0)
+      '@semantask/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@semantask/services':
+        specifier: workspace:*
+        version: link:../../packages/services
+      '@semantask/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@tailwindcss/postcss':
         specifier: ^4.2.2
         version: 4.3.0
@@ -416,7 +416,7 @@ importers:
 
   packages/redis:
     dependencies:
-      '@chat/types':
+      '@semantask/types':
         specifier: workspace:*
         version: link:../types
       '@upstash/ratelimit':
@@ -434,10 +434,10 @@ importers:
 
   packages/services:
     dependencies:
-      '@chat/db':
+      '@semantask/db':
         specifier: workspace:*
         version: link:../db
-      '@chat/types':
+      '@semantask/types':
         specifier: workspace:*
         version: link:../types
       zod:

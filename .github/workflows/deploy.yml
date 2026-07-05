@@ -516,6 +516,7 @@ jobs:
     timeout-minutes: 30
     needs: [prepare, build_image_socket, build_image_task_worker]
     if: >
+      always() &&
       needs.prepare.outputs.should_deploy == 'true' &&
       needs.build_image_socket.result == 'success' &&
       (needs.build_image_task_worker.result == 'success' || needs.build_image_task_worker.result == 'skipped') &&
@@ -589,6 +590,19 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.prepare.outputs.release_sha }}
+
+      - name: Overlay deploy scripts from workflow branch
+        if: steps.staging_guard.outputs.already_deployed != 'true'
+        run: |
+          set -euo pipefail
+          git fetch origin
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SCRIPT_REF="origin/${{ github.ref_name }}"
+          else
+            SCRIPT_REF="origin/main"
+          fi
+          git checkout "$SCRIPT_REF" -- scripts/ci/deploy/
+          echo "Deploy scripts sourced from $SCRIPT_REF (app remains at ${{ needs.prepare.outputs.release_tag }})"
 
       - name: Configure SSH key for VPS
         if: steps.staging_guard.outputs.already_deployed != 'true' && vars.ENABLE_TASK_WORKER_DEPLOY == 'true'
@@ -765,6 +779,19 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.prepare.outputs.release_sha }}
+
+      - name: Overlay deploy scripts from workflow branch
+        if: steps.production_guard.outputs.already_deployed != 'true'
+        run: |
+          set -euo pipefail
+          git fetch origin
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SCRIPT_REF="origin/${{ github.ref_name }}"
+          else
+            SCRIPT_REF="origin/main"
+          fi
+          git checkout "$SCRIPT_REF" -- scripts/ci/deploy/
+          echo "Deploy scripts sourced from $SCRIPT_REF (app remains at ${{ needs.prepare.outputs.release_tag }})"
 
       - name: Configure SSH key for VPS
         if: steps.production_guard.outputs.already_deployed != 'true' && vars.ENABLE_TASK_WORKER_DEPLOY == 'true'

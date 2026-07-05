@@ -2,7 +2,7 @@ import { Socket as IOSocket } from "socket.io";
 import {
     ServerToClientEvents,
     ClientToServerEvents,
-} from "@chat/types";
+} from "@semantask/types";
 
 export type SocketData = {
     userId: string;

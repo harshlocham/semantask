@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/Db/db";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import { requireTaskAccess } from "@/lib/utils/auth/requireConversationAccess";
-import { getExecutionEventsAfter } from "@chat/services/execution-event.service";
+import { getExecutionEventsAfter } from "@semantask/services/execution-event.service";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {

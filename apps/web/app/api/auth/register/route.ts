@@ -8,7 +8,7 @@ import {
     generateAccessToken,
     logAuthEventBestEffort,
     registerService,
-} from "@chat/auth";
+} from "@semantask/auth";
 
 function safeIpAddress(req: NextRequest): string {
     const xForwardedFor = req.headers.get("x-forwarded-for") || "";

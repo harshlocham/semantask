@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import mongoose from "mongoose";
 import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
-import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
+import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 
 export async function POST(req: Request) {

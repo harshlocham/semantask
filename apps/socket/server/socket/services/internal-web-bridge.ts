@@ -1,4 +1,4 @@
-import { createInternalRequestHeaders } from "@chat/types/utils/internal-bridge-auth";
+import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 import { resolveInternalBaseUrl } from "../utils/url.js";
 
 function normalizeUrl(value: string): string {
