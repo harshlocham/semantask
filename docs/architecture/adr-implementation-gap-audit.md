@@ -38,10 +38,10 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | **P0-1** | Lease-busy + outbox completion | **FIXED** (`f7886b5`) | — | `index.ts:1641-1649`, `lease.service.ts:104-110`, `dispatch.lease-wrapper.test.ts` |
 | **P0-2** | Tool idempotency includes `runId` | **FIXED** (`f7886b5`) | — | `agent-runner.ts:2734-2745`, `idempotent-tool-execution.test.ts` |
 | **P0-3** | Legacy vs shadow divergence undetected | **OPEN** (detection in 1.1) | [Phase 1.1](../PRODUCTION_ROADMAP_V1.md) ✓, [Phase 5.2](../PRODUCTION_ROADMAP_V1.md) (enforce) | `TASK_STATE_DIVERGENCE_CHECK=1` logs `state_diverged`; projection at write deferred |
-| **P1-4** | Wire `RETRY_DUE` on retry scanner | **OPEN** | [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) | `retry-scheduler.ts` sets `lifecycleState: "ready"` only; FSM unchanged until next `AgentRunner` run |
+| **P1-4** | Wire `RETRY_DUE` on retry scanner | **FIXED** (flagged) | [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) ✓ | `emitRetryDueShadowState` (`retry-shadow.ts`) emits `RETRY_DUE` after scanner promote when `TASK_RETRY_SHADOW_EMIT=1` |
 | **P1-5** | `deriveLegacy*` at write time (projection) | **DEFERRED** | [Phase 5.2](../PRODUCTION_ROADMAP_V1.md) | `execution-state.ts:143-203`; only referenced in tests today |
 | **P1-6** | Policy/approval early exits — shadow FSM lag | **FIXED** (flagged) | [Phase 1.2](../PRODUCTION_ROADMAP_V1.md) ✓ | `emitPolicyShadowState` (`policy-shadow.ts`) emits `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` and aligns `lifecycleState` on the blocked/approval early returns when `TASK_POLICY_SHADOW_EMIT=1`; approved re-run resumes via `APPROVAL_GRANTED` in `startShadowExecutionRun` |
-| **P1-7** | Replica-set assumption for retry scanner | **OPEN** (documented) | [Phase 0.3](../PRODUCTION_ROADMAP_V1.md) ✓, [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) (standalone fallback) | `retry-scheduler.ts` uses `withTransaction`; see [`PRODUCTION_REQUIREMENTS.md`](../operations/PRODUCTION_REQUIREMENTS.md) |
+| **P1-7** | Replica-set assumption for retry scanner | **FIXED** | [Phase 0.3](../PRODUCTION_ROADMAP_V1.md) ✓, [Phase 1.3](../PRODUCTION_ROADMAP_V1.md) ✓ | `runRetryScannerOnce` falls back to non-transactional promote+enqueue via `isMongoTransactionUnsupported` (mirrors `message.service.ts`) |
 | **P2-8** | Dead `buildExecutionPlan` / `runExecutionPlan` | **OPEN** (debt) | [Phase 5.1](../PRODUCTION_ROADMAP_V1.md) | Defined `index.ts:969-1130`; zero callers |
 | **P2-9** | Unify `RetryManager` schedules | **DEFERRED** | Phase 5+ | Hard-coded in `agent-runner.ts`, `retry-manager.ts` |
 | **P2-10** | `RETRY_BUDGET_EXHAUSTED` vs `ERROR_OCCURRED` alignment | **OPEN** (debt) | Phase 1+ | `scheduleTaskRetry` sets legacy `failed` directly |
@@ -80,7 +80,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 
 | # | Gap | Status | Notes |
 |---|-----|--------|-------|
-| 1 | **`RETRY_DUE` not emitted by retry scanner** | **OPEN** (P1-4) | `runRetryScannerOnce` promotes `lifecycleState: "ready"` and enqueues outbox; FSM stays stale until next `AgentRunner` emissions. Unit tests cover `RETRY_DUE`; production scanner does not. |
+| 1 | **`RETRY_DUE` not emitted by retry scanner** | **FIXED** (P1-4, flagged) | `emitRetryDueShadowState` emits `RETRY_DUE` after promote when `TASK_RETRY_SHADOW_EMIT=1`; FSM moves to `queued` (projects to `ready`). |
 | 2 | **Policy / approval paths — no shadow FSM on early return** | **FIXED** (P1-6, flagged) | `emitPolicyShadowState` emits `POLICY_BLOCKED` / `POLICY_APPROVAL_REQUIRED` and aligns `lifecycleState` on the blocked / approval_pending early returns under `TASK_POLICY_SHADOW_EMIT=1`. |
 | 3 | **`iteration` (FSM) vs `Task.iterationCount`** | **OPEN** (debt) | Independent counters; footgun during clarification resume. |
 
@@ -111,7 +111,7 @@ No material factual errors after reconciliation. Uncertain items (`optimisticCon
 
 - No `Retry-After` / provider-aware backoff (**P3-13 DEFERRED**).
 - No circuit breaker; fixed env backoff envelope.
-- Retry scanner requires replica-set transactions (**P1-7 OPEN**).
+- Retry scanner prefers transactions; falls back on standalone Mongo (**P1-7 FIXED**).
 - Layered idempotency insufficient for time-varying tool side effects.
 
 ### Gaps ADR-002 understates or code diverges
@@ -149,7 +149,7 @@ Aligned with [Production Roadmap V1](../PRODUCTION_ROADMAP_V1.md). Items marked 
 ### Phase B — Align dual state without flipping authority (ADR-001)
 
 4. **Projection at write** — **DEFERRED** → Phase 5.2
-5. **Scanner FSM `RETRY_DUE`** — **OPEN** → Phase 1.3
+5. **Scanner FSM `RETRY_DUE`** — **FIXED** (flagged) → Phase 1.3 ✓
 6. **Policy/approval shadow emit** — **OPEN** → Phase 1.2
 
 ### Phase C — Observability before cutover
@@ -188,7 +188,7 @@ flowchart LR
   AR --> LC
   AR --> SH --> ES
   RS --> LC
-  RS -.->|missing RETRY_DUE — P1-4 OPEN| ES
+  RS -.->|RETRY_DUE when TASK_RETRY_SHADOW_EMIT=1 — P1-4 FIXED| ES
   derive[deriveLegacy*] -.->|not used at write — P1-5 DEFERRED| LC
   LB[lease_busy] -.->|defer not complete — FIXED f7886b5| OB
 ```
