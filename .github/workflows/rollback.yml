@@ -136,6 +136,13 @@ jobs:
           set -euo pipefail
           git checkout --force "${{ steps.meta.outputs.release_tag }}"
 
+      - name: Overlay deploy scripts from main
+        run: |
+          set -euo pipefail
+          git fetch origin
+          git checkout origin/main -- scripts/ci/deploy/
+          echo "Deploy scripts sourced from origin/main (app at ${{ steps.meta.outputs.release_tag }})"
+
       - name: Configure SSH key for VPS
         if: vars.ENABLE_TASK_WORKER_DEPLOY == 'true'
         run: |
