@@ -23,10 +23,13 @@ export VERCEL_PROJECT_ID
 case "$DEPLOY_ENVIRONMENT" in
   staging)
     vercel_env="preview"
+    build_args=()
     deploy_args=()
     ;;
   production)
     vercel_env="production"
+    # build and deploy must target the same environment or --prebuilt rejects the output
+    build_args=(--prod)
     deploy_args=(--prod)
     ;;
   *)
@@ -44,7 +47,7 @@ corepack enable
 pnpm install --frozen-lockfile
 
 npx --yes vercel@latest pull --yes --environment="$vercel_env" --token="$VERCEL_TOKEN"
-npx --yes vercel@latest build --token="$VERCEL_TOKEN"
+npx --yes vercel@latest build "${build_args[@]}" --token="$VERCEL_TOKEN"
 npx --yes vercel@latest deploy --prebuilt "${deploy_args[@]}" --token="$VERCEL_TOKEN"
 
 echo "Vercel deploy completed for ${DEPLOY_ENVIRONMENT}."
