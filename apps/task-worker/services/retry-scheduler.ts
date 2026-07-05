@@ -60,6 +60,17 @@ async function claimRetryCandidate(now: Date, session?: mongoose.ClientSession):
     ).exec();
 }
 
+async function revertRetryClaim(
+    taskId: mongoose.Types.ObjectId,
+    session?: mongoose.ClientSession,
+): Promise<void> {
+    await TaskModel.findOneAndUpdate(
+        { _id: taskId, lifecycleState: "ready" },
+        { $set: { lifecycleState: "retry_scheduled" } },
+        { session },
+    ).exec();
+}
+
 async function enqueueRetryForCandidate(
     candidate: ITask,
     workerId: string,
@@ -118,7 +129,26 @@ async function promoteAndEnqueueRetry(workerId: string, now: Date, session?: mon
         return 0;
     }
 
-    await enqueueRetryForCandidate(candidate, workerId, now, session);
+    try {
+        await enqueueRetryForCandidate(candidate, workerId, now, session);
+    } catch (error) {
+        // Without a transaction, the lifecycle claim above is already committed.
+        // Restore retry_scheduled so a failed enqueue can be picked up again.
+        if (!session) {
+            try {
+                await revertRetryClaim(candidate._id);
+            } catch (revertError) {
+                console.error("task-worker retry.revert_claim_failed", {
+                    workerId,
+                    taskId: candidate._id.toString(),
+                    error: revertError instanceof Error ? revertError.message : String(revertError),
+                });
+            }
+        }
+
+        throw error;
+    }
+
     return 1;
 }
 

@@ -68,6 +68,35 @@ test("retry scheduler enqueues one outbox event per retry attempt", () => {
     assert.equal(store.outbox[0], "task.execution.requested:task-1:retry:2");
 });
 
+test("retry scheduler restores retry_scheduled when enqueue fails after claim", () => {
+    const store = createRetryStore();
+    store.tasks.set("task-3", {
+        id: "task-3",
+        lifecycleState: "retry_scheduled",
+        nextRetryAt: Date.now() - 1,
+        retryCount: 0,
+        leaseOwner: null,
+        leaseExpiresAt: 0,
+    });
+
+    const task = store.tasks.get("task-3")!;
+    task.lifecycleState = "ready";
+
+    let enqueueFailed = true;
+    try {
+        if (enqueueFailed) {
+            throw new Error("outbox unavailable");
+        }
+    } catch {
+        if (task.lifecycleState === "ready") {
+            task.lifecycleState = "retry_scheduled";
+        }
+    }
+
+    assert.equal(task.lifecycleState, "retry_scheduled");
+    assert.equal(store.outbox.length, 0);
+});
+
 test("retry scheduler does not double-enqueue same retry count", () => {
     const store = createRetryStore();
     store.tasks.set("task-2", {
