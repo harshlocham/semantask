@@ -1,5 +1,6 @@
 import { jwtVerify, type JWTPayload } from "jose";
 import { NextRequest, NextResponse } from "next/server";
+import { buildAppRedirectUrl } from "@/lib/utils/auth/googleOAuthBaseUrl";
 
 type AccessPayload = JWTPayload & {
     sub?: string;
@@ -143,7 +144,7 @@ export default async function middleware(req: NextRequest) {
 
     if (isPublic) {
         if (token && (pathname === "/login" || pathname === "/register")) {
-            return NextResponse.redirect(new URL("/", req.url));
+            return NextResponse.redirect(buildAppRedirectUrl(req, "/"));
         }
 
         return NextResponse.next();
@@ -153,7 +154,7 @@ export default async function middleware(req: NextRequest) {
     // If both access + refresh are missing, user is fully unauthenticated.
     // Redirecting to login is correct and expected.
     if (!token && !hasRefreshToken) {
-        return NextResponse.redirect(new URL("/login", req.url));
+        return NextResponse.redirect(buildAppRedirectUrl(req, "/login"));
     }
 
     // CRITICAL AUTH BEHAVIOR (DO NOT REMOVE):
@@ -170,7 +171,7 @@ export default async function middleware(req: NextRequest) {
     if (token.sub) {
         const challengeId = await getPendingStepUpChallengeId(req, token.sub);
         if (challengeId) {
-            const redirectUrl = new URL("/auth/challenge", req.url);
+            const redirectUrl = buildAppRedirectUrl(req, "/auth/challenge");
             redirectUrl.searchParams.set("cid", challengeId);
             const nextPath = `${pathname}${req.nextUrl.search || ""}`;
             redirectUrl.searchParams.set("next", nextPath);
@@ -180,12 +181,12 @@ export default async function middleware(req: NextRequest) {
 
     if (pathname.startsWith("/admin")) {
         if (!token.sub) {
-            return NextResponse.redirect(new URL("/", req.url));
+            return NextResponse.redirect(buildAppRedirectUrl(req, "/"));
         }
 
         const isAdmin = await hasActiveAdminRole(req, token.sub, token.tokenVersion);
         if (!isAdmin) {
-            return NextResponse.redirect(new URL("/", req.url));
+            return NextResponse.redirect(buildAppRedirectUrl(req, "/"));
         }
     }
 

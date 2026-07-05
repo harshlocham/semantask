@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
-import { getGoogleOAuthBaseUrl } from "@/lib/utils/auth/googleOAuthBaseUrl";
+import {
+    buildAppRedirectUrl,
+    getGoogleOAuthBaseUrl,
+} from "@/lib/utils/auth/googleOAuthBaseUrl";
 
 function makeRequest(url: string, headers?: Record<string, string>): NextRequest {
     return new NextRequest(url, headers ? { headers } : undefined);
@@ -39,5 +42,21 @@ describe("getGoogleOAuthBaseUrl", () => {
         });
 
         expect(getGoogleOAuthBaseUrl(req)).toBe("http://localhost:3000");
+    });
+});
+
+describe("buildAppRedirectUrl", () => {
+    it("builds login redirect on public origin behind proxy", () => {
+        const req = makeRequest("http://localhost:3000/api/auth/google/callback", {
+            host: "semantask.com",
+            "x-forwarded-proto": "https",
+        });
+
+        const url = buildAppRedirectUrl(req, "/login");
+        url.searchParams.set("error", "google_token_exchange_failed");
+
+        expect(url.toString()).toBe(
+            "https://semantask.com/login?error=google_token_exchange_failed"
+        );
     });
 });

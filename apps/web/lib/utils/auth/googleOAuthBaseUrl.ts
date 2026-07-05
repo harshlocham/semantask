@@ -26,3 +26,9 @@ export function getGoogleOAuthBaseUrl(req: NextRequest): string {
 
     return stripTrailingSlash(req.nextUrl.origin);
 }
+
+/** Build a redirect URL using the public app origin (not internal req.url behind nginx). */
+export function buildAppRedirectUrl(req: NextRequest, pathname: string): URL {
+    const path = pathname.startsWith("/") ? pathname : `/${pathname}`;
+    return new URL(path, `${getGoogleOAuthBaseUrl(req)}/`);
+}

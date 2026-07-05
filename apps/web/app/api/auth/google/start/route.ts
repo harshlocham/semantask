@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createGoogleOAuthState } from "@semantask/auth";
-import { getGoogleOAuthBaseUrl } from "@/lib/utils/auth/googleOAuthBaseUrl";
+import {
+    buildAppRedirectUrl,
+    getGoogleOAuthBaseUrl,
+} from "@/lib/utils/auth/googleOAuthBaseUrl";
 
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 const GOOGLE_CALLBACK_COOKIE = "google_oauth_callback";
@@ -35,7 +38,7 @@ export async function GET(req: NextRequest) {
         const googleClientId = getGoogleClientId();
 
         if (!googleClientId) {
-            const loginRedirect = new URL("/login", req.url);
+            const loginRedirect = buildAppRedirectUrl(req, "/login");
             loginRedirect.searchParams.set("error", "google_oauth_unavailable");
             return NextResponse.redirect(loginRedirect);
         }
