@@ -18,6 +18,7 @@ import { acquireTaskLease, heartbeatTaskLease, releaseTaskLease } from "./task-l
 import { scheduleTaskRetry } from "./schedule-retry.js";
 import { logExecution } from "./execution-logger.js";
 import { maybeLogTaskStateDivergence } from "./state-divergence-check.js";
+import { finalizeTaskCancellation, isTaskCancellationRequested } from "./task-cancellation.js";
 import { assertTransition } from "./task-state-machine.js";
 import { rankTools, type ToolRankingInput } from "./tool-ranking.js";
 import { collectPreviousStepOutputs, llmDecisionSchema, normalizeParams, resolveStepTemplates, type PreviousStepOutputs, validateToolParameters } from "./step-execution-utils.js";
@@ -77,6 +78,9 @@ type TaskDocumentLike = {
     checkpoints?: TaskCheckpoint[];
     executionHistory?: TaskExecutionHistory;
     result?: TaskResult;
+    cancelRequestedAt?: Date | null;
+    cancelReason?: string | null;
+    cancelRequestedByType?: "user" | "agent" | "system" | null;
     executionState?: ExecutionState | Record<string, unknown> | null;
     stateHistory?: ShadowExecutionStateHistoryEntry[];
     version: number;
@@ -431,9 +435,91 @@ export class AgentRunner {
         return collectPreviousStepOutputs(plan.steps);
     }
 
+    private rethrowLlmFailure(err: unknown): never {
+        const detail = err instanceof Error ? err.message : String(err);
+        if (/abort/i.test(detail)) {
+            throw err instanceof Error ? err : new Error(detail);
+        }
+
+        throw new Error(`LLM_ERROR: ${detail}`);
+    }
+
+    private async resolveCancellationBeforeSideEffect(
+        taskId: string,
+        runAbortController: AbortController,
+        runId: string,
+    ): Promise<RunTaskOutcome | null> {
+        const fresh = await this.taskModel.findById(taskId);
+        if (!fresh) {
+            return null;
+        }
+
+        return this.handleCancellationIfRequested(fresh, runAbortController, runId);
+    }
+
+    private getCancelPollIntervalMs(): number {
+        const configured = Number(process.env.TASK_CANCEL_POLL_MS || 250);
+        return Math.max(100, Math.min(2000, configured));
+    }
+
+    private startCancelWatcher(taskId: string, runAbortController: AbortController) {
+        let stopped = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const intervalMs = this.getCancelPollIntervalMs();
+
+        const schedule = () => {
+            if (stopped || runAbortController.signal.aborted) {
+                return;
+            }
+
+            timer = setTimeout(async () => {
+                if (stopped || runAbortController.signal.aborted) {
+                    return;
+                }
+
+                try {
+                    const fresh = await this.taskModel.findById(taskId);
+                    if (fresh && isTaskCancellationRequested(fresh)) {
+                        runAbortController.abort();
+                        return;
+                    }
+                } catch (error) {
+                    logExecution("warn", {
+                        event: "cancel.watchdog.error",
+                        workerId: this.workerId,
+                        taskId,
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                }
+
+                schedule();
+            }, intervalMs);
+        };
+
+        schedule();
+
+        return {
+            stop: () => {
+                stopped = true;
+                if (timer) {
+                    clearTimeout(timer);
+                }
+            },
+        };
+    }
+
     private async requestLlmResponse(model: string, input: string): Promise<{ output_text?: string; output?: unknown }> {
+        if (this.currentExecutionSignal?.aborted) {
+            throw new Error("Execution aborted.");
+        }
+
         if (this.llmRequestFn) {
-            return this.llmRequestFn({ model, input });
+            const response = await this.llmRequestFn({ model, input });
+            if (this.currentExecutionSignal?.aborted) {
+                throw new Error("Execution aborted.");
+            }
+
+            return response;
         }
 
         const provider = createDefaultLLMProvider();
@@ -626,7 +712,7 @@ export class AgentRunner {
         } catch (err) {
             const detail = err instanceof Error ? err.message : String(err);
             console.error("agent-runner llm:error", { taskId: task._id.toString(), detail });
-            throw new Error(`LLM_ERROR: ${detail}`);
+            this.rethrowLlmFailure(err);
         }
 
         // Log sanitized full response (avoid dumping headers / keys)
@@ -1005,10 +1091,88 @@ Reply to confirm receipt or contact support if you have questions.
         });
     }
 
+    private async handleCancellationIfRequested(
+        task: TaskDocumentLike,
+        runAbortController: AbortController,
+        runId: string,
+    ): Promise<RunTaskOutcome | null> {
+        const fresh = await this.taskModel.findById(task._id.toString());
+        if (!fresh || !isTaskCancellationRequested(fresh)) {
+            return null;
+        }
+
+        runAbortController.abort();
+
+        const reason = fresh.cancelReason ?? "Task cancelled.";
+        const requestedAt = fresh.cancelRequestedAt instanceof Date
+            ? fresh.cancelRequestedAt.toISOString()
+            : new Date().toISOString();
+        const initiatedBy = fresh.cancelRequestedByType ?? "user";
+
+        await finalizeTaskCancellation({
+            task: fresh as unknown as import("@semantask/db/models/Task").ITask & { save(): Promise<unknown> },
+            reason,
+            initiatedBy,
+            requestedAt,
+            workerId: this.workerId,
+            releaseLease: false,
+            source: "agent-runner.handleCancellationIfRequested",
+        });
+
+        await this.emitTaskUpdated(fresh.conversationId.toString(), {
+            taskId: fresh._id.toString(),
+            conversationId: fresh.conversationId.toString(),
+            patch: {
+                status: "failed",
+                lifecycleState: "failed",
+                result: fresh.result,
+                progress: 100,
+                updatedBy: null,
+            },
+            previousVersion: Math.max(0, fresh.version - 1),
+            newVersion: fresh.version,
+            updatedByType: "agent",
+            updatedById: null,
+        });
+
+        const cancelResult: ActionExecutionResult = {
+            summary: "Task cancelled.",
+            adapterSuccess: false,
+            evidence: { reason: "cancelled" },
+            error: reason,
+        };
+
+        await this.emitExecutionUpdate(fresh, {
+            state: "cancelled",
+            summary: "Task cancelled.",
+            error: reason,
+            phase: "finalize",
+            step: "cancelled",
+            progress: 100,
+        });
+
+        return {
+            completed: false,
+            retryCount: typeof fresh.retryCount === "number" ? fresh.retryCount : 0,
+            maxRetries: typeof fresh.maxRetries === "number" ? fresh.maxRetries : 2,
+            result: cancelResult,
+            verification: null,
+        };
+    }
+
     async runTask(taskId: string, ctx?: RunTaskContext): Promise<RunTaskOutcome> {
         const runId = ctx?.runId ?? `run-${taskId}-${Date.now()}`;
         this.currentRunId = runId;
         try {
+            const preflight = await this.taskModel.findById(taskId);
+            if (preflight && isTaskCancellationRequested(preflight)) {
+                const preflightAbort = new AbortController();
+                const cancellationOutcome = await this.handleCancellationIfRequested(preflight, preflightAbort, runId);
+                if (cancellationOutcome) {
+                    return cancellationOutcome;
+                }
+            }
+
             if (this.persistentLoopEnabled) {
                 return await this.runTaskPersistent(taskId, runId, ctx);
             }
@@ -1053,7 +1217,18 @@ Reply to confirm receipt or contact support if you have questions.
             let iteration = 0;
             let goalAchieved = false;
             const iterationContext: IterationContextEntry[] = [];
+            const runAbortController = new AbortController();
+            if (ctx?.abortSignal) {
+                if (ctx.abortSignal.aborted) {
+                    runAbortController.abort();
+                } else {
+                    ctx.abortSignal.addEventListener("abort", () => runAbortController.abort(), { once: true });
+                }
+            }
+            const cancelWatcher = this.startCancelWatcher(taskId, runAbortController);
+            this.currentExecutionSignal = runAbortController.signal;
 
+            try {
             logExecution("info", {
                 event: "execution.started",
                 workerId: this.workerId,
@@ -1085,6 +1260,19 @@ Reply to confirm receipt or contact support if you have questions.
 
             while (!goalAchieved && iteration < maxIterations && task.status !== "completed") {
                 iteration += 1;
+
+                const latestForCancel = await this.taskModel.findById(taskId);
+                if (latestForCancel) {
+                    const cancellationOutcome = await this.handleCancellationIfRequested(
+                        latestForCancel,
+                        runAbortController,
+                        runId,
+                    );
+                    if (cancellationOutcome) {
+                        return cancellationOutcome;
+                    }
+                }
+
                 await this.persistShadowExecutionState(task, { type: "ITERATION_START", iteration });
                 logExecution("info", {
                     event: "execution.iteration",
@@ -1101,6 +1289,16 @@ Reply to confirm receipt or contact support if you have questions.
                         decision = await this.decideNextAction(task, this.getExecutionHistory(task), availableTools, iterationContext);
                     } catch (err) {
                         const message = err instanceof Error ? err.message : String(err);
+                        if (/abort/i.test(message)) {
+                            const cancellationOutcome = await this.resolveCancellationBeforeSideEffect(
+                                taskId,
+                                runAbortController,
+                                runId,
+                            );
+                            if (cancellationOutcome) {
+                                return cancellationOutcome;
+                            }
+                        }
                         if (typeof message === "string" && message.startsWith("LLM_ERROR:")) {
                             // LLM failed — do not execute any tool. Respect retry semantics.
                             context.retryCount += 1;
@@ -1392,6 +1590,15 @@ Reply to confirm receipt or contact support if you have questions.
                         },
                     });
 
+                    const sideEffectCancellation = await this.resolveCancellationBeforeSideEffect(
+                        taskId,
+                        runAbortController,
+                        runId,
+                    );
+                    if (sideEffectCancellation) {
+                        return sideEffectCancellation;
+                    }
+
                     const executed = await this.execute({
                         ...context.attemptPayload,
                         stepId: context.action.toolName,
@@ -1598,6 +1805,15 @@ Reply to confirm receipt or contact support if you have questions.
                     const reason = error instanceof Error ? error.message : "unknown execution error";
 
                     if (/abort|timed out|lease lost/i.test(reason)) {
+                        const cancellationOutcome = await this.resolveCancellationBeforeSideEffect(
+                            taskId,
+                            runAbortController,
+                            runId,
+                        );
+                        if (cancellationOutcome) {
+                            return cancellationOutcome;
+                        }
+
                         await this.persistShadowExecutionState(task, {
                             type: "ERROR_OCCURRED",
                             reason,
@@ -1775,6 +1991,10 @@ Reply to confirm receipt or contact support if you have questions.
                 result: context.observed,
                 verification: context.verification,
             };
+            } finally {
+                cancelWatcher.stop();
+                this.currentExecutionSignal = null;
+            }
         } finally {
             this.currentRunId = null;
         }
@@ -1992,7 +2212,7 @@ Reply to confirm receipt or contact support if you have questions.
             res = await this.requestLlmResponse(model, JSON.stringify({ systemPrompt, userPayload }));
         } catch (err) {
             console.error("agent-runner llm:step-error", { runId: this.currentRunId, taskId: input.task._id.toString(), stepId: input.step.stepId, err: err instanceof Error ? err.message : String(err) });
-            throw new Error(`LLM_ERROR: ${err instanceof Error ? err.message : String(err)}`);
+            this.rethrowLlmFailure(err);
         }
 
         const text = String(res.output_text ?? (Array.isArray(res.output) ? res.output.map((o: any) => (o.content ?? []).map((c: any) => c.text || JSON.stringify(c)).join('')).join('\n') : '')).trim();
@@ -2076,6 +2296,7 @@ Reply to confirm receipt or contact support if you have questions.
         const watchdog = leaseHeld
             ? { stop: () => undefined }
             : this.startLeaseWatchdog(taskId, runAbortController, runId, watchdogIntervalMs);
+        const cancelWatcher = this.startCancelWatcher(taskId, runAbortController);
 
         try {
             await this.startShadowExecutionRun(task, runId);
@@ -2096,6 +2317,16 @@ Reply to confirm receipt or contact support if you have questions.
                     if (!latestTask) {
                         throw new Error(`Task disappeared during execution: ${taskId}`);
                     }
+
+                    const cancellationOutcome = await this.handleCancellationIfRequested(
+                        latestTask,
+                        runAbortController,
+                        runId,
+                    );
+                    if (cancellationOutcome) {
+                        return cancellationOutcome;
+                    }
+
                     await this.persistShadowExecutionState(latestTask, { type: "ITERATION_START", iteration });
 
                     const plan = await this.ensurePlan(latestTask);
@@ -2196,6 +2427,16 @@ Reply to confirm receipt or contact support if you have questions.
                         });
                     } catch (err) {
                         const message = err instanceof Error ? err.message : String(err);
+                        if (/abort/i.test(message)) {
+                            const cancellationOutcome = await this.resolveCancellationBeforeSideEffect(
+                                taskId,
+                                runAbortController,
+                                runId,
+                            );
+                            if (cancellationOutcome) {
+                                return cancellationOutcome;
+                            }
+                        }
                         if (typeof message === "string" && message.startsWith("LLM_ERROR:")) {
                             // Do not execute any tool. Respect retry semantics for persistent loop.
                             await this.updatePlanStepState(taskId, step.stepId, {
@@ -2355,6 +2596,15 @@ Reply to confirm receipt or contact support if you have questions.
                         lastError: null,
                     });
 
+                    const sideEffectCancellation = await this.resolveCancellationBeforeSideEffect(
+                        taskId,
+                        runAbortController,
+                        runId,
+                    );
+                    if (sideEffectCancellation) {
+                        return sideEffectCancellation;
+                    }
+
                     let executed = await this.execute(executionPayload, {
                         userId: this.getTaskUserId(latestTask),
                         clarificationReply,
@@ -2460,6 +2710,15 @@ Reply to confirm receipt or contact support if you have questions.
                                             input: activeNormalizedInput,
                                             lastError: null,
                                         });
+
+                                        const retrySideEffectCancellation = await this.resolveCancellationBeforeSideEffect(
+                                            taskId,
+                                            runAbortController,
+                                            runId,
+                                        );
+                                        if (retrySideEffectCancellation) {
+                                            return retrySideEffectCancellation;
+                                        }
 
                                         executed = await this.execute(executionPayload, {
                                             userId: this.getTaskUserId(latestTask),
@@ -2635,6 +2894,20 @@ Reply to confirm receipt or contact support if you have questions.
                         status: "failed",
                     });
                     break;
+                } catch (error) {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    if (/abort/i.test(reason)) {
+                        const cancellationOutcome = await this.resolveCancellationBeforeSideEffect(
+                            taskId,
+                            runAbortController,
+                            runId,
+                        );
+                        if (cancellationOutcome) {
+                            return cancellationOutcome;
+                        }
+                    }
+
+                    throw error;
                 } finally {
                     clearTimeout(iterationTimeoutHandle);
                     this.currentExecutionSignal = runAbortController.signal;
@@ -2667,6 +2940,7 @@ Reply to confirm receipt or contact support if you have questions.
                 verification: lastVerification,
             };
         } finally {
+            cancelWatcher.stop();
             watchdog.stop();
             this.currentExecutionSignal = null;
             if (!leaseHeld) {

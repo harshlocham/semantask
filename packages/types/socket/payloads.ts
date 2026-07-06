@@ -243,7 +243,7 @@ export interface TaskCreatedPayload {
 export interface TaskUpdatedPayload {
     taskId: string;
     conversationId: string;
-    patch: Partial<Pick<TaskRecord, "title" | "description" | "status" | "priority" | "assignees" | "dueAt" | "tags" | "latestContextMessageId" | "updatedBy" | "result" | "retryCount" | "maxRetries" | "parentTaskId" | "subTasks" | "dependencyIds" | "progress" | "checkpoints" | "executionHistory">>;
+    patch: Partial<Pick<TaskRecord, "title" | "description" | "status" | "lifecycleState" | "priority" | "assignees" | "dueAt" | "tags" | "latestContextMessageId" | "updatedBy" | "result" | "retryCount" | "maxRetries" | "parentTaskId" | "subTasks" | "dependencyIds" | "progress" | "checkpoints" | "executionHistory" | "cancelRequestedAt" | "cancelReason">>;
     previousVersion: number;
     newVersion: number;
     updatedByType: "user" | "agent" | "system";
@@ -261,7 +261,7 @@ export interface TaskLinkedToMessagePayload {
 export interface TaskExecutionUpdatedPayload {
     taskId: string;
     conversationId: string;
-    state: "queued" | "running" | "succeeded" | "failed" | "blocked" | "approval_pending";
+    state: "queued" | "running" | "succeeded" | "failed" | "blocked" | "approval_pending" | "cancelled";
     actionType: TaskExecutionActionType;
     summary: string | null;
     error: string | null;

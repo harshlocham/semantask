@@ -64,6 +64,9 @@ export function normalizeTask(doc: ITask): TaskRecord {
                 ? { error: doc.result.error }
                 : {}),
         },
+        ...(doc.lifecycleState ? { lifecycleState: doc.lifecycleState } : {}),
+        ...(doc.cancelRequestedAt ? { cancelRequestedAt: new Date(doc.cancelRequestedAt).toISOString() } : {}),
+        ...(typeof doc.cancelReason === "string" ? { cancelReason: doc.cancelReason } : {}),
         version: doc.version,
         closedAt: doc.closedAt ? new Date(doc.closedAt).toISOString() : null,
         archivedAt: doc.archivedAt ? new Date(doc.archivedAt).toISOString() : null,

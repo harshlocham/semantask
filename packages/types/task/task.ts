@@ -126,6 +126,8 @@ export interface TaskRecord {
     nextRetryAt?: string | null;
     lastRetryReason?: string | null;
     lastRetryAt?: string | null;
+    cancelRequestedAt?: string | null;
+    cancelReason?: string | null;
     executionRunId?: string | null;
     executionStartedAt?: string | null;
     executionState?: import("./execution-state.js").ExecutionState;

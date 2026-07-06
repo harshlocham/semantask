@@ -99,6 +99,9 @@ function mapPayloadStateToEventType(
     if (step === "failed" || step === "exception" || state === "failed") {
         return "execution_failed";
     }
+    if (step === "cancelled" || state === "cancelled") {
+        return "execution_failed";
+    }
     if (step === "run_task" || step === "queued" || step === "policy_approved") {
         return "execution_started";
     }

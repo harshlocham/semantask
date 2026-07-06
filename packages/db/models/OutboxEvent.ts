@@ -5,7 +5,8 @@ export type OutboxTopic =
     | "task.created"
     | "task.updated"
     | "task.execution.requested"
-    | "task.execution.approved";
+    | "task.execution.approved"
+    | "task.cancel.requested";
 
 export type OutboxStatus = "pending" | "processing" | "completed" | "failed" | "dead_letter";
 
@@ -30,7 +31,7 @@ const OutboxEventSchema = new Schema<IOutboxEvent>(
     {
         topic: {
             type: String,
-            enum: ["message.created", "task.created", "task.updated", "task.execution.requested", "task.execution.approved"],
+            enum: ["message.created", "task.created", "task.updated", "task.execution.requested", "task.execution.approved", "task.cancel.requested"],
             required: true,
             index: true,
         },
