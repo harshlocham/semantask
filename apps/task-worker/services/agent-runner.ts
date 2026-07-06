@@ -1125,6 +1125,8 @@ Reply to confirm receipt or contact support if you have questions.
             patch: {
                 status: "failed",
                 lifecycleState: "failed",
+                ...(fresh.cancelRequestedAt instanceof Date ? { cancelRequestedAt: fresh.cancelRequestedAt.toISOString() } : {}),
+                ...(typeof fresh.cancelReason === "string" ? { cancelReason: fresh.cancelReason } : {}),
                 result: fresh.result,
                 progress: 100,
                 updatedBy: null,

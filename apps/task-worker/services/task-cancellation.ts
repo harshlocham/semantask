@@ -3,7 +3,6 @@ import type { ExecutionActorType, ExecutionEvent, ExecutionState, TaskResult } f
 import { deriveLegacyLifecycleState } from "@semantask/types";
 import {
     appendShadowHistory,
-    isExecutionState,
     reduceShadowExecutionEvent,
     resolveCurrentShadowState,
     type ShadowExecutionStateHistoryEntry,
@@ -133,7 +132,7 @@ export async function finalizeTaskCancellation(input: FinalizeTaskCancellationIn
     const events: ExecutionEvent[] = [];
 
     const current = resolveCurrentShadowState(task.executionState);
-    if (!isExecutionState(task.executionState) || task.executionState.kind !== "cancelling") {
+    if (current.kind !== "cancelling") {
         events.push({
             type: "CANCEL_REQUESTED",
             initiatedBy,
@@ -207,7 +206,7 @@ export async function processTaskCancellation(input: ProcessTaskCancellationInpu
     if (isTaskActivelyLeased(task)) {
         if (isShadowCancellationEnabled()) {
             const current = resolveCurrentShadowState(task.executionState);
-            if (!isExecutionState(task.executionState) || task.executionState.kind !== "cancelling") {
+            if (current.kind !== "cancelling") {
                 await applyShadowCancellationEvents(
                     task,
                     [{

@@ -409,6 +409,37 @@ async function updateTaskLifecycle(input: {
     return task;
 }
 
+async function emitTaskUpdatedSnapshot(task: {
+    _id: { toString(): string };
+    status: TaskUpdatedPayload["patch"]["status"];
+    lifecycleState?: TaskUpdatedPayload["patch"]["lifecycleState"];
+    progress?: number;
+    result?: TaskResult;
+    version: number;
+    cancelRequestedAt?: Date | null;
+    cancelReason?: string | null;
+}, conversationId: string) {
+    const taskUpdatedPayload: TaskUpdatedPayload = {
+        taskId: task._id.toString(),
+        conversationId,
+        patch: {
+            status: task.status,
+            ...(task.lifecycleState !== undefined ? { lifecycleState: task.lifecycleState } : {}),
+            ...(typeof task.progress === "number" ? { progress: task.progress } : {}),
+            ...(task.result !== undefined ? { result: task.result } : {}),
+            ...(task.cancelRequestedAt instanceof Date ? { cancelRequestedAt: task.cancelRequestedAt.toISOString() } : {}),
+            ...(typeof task.cancelReason === "string" ? { cancelReason: task.cancelReason } : {}),
+            updatedBy: null,
+        },
+        previousVersion: Math.max(0, task.version - 1),
+        newVersion: task.version,
+        updatedByType: "agent",
+        updatedById: null,
+    };
+
+    await emitInternal("/internal/task-updated", conversationId, taskUpdatedPayload);
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
     if (value && typeof value === "object") {
         return value as Record<string, unknown>;
@@ -1537,17 +1568,7 @@ async function processTaskCancelRequested(payload: TaskCancelRequestedPayload) {
         return;
     }
 
-    await updateTaskLifecycle({
-        taskId: payload.taskId,
-        conversationId: payload.conversationId,
-        status: "failed",
-        result: {
-            success: false,
-            confidence: 0,
-            evidence: { reason: "cancelled" },
-            error: payload.reason,
-        },
-    });
+    await emitTaskUpdatedSnapshot(task, payload.conversationId);
 
     await emitTaskExecutionUpdate({
         taskId: payload.taskId,
