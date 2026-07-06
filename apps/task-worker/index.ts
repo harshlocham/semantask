@@ -18,6 +18,7 @@ import { persistExecutionUpdatePayload } from "./services/execution-event.servic
 import { logExecution } from "./services/execution-logger.js";
 import { maybeLogTaskStateDivergence } from "./services/state-divergence-check.js";
 import { emitPolicyShadowState } from "./services/policy-shadow.js";
+import { isTaskCancelRequestedPayload, processTaskCancellation, type TaskCancelRequestedPayload } from "./services/task-cancellation.js";
 import { startStuckTaskDetector } from "./services/stuck-task-detector.js";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
@@ -91,6 +92,11 @@ type TaskModelLike = {
         maxRetries?: number;
         result?: TaskResult;
         updatedBy: null | string;
+        cancelRequestedAt?: Date | null;
+        cancelReason?: string | null;
+        cancelRequestedByType?: "user" | "agent" | "system" | null;
+        cancelRequestedById?: { toString(): string } | null;
+        executionRunId?: string | null;
         save: () => Promise<void>;
     } | null>;
 };
@@ -401,6 +407,37 @@ async function updateTaskLifecycle(input: {
 
     await emitInternal("/internal/task-updated", conversationId, taskUpdatedPayload);
     return task;
+}
+
+async function emitTaskUpdatedSnapshot(task: {
+    _id: { toString(): string };
+    status: TaskUpdatedPayload["patch"]["status"];
+    lifecycleState?: TaskUpdatedPayload["patch"]["lifecycleState"];
+    progress?: number;
+    result?: TaskResult;
+    version: number;
+    cancelRequestedAt?: Date | null;
+    cancelReason?: string | null;
+}, conversationId: string) {
+    const taskUpdatedPayload: TaskUpdatedPayload = {
+        taskId: task._id.toString(),
+        conversationId,
+        patch: {
+            status: task.status,
+            ...(task.lifecycleState !== undefined ? { lifecycleState: task.lifecycleState } : {}),
+            ...(typeof task.progress === "number" ? { progress: task.progress } : {}),
+            ...(task.result !== undefined ? { result: task.result } : {}),
+            ...(task.cancelRequestedAt instanceof Date ? { cancelRequestedAt: task.cancelRequestedAt.toISOString() } : {}),
+            ...(typeof task.cancelReason === "string" ? { cancelReason: task.cancelReason } : {}),
+            updatedBy: null,
+        },
+        previousVersion: Math.max(0, task.version - 1),
+        newVersion: task.version,
+        updatedByType: "agent",
+        updatedById: null,
+    };
+
+    await emitInternal("/internal/task-updated", conversationId, taskUpdatedPayload);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -1205,6 +1242,19 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
         progress: 5,
     });
 
+    const existingTask = await TaskModel.findById(payload.taskId);
+    if (existingTask?.cancelRequestedAt) {
+        await processTaskCancelRequested({
+            taskId: payload.taskId,
+            conversationId: payload.conversationId,
+            reason: existingTask.cancelReason ?? "Task cancelled.",
+            initiatedBy: existingTask.cancelRequestedByType ?? "user",
+            initiatedById: existingTask.cancelRequestedById?.toString() ?? null,
+            requestedAt: existingTask.cancelRequestedAt.toISOString(),
+        });
+        return;
+    }
+
     const confidence = payload.confidence ?? 0.5;
     const policyDecision = evaluateExecutionPolicy(payload);
     const safePolicyDecision = {
@@ -1498,6 +1548,50 @@ async function processTaskExecutionApproved(payload: TaskExecutionApprovedPayloa
     await processTaskExecutionRequested(normalizedPayload);
 }
 
+async function processTaskCancelRequested(payload: TaskCancelRequestedPayload) {
+    const outcome = await processTaskCancellation({ payload, workerId: WORKER_ID });
+
+    if (outcome === "noop" || outcome === "deferred") {
+        if (outcome === "deferred") {
+            logExecution("info", {
+                event: "task.cancel.deferred",
+                workerId: WORKER_ID,
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+            });
+        }
+        return;
+    }
+
+    const task = await TaskModel.findById(payload.taskId);
+    if (!task) {
+        return;
+    }
+
+    await emitTaskUpdatedSnapshot(task, payload.conversationId);
+
+    await emitTaskExecutionUpdate({
+        taskId: payload.taskId,
+        conversationId: payload.conversationId,
+        state: "cancelled",
+        actionType: "none",
+        summary: "Task cancelled.",
+        error: payload.reason,
+        updatedAt: new Date().toISOString(),
+        runId: task.executionRunId ?? null,
+        phase: "finalize",
+        step: "cancelled",
+        progress: 100,
+        structuredOutput: {
+            status: "failed",
+            confidence: 0,
+            summary: "Task cancelled.",
+            error: payload.reason,
+            evidence: { reason: "cancelled" },
+        },
+    });
+}
+
 async function ensureDatabaseConnection() {
     if (mongoose.connection.readyState === 1) {
         return;
@@ -1622,6 +1716,17 @@ async function processOneEvent(event: {
             }
 
             await processTaskExecutionApproved(event.payload);
+
+            await complete(eventId);
+            return;
+        }
+
+        if (event.topic === "task.cancel.requested") {
+            if (!isTaskCancelRequestedPayload(event.payload)) {
+                throw new Error("Invalid task.cancel.requested payload shape");
+            }
+
+            await processTaskCancelRequested(event.payload);
 
             await complete(eventId);
             return;

@@ -46,7 +46,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | **P2-9** | Unify `RetryManager` schedules | **DEFERRED** | Phase 5+ | Hard-coded in `agent-runner.ts`, `retry-manager.ts` |
 | **P2-10** | `RETRY_BUDGET_EXHAUSTED` vs `ERROR_OCCURRED` alignment | **OPEN** (debt) | Phase 1+ | `scheduleTaskRetry` sets legacy `failed` directly |
 | **P2-11** | Stuck detector log-only | **OPEN** | [Phase 1.5](../PRODUCTION_ROADMAP_V1.md) | `stuck-task-detector.ts` — warn only |
-| **P3-12** | Cancellation wiring | **DEFERRED** | [Phase 1.4](../PRODUCTION_ROADMAP_V1.md) | FSM models `CANCEL_*`; no emitters |
+| **P3-12** | Cancellation wiring | **FIXED** | [Phase 1.4](../PRODUCTION_ROADMAP_V1.md) ✓ | `POST /api/tasks/:id/cancel` → `task.cancel.requested` outbox → `processTaskCancellation` + per-iteration checks in `AgentRunner` |
 | **P3-13** | `Retry-After` / circuit breaker | **DEFERRED** | Phase 4+ | Not implemented |
 | **P3-14** | Divergence audit job | **DEFERRED** | [Phase 1.1](../PRODUCTION_ROADMAP_V1.md) | Overlaps P0-3 |
 | **P3-15** | Retry scanner batching | **DEFERRED** | [Phase 6.2](../PRODUCTION_ROADMAP_V1.md) | One row per 5 s tick per worker |
@@ -65,7 +65,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | Shadow on by default (`TASK_EXECUTION_FSM_SHADOW_MODE !== "0"`) | `AgentRunner.isShadowExecutionStateEnabled()` |
 | `deriveLegacyLifecycleState` / `deriveLegacyTaskStatus` exist but are **not** used at write time | Only referenced in `apps/task-worker/tests/execution-state-machine.test.ts` |
 | `AgentRunner` writes legacy (`updateTask` / `transitionLifecycle`) and FSM (`persistShadowExecutionState`) separately | Same file, non-transactional |
-| `CANCEL_*` events modeled; no runtime emitters | Grep: only FSM reducer + unit tests |
+| `CANCEL_*` events modeled; runtime wired via `task.cancel.requested` outbox + `AgentRunner` iteration checks | `task-cancellation.ts`, `POST /api/tasks/:id/cancel` |
 | `stuck-task-detector` logs only; no remediation | `detectStuckTasksOnce` — warn log, no state change |
 | Cancellation FSM `cancelled` has no matching legacy enum value | `deriveLegacyLifecycleState(cancelled)` → `"failed"` (schema has no `cancelled` lifecycle) |
 
@@ -74,7 +74,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 - **Shadow FSM is best-effort:** invalid transitions stay on `from`; `shadowError` in history; persist failures log and continue.
 - **No reconciliation:** legacy vs `executionState` divergence is undetected in production (**P0-3 OPEN**).
 - **Dual reducers:** programmer discipline keeps legacy and shadow aligned; not a runtime invariant.
-- **Cancellation** is designed in the FSM but not wired from API/socket/worker (**P3-12 DEFERRED**).
+- **Cancellation** is wired from `POST /api/tasks/:id/cancel` through the outbox to the worker and `AgentRunner` iteration checks (**P3-12 FIXED**).
 
 ### Gaps ADR-001 understates or code diverges
 

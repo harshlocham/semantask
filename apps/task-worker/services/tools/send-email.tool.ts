@@ -29,6 +29,10 @@ export class SendEmailTool implements Tool {
             throw new Error("Email adapter requires parameters.to");
         }
 
+        if (context.signal?.aborted) {
+            throw new Error("Execution aborted.");
+        }
+
         const subject = typeof input.subject === "string"
             ? input.subject
             : `Task update ${context.taskId}`;

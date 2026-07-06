@@ -31,6 +31,7 @@ interface ExecutionStep {
 interface TaskInlineCardProps {
     task: TaskRecord;
     onStatusChange: (taskId: string, status: TaskStatus) => void;
+    onCancel: (taskId: string) => Promise<void>;
 }
 
 function formatDueDate(value: string | null) {
@@ -146,7 +147,15 @@ const StepRow = memo(function StepRow({
     );
 });
 
-function TaskInlineCard({ task, onStatusChange }: TaskInlineCardProps) {
+function canCancelTask(task: TaskRecord): boolean {
+    return task.lifecycleState !== "completed"
+        && task.lifecycleState !== "failed"
+        && task.status !== "completed"
+        && task.status !== "failed"
+        && !task.cancelRequestedAt;
+}
+
+function TaskInlineCard({ task, onStatusChange, onCancel }: TaskInlineCardProps) {
     const shouldReduceMotion = useReducedMotion();
     const executionView = useTaskExecution(task._id);
     const setExecutionEvents = useTaskStore((state) => state.setExecutionEvents);
@@ -169,6 +178,7 @@ function TaskInlineCard({ task, onStatusChange }: TaskInlineCardProps) {
 
     const progress = executionView.progress > 0 ? executionView.progress : getProgressValue(steps);
     const hasRunningStep = steps.some((step) => step.status === "running") || task.status === "executing";
+    const showCancel = canCancelTask(task);
 
     const replayExecutionEvents = useCallback(async () => {
         const currentEvents = executionEventsRef.current;
@@ -272,6 +282,9 @@ function TaskInlineCard({ task, onStatusChange }: TaskInlineCardProps) {
                 {executionView.approvalPending && (
                     <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">Awaiting human approval</p>
                 )}
+                {task.cancelRequestedAt && task.status !== "failed" && task.status !== "completed" && (
+                    <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">Cancellation requested…</p>
+                )}
                 {steps.length === 0 && task.status === "executing" && (
                     <p className="mb-2 text-xs text-muted-foreground">Waiting for execution telemetry...</p>
                 )}
@@ -335,10 +348,23 @@ function TaskInlineCard({ task, onStatusChange }: TaskInlineCardProps) {
 
             <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-[11px] text-muted-foreground">
                 <span>Due {formatDueDate(task.dueAt)}</span>
-                <span className="inline-flex items-center gap-1">
-                    <Sparkles className="h-3 w-3 text-primary" />
-                    Real-time execution
-                </span>
+                <div className="flex items-center gap-2">
+                    {showCancel && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 rounded-lg px-2.5 text-[11px]"
+                            onClick={() => void onCancel(task._id)}
+                        >
+                            Cancel
+                        </Button>
+                    )}
+                    <span className="inline-flex items-center gap-1">
+                        <Sparkles className="h-3 w-3 text-primary" />
+                        Real-time execution
+                    </span>
+                </div>
             </div>
         </motion.article>
     );
@@ -450,6 +476,27 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
         }
     };
 
+    const cancelTask = async (taskId: string) => {
+        try {
+            const response = await authenticatedFetch(`/api/tasks/${taskId}/cancel`, {
+                method: "POST",
+                body: JSON.stringify({ reason: "Cancelled from task panel." }),
+            });
+            if (response.status === 409) {
+                console.warn("Task is already terminal");
+                return;
+            }
+            if (!response.ok) {
+                throw new Error("Failed to cancel task");
+            }
+
+            const updated = (await response.json()) as TaskRecord;
+            upsertTask(updated);
+        } catch (error) {
+            console.error("Failed to cancel task", error);
+        }
+    };
+
     return (
         <aside className="hidden min-h-0 w-85 shrink-0 border-l border-border bg-[hsl(var(--left-panel))] text-foreground xl:flex xl:flex-col dark:bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.12),transparent_28%),linear-gradient(180deg,hsl(var(--left-panel)),hsl(var(--background)))]">
             <div className="border-b border-border px-4 py-4">
@@ -497,7 +544,7 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
                 <AnimatePresence initial={false} mode="popLayout">
                     <div className="space-y-3">
                         {tasks.map((task) => (
-                            <TaskInlineCard key={task._id} task={task} onStatusChange={updateTaskStatus} />
+                            <TaskInlineCard key={task._id} task={task} onStatusChange={updateTaskStatus} onCancel={cancelTask} />
                         ))}
                     </div>
                 </AnimatePresence>

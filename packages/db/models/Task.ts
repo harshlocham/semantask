@@ -48,6 +48,10 @@ export interface ITask {
     nextRetryAt?: Date | null;
     lastRetryReason?: string | null;
     lastRetryAt?: Date | null;
+    cancelRequestedAt?: Date | null;
+    cancelReason?: string | null;
+    cancelRequestedByType?: "user" | "agent" | "system" | null;
+    cancelRequestedById?: mongoose.Types.ObjectId | null;
     executionRunId?: string | null;
     executionStartedAt?: Date | null;
     executionEventSequence?: number;
@@ -158,6 +162,10 @@ const TaskSchema = new Schema<ITask>(
         nextRetryAt: { type: Date, default: null, index: true },
         lastRetryReason: { type: String, trim: true, maxlength: 500, default: null },
         lastRetryAt: { type: Date, default: null },
+        cancelRequestedAt: { type: Date, default: null, index: true },
+        cancelReason: { type: String, trim: true, maxlength: 2000, default: null },
+        cancelRequestedByType: { type: String, enum: ["user", "agent", "system"], default: null },
+        cancelRequestedById: { type: Schema.Types.ObjectId, ref: "User", default: null },
         executionRunId: { type: String, trim: true, maxlength: 80, default: null },
         executionStartedAt: { type: Date, default: null },
         executionEventSequence: { type: Number, min: 0, default: 0 },
