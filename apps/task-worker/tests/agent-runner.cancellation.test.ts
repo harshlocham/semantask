@@ -11,7 +11,7 @@ type MockTask = {
     title: string;
     description: string;
     status: string;
-    lifecycleState?: string;
+    lifecycleState?: "planning" | "ready" | "executing" | "waiting_for_approval" | "blocked" | "retry_scheduled" | "paused" | "completed" | "failed";
     version: number;
     updatedBy: null | string;
     retryCount?: number;
@@ -129,10 +129,10 @@ test("cancellation gate after LLM prevents tool side effects", async () => {
                         cancelRequestedAt: new Date("2026-07-06T07:24:56.000Z"),
                         cancelReason: "Cancelled by user.",
                         cancelRequestedByType: "user" as const,
-                    };
+                    } as any;
                 }
 
-                return task;
+                return task as any;
             },
         },
         toolRegistry: registry,
@@ -192,7 +192,7 @@ test("cancel watcher aborts in-flight LLM before tool execution", async () => {
                     task.cancelRequestedByType = "user";
                 }
 
-                return task;
+                return task as any;
             },
         },
         toolRegistry: registry,
