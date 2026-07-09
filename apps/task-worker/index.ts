@@ -1762,7 +1762,14 @@ async function run() {
     }
 
     startRetryScheduler(WORKER_ID);
-    startStuckTaskDetector(WORKER_ID);
+    startStuckTaskDetector(WORKER_ID, {
+        onTaskUpdated: async (task, conversationId) => {
+            await emitTaskUpdatedSnapshot(task, conversationId);
+        },
+        onExecutionUpdate: async (payload) => {
+            await emitTaskExecutionUpdate(payload);
+        },
+    });
 
     // eslint-disable-next-line no-constant-condition
     while (true) {

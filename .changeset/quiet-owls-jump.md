@@ -1,9 +1,9 @@
 ---
-"@chat/task-worker": patch
-"@chat/web": patch
-"@chat/db": patch
-"@chat/types": patch
-"@chat/services": patch
+"@semantask/task-worker": patch
+"@semantask/web": patch
+"@semantask/db": patch
+"@semantask/types": patch
+"@semantask/services": patch
 ---
 
 ## Runtime

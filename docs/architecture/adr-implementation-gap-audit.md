@@ -45,7 +45,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | **P2-8** | Dead `buildExecutionPlan` / `runExecutionPlan` | **OPEN** (debt) | [Phase 5.1](../PRODUCTION_ROADMAP_V1.md) | Defined `index.ts:969-1130`; zero callers |
 | **P2-9** | Unify `RetryManager` schedules | **DEFERRED** | Phase 5+ | Hard-coded in `agent-runner.ts`, `retry-manager.ts` |
 | **P2-10** | `RETRY_BUDGET_EXHAUSTED` vs `ERROR_OCCURRED` alignment | **OPEN** (debt) | Phase 1+ | `scheduleTaskRetry` sets legacy `failed` directly |
-| **P2-11** | Stuck detector log-only | **OPEN** | [Phase 1.5](../PRODUCTION_ROADMAP_V1.md) | `stuck-task-detector.ts` — warn only |
+| **P2-11** | Stuck detector log-only | **FIXED** | [Phase 1.5](../PRODUCTION_ROADMAP_V1.md) ✓ | `stuck-task-detector.ts` — `TASK_STUCK_REMEDIATION=fail\|retry\|log` (default `log`) |
 | **P3-12** | Cancellation wiring | **FIXED** | [Phase 1.4](../PRODUCTION_ROADMAP_V1.md) ✓ | `POST /api/tasks/:id/cancel` → `task.cancel.requested` outbox → `processTaskCancellation` + per-iteration checks in `AgentRunner` |
 | **P3-13** | `Retry-After` / circuit breaker | **DEFERRED** | Phase 4+ | Not implemented |
 | **P3-14** | Divergence audit job | **DEFERRED** | [Phase 1.1](../PRODUCTION_ROADMAP_V1.md) | Overlaps P0-3 |
@@ -66,7 +66,7 @@ Use the [status register](#status-register-p0p1) below as the single source for 
 | `deriveLegacyLifecycleState` / `deriveLegacyTaskStatus` exist but are **not** used at write time | Only referenced in `apps/task-worker/tests/execution-state-machine.test.ts` |
 | `AgentRunner` writes legacy (`updateTask` / `transitionLifecycle`) and FSM (`persistShadowExecutionState`) separately | Same file, non-transactional |
 | `CANCEL_*` events modeled; runtime wired via `task.cancel.requested` outbox + `AgentRunner` iteration checks | `task-cancellation.ts`, `POST /api/tasks/:id/cancel` |
-| `stuck-task-detector` logs only; no remediation | `detectStuckTasksOnce` — warn log, no state change |
+| `stuck-task-detector` remediates via `TASK_STUCK_REMEDIATION` (`log` / `fail` / `retry`) | `detectStuckTasksOnce` + `remediateStuckTask` |
 | Cancellation FSM `cancelled` has no matching legacy enum value | `deriveLegacyLifecycleState(cancelled)` → `"failed"` (schema has no `cancelled` lifecycle) |
 
 ### Accepted limitations (documented, not production-ready)
@@ -123,7 +123,7 @@ No material factual errors after reconciliation. Uncertain items (`optimisticCon
 | 3 | **`buildExecutionPlan` / `runExecutionPlan` are dead code** | **OPEN** (P2-8) | Only defined in `index.ts:969-1130`; **never called**. Live execution always goes through `agentRunner.runTask` / `runTaskPersistent`. |
 | 4 | **`TASK_AGENT_PERSISTENT_LOOP_ENABLED` toggles runner mode** | **OPEN** (documented) | Default `false` → `runTask`; `true` → `runTaskPersistent`. Both use `scheduleTaskRetry`; not legacy plan vs AgentRunner. |
 | 5 | **`RETRY_BUDGET_EXHAUSTED` FSM event** | **OPEN** (P2-10) | Reducer supports it; runtime uses `ERROR_OCCURRED` → `failed` when budget exceeded. |
-| 6 | **Stuck detector does not interact with retry** | **OPEN** (P2-11) | Logs only; no remediation. |
+| 6 | **Stuck detector does not interact with retry** | **FIXED** (P2-11) | `TASK_STUCK_REMEDIATION=retry` schedules via `scheduleTaskRetry`. |
 
 ### ADR-002 uncertain items — resolved
 
@@ -155,7 +155,7 @@ Aligned with [Production Roadmap V1](../PRODUCTION_ROADMAP_V1.md). Items marked 
 ### Phase C — Observability before cutover
 
 7. **Divergence metric** — **shipped** (Phase 1.1): `TASK_STATE_DIVERGENCE_CHECK=1` logs `state_diverged`
-8. **Stuck detector remediation** — **OPEN** → Phase 1.5
+8. **Stuck detector remediation** — **FIXED** (Phase 1.5)
 
 ### Phase D — Authoritative FSM (ADR-001 future evolution)
 
