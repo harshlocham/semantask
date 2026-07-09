@@ -20,6 +20,8 @@ import { maybeLogTaskStateDivergence } from "./services/state-divergence-check.j
 import { emitPolicyShadowState } from "./services/policy-shadow.js";
 import { isTaskCancelRequestedPayload, processTaskCancellation, type TaskCancelRequestedPayload } from "./services/task-cancellation.js";
 import { startStuckTaskDetector } from "./services/stuck-task-detector.js";
+import { classifyMessageWithLlm } from "./services/message-classifier-llm.js";
+import { configureMessageClassifier } from "@semantask/services/message-classifier.service";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +47,20 @@ for (let depth = 0; depth < 8; depth += 1) {
     }
     scanDir = parent;
 }
+
+configureMessageClassifier({
+    llmClassify: classifyMessageWithLlm,
+    onDisagreement: (payload) => {
+        logExecution("warn", {
+            event: "classifier.shadow.disagreement",
+            regexIsTask: payload.regex.isTask,
+            regexConfidence: payload.regex.confidence,
+            llmIsTask: payload.llm.isTask,
+            llmConfidence: payload.llm.confidence,
+            contentPreview: payload.contentPreview,
+        });
+    },
+});
 
 const WORKER_ID = `${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
 const BATCH_SIZE = Number(process.env.TASK_WORKER_BATCH_SIZE || 10);

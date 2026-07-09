@@ -16,8 +16,12 @@ import {
 } from "./repositories/task.repo";
 import { connectToDatabase } from "@semantask/db";
 import { enqueueOutboxEvent } from "./outbox.service";
+import {
+    classifyMessage,
+    isTaskClassification,
+} from "./message-classifier.service.js";
 
-const AI_VERSION = "intelligent-v3-preprocess";
+const AI_VERSION = "intelligent-v4-classifier";
 
 export interface ProcessMessageTaskIntelligenceInput {
     messageId: string;
@@ -32,69 +36,6 @@ export interface ProcessMessageTaskIntelligenceResult {
     taskCreatedPayload?: TaskCreatedPayload;
     taskUpdatedPayload?: TaskUpdatedPayload;
     taskLinkedPayload?: TaskLinkedToMessagePayload;
-}
-
-interface MessageClassification {
-    isTask: boolean;
-    confidence: number;
-    reasoning: string;
-}
-
-/**
- * Classify a message to determine if it's a task request or just casual chat.
- * Uses simple heuristics first; can be enhanced with LLM calls.
- */
-function classifyMessage(content: string): MessageClassification {
-    const normalized = normalizeContent(content).toLowerCase();
-
-    // Filter out very short messages that are unlikely to be tasks
-    if (normalized.length < 5) {
-        return {
-            isTask: false,
-            confidence: 0.95,
-            reasoning: "Message too short to be a task request",
-        };
-    }
-
-    // Check for task-like patterns
-    const taskPatterns = [
-        /^(create|make|build|fix|update|delete|add|remove|implement|design|plan|schedule|send|book|remind|set)/i,
-        /\b(need|should|must|have to|required to|please|can you|will you|would you|could you)\b/i,
-        /\b(task|todo|issue|bug|feature|request|action|step|deadline|due|urgent|asap)\b/i,
-        /[?!]$/, // Questions and strong statements
-    ];
-
-    const chatPatterns = [
-        /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|lol|haha|nice|great)/i,
-        /^(how are|what's up|good morning|good night|see you|bye|goodbye)/i,
-        /^\W*(lol|haha|omg|btw|fyi|idk|imo|smh)\W*$/i,
-    ];
-
-    const matchesTaskPattern = taskPatterns.some((p) => p.test(normalized));
-    const matchesChatPattern = chatPatterns.some((p) => p.test(normalized));
-
-    if (matchesChatPattern && !matchesTaskPattern) {
-        return {
-            isTask: false,
-            confidence: 0.85,
-            reasoning: "Message matches casual chat patterns",
-        };
-    }
-
-    if (matchesTaskPattern) {
-        return {
-            isTask: true,
-            confidence: 0.8,
-            reasoning: "Message matches task-like patterns",
-        };
-    }
-
-    // Default: treat as chat unless it looks like a task
-    return {
-        isTask: false,
-        confidence: 0.6,
-        reasoning: "Message is ambiguous; treating as chat by default",
-    };
 }
 
 function normalizeContent(content: string) {
@@ -177,10 +118,10 @@ export async function processMessageTaskIntelligence(
     }
 
     // Classify the message before creating a task
-    const classification = classifyMessage(input.content);
+    const classification = await classifyMessage(input.content);
 
     // If message is not classified as a task, mark it as chat and return
-    if (!classification.isTask || classification.confidence < 0.7) {
+    if (!isTaskClassification(classification)) {
         await updateMessageSemanticState(input.messageId, {
             semanticType: "chat",
             semanticConfidence: classification.confidence,
@@ -266,7 +207,7 @@ export async function processMessageTaskIntelligence(
 
     await updateMessageSemanticState(input.messageId, {
         semanticType: "task",
-        semanticConfidence: 0.9,
+        semanticConfidence: classification.confidence,
         aiStatus: "classified",
         aiVersion: AI_VERSION,
         linkedTaskIds: [task._id.toString()],
@@ -364,7 +305,7 @@ export async function processMessageTaskIntelligence(
         messageId: input.messageId,
         conversationId: input.conversationId,
         semanticType: "task",
-        semanticConfidence: 0.9,
+        semanticConfidence: classification.confidence,
         aiStatus: "classified",
         aiVersion: AI_VERSION,
         linkedTaskIds: [task._id.toString()],

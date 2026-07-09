@@ -25,6 +25,11 @@
             "types": "./dist/services/task-intelligence.service.d.ts",
             "default": "./dist/services/task-intelligence.service.js"
         },
+        "./message-classifier.service": {
+            "import": "./dist/services/message-classifier.service.js",
+            "types": "./dist/services/message-classifier.service.d.ts",
+            "default": "./dist/services/message-classifier.service.js"
+        },
         "./repositories/task.repo": {
             "import": "./dist/services/repositories/task.repo.js",
             "types": "./dist/services/repositories/task.repo.d.ts",
