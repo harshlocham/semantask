@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { CLASSIFIABLE_SEMANTIC_TYPES } from "@semantask/types";
 import type { MessageClassification } from "@semantask/services/message-classifier.service";
 import { createDefaultLLMProvider } from "./llm/provider-factory.js";
 import { parseJsonText } from "./llm/response-parser.js";
 import { LLMError } from "./llm/types.js";
 
 const classifierResponseSchema = z.object({
-    isTask: z.boolean(),
+    semanticType: z.enum(CLASSIFIABLE_SEMANTIC_TYPES),
     confidence: z.number().min(0).max(1),
     reasoning: z.string().min(1).max(2000),
 });
@@ -26,9 +27,15 @@ function buildClassifierPrompt(content: string): string {
     return JSON.stringify({
         systemPrompt: [
             "You classify chat messages for a collaboration app.",
-            "Return one JSON object only with keys: isTask, confidence, reasoning.",
-            "isTask=true when the user requests an action, deliverable, reminder, scheduling, email, issue, or follow-up work.",
-            "isTask=false for greetings, acknowledgements, small talk, and non-actionable chat.",
+            "Return one JSON object only with keys: semanticType, confidence, reasoning.",
+            "semanticType must be one of: chat, task, incident, scheduling, escalation, approval, automation.",
+            "chat: greetings, acknowledgements, small talk, non-actionable discussion.",
+            "task: generic action requests, deliverables, follow-up work, emails, issues.",
+            "incident: outages, production issues, bugs, errors, on-call events.",
+            "scheduling: meetings, calendar events, reminders, appointments.",
+            "escalation: urgent help, paging leadership, raising severity.",
+            "approval: sign-off, review approval, permission requests.",
+            "automation: workflows, scripts, cron jobs, pipeline triggers.",
             "confidence is 0 to 1. reasoning is one short sentence.",
         ].join(" "),
         userMessage: content,
@@ -113,12 +120,12 @@ export async function classifyMessageWithLlm(content: string): Promise<MessageCl
         model,
         provider: response.provider,
         latencyMs: Date.now() - startedAt,
-        isTask: validated.data.isTask,
+        semanticType: validated.data.semanticType,
         confidence: validated.data.confidence,
     });
 
     return {
-        isTask: validated.data.isTask,
+        semanticType: validated.data.semanticType,
         confidence: validated.data.confidence,
         reasoning: validated.data.reasoning,
         source: "llm",

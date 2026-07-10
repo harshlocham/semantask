@@ -1,4 +1,5 @@
 import type { MessageDTO } from "@semantask/types";
+import { mapLegacySemanticType } from "@semantask/types";
 import { IMessagePopulated } from "@semantask/db/models/Message";
 
 type Stringable = { toString(): string };
@@ -55,7 +56,9 @@ export function normalizeMessage(doc: IMessagePopulated): MessageDTO {
             ? new Date(doc.updatedAt).toISOString()
             : undefined,
 
-        semanticType: doc.semanticType,
+        semanticType: doc.semanticType
+            ? mapLegacySemanticType(doc.semanticType)
+            : undefined,
         semanticConfidence: doc.semanticConfidence,
         aiStatus: doc.aiStatus,
         aiVersion: doc.aiVersion ?? null,

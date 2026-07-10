@@ -53,9 +53,9 @@ configureMessageClassifier({
     onDisagreement: (payload) => {
         logExecution("warn", {
             event: "classifier.shadow.disagreement",
-            regexIsTask: payload.regex.isTask,
+            regexSemanticType: payload.regex.semanticType,
             regexConfidence: payload.regex.confidence,
-            llmIsTask: payload.llm.isTask,
+            llmSemanticType: payload.llm.semanticType,
             llmConfidence: payload.llm.confidence,
             contentPreview: payload.contentPreview,
         });

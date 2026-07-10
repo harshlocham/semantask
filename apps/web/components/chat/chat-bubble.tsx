@@ -20,6 +20,7 @@ import { ClientUser } from "@semantask/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { UIMessage } from "@semantask/types";
 import ChatBubbleAvatar from "../home/chat-bubble-avatar";
+import { IntentBadge } from "./intent-badge";
 
 interface ChatBubbleProps {
     message: UIMessage;
@@ -270,6 +271,14 @@ const ChatBubble = ({
                         {message.sender.username}
                     </div>
                 )}
+                {message.aiStatus === "classified" && message.semanticType ? (
+                    <div className={`mb-1 ${isMine ? "self-end" : "self-start"}`}>
+                        <IntentBadge
+                            semanticType={message.semanticType}
+                            confidence={message.semanticConfidence}
+                        />
+                    </div>
+                ) : null}
                 {/* Modern SaaS-style reaction badges */}
                 {hasReactions && !message.isDeleted && (
                     <div className={`absolute -top-3 ${isMine ? "right-4" : "left-4"} flex gap-1 z-20`}>

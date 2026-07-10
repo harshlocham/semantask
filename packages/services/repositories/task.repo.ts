@@ -397,7 +397,7 @@ export async function linkMessageToTask(input: LinkMessageToTaskInput) {
         {
             $addToSet: { linkedTaskIds: task._id },
             $set: {
-                semanticType: "task",
+                semanticType: input.semanticType ?? "task",
                 aiStatus: "classified",
                 semanticProcessedAt: new Date(),
             },

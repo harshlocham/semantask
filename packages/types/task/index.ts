@@ -5,3 +5,4 @@ export * from "./memory.js";
 export * from "./reflection.js";
 export * from "./execution-event.js";
 export * from "./execution-state.js";
+export * from "./semantic.js";

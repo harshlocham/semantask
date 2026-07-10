@@ -2,6 +2,31 @@
 import mongoose, { Schema, Model } from "mongoose";
 import { IUser } from "./User.js";
 
+export type StoredMessageSemanticType =
+    | "chat"
+    | "task"
+    | "decision"
+    | "reminder"
+    | "unknown"
+    | "incident"
+    | "scheduling"
+    | "escalation"
+    | "approval"
+    | "automation";
+
+const MESSAGE_SEMANTIC_TYPE_ENUM = [
+    "chat",
+    "task",
+    "decision",
+    "reminder",
+    "unknown",
+    "incident",
+    "scheduling",
+    "escalation",
+    "approval",
+    "automation",
+] as const;
+
 export type MessageType = "text" | "image" | "video" | "audio" | "voice" | "file";
 
 // Deprecated: IReaction interface (use reactions map instead)
@@ -32,7 +57,7 @@ export interface IMessage {
     delivered?: boolean;
     seen?: boolean;
     status: "pending" | "failed" | "sent" | "delivered" | "seen" | "queued";
-    semanticType?: "chat" | "task" | "decision" | "reminder" | "unknown";
+    semanticType?: StoredMessageSemanticType;
     semanticConfidence?: number;
     aiStatus?: "pending" | "classified" | "failed" | "overridden";
     aiVersion?: string | null;
@@ -89,7 +114,7 @@ const MessageSchema = new Schema<IMessage>({
     },
     semanticType: {
         type: String,
-        enum: ["chat", "task", "decision", "reminder", "unknown"],
+        enum: MESSAGE_SEMANTIC_TYPE_ENUM,
         default: "unknown",
         index: true,
     },
