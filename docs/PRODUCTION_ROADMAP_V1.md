@@ -348,7 +348,7 @@ Phase 0 → 1.1–1.3 → 2.1–2.2 → 3.1–3.2 → 4.1–4.2 → 1.4 → 5.2
 
 | ID | Debt | Location | Phase |
 |----|------|----------|-------|
-| TD-01 | Regex ingress classifier | `task-intelligence.service.ts` | 2.1 |
+| TD-01 | LLM ingress classifier (`TASK_CLASSIFIER_MODE=regex\|shadow\|llm`; regex fallback) | `message-classifier.service.ts`, `message-classifier-llm.ts` | 2.1 ✓ |
 | TD-02 | ARCHITECTURE.md false LLM/MessageIntent claims | `docs/ARCHITECTURE.md` | 0.1 |
 | TD-03 | Dual task state without projection | `Task.ts`, `agent-runner.ts` | 1.1, 5.2 |
 | TD-04 | Orphaned MessageIntent model | `MessageIntent.ts` | 2.3 |
