@@ -24,9 +24,17 @@ export const ACTIONABLE_SEMANTIC_TYPES = [
 
 export type ActionableSemanticType = (typeof ACTIONABLE_SEMANTIC_TYPES)[number];
 
-export const CLASSIFIABLE_SEMANTIC_TYPES = MESSAGE_SEMANTIC_TYPES.filter(
-    (type) => type !== "unknown"
-) as Exclude<MessageSemanticType, "unknown">[];
+export const CLASSIFIABLE_SEMANTIC_TYPES = [
+    "chat",
+    "task",
+    "incident",
+    "scheduling",
+    "escalation",
+    "approval",
+    "automation",
+] as const;
+
+export type ClassifiableSemanticType = (typeof CLASSIFIABLE_SEMANTIC_TYPES)[number];
 
 const KNOWN_SEMANTIC_TYPES = new Set<string>(MESSAGE_SEMANTIC_TYPES);
 
