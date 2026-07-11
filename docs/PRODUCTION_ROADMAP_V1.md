@@ -173,7 +173,7 @@
 | **Effort** | M |
 | **Dependencies** | 2.1, 2.2 |
 | **Risk level** | Medium |
-| **Acceptance criteria** | Classified messages have Intent row; API returns intent + entities |
+| **Acceptance criteria** | Classified messages have Intent row; API returns intent + entities ✓ |
 
 ### Milestone 2.4 — Confidence Calibration
 
@@ -351,7 +351,7 @@ Phase 0 → 1.1–1.3 → 2.1–2.2 → 3.1–3.2 → 4.1–4.2 → 1.4 → 5.2
 | TD-01 | LLM ingress classifier (`TASK_CLASSIFIER_MODE=regex\|shadow\|llm`; regex fallback) | `message-classifier.service.ts`, `message-classifier-llm.ts` | 2.1 ✓ |
 | TD-02 | ARCHITECTURE.md false LLM/MessageIntent claims | `docs/ARCHITECTURE.md` | 0.1 |
 | TD-03 | Dual task state without projection | `Task.ts`, `agent-runner.ts` | 1.1, 5.2 |
-| TD-04 | Orphaned MessageIntent model | `MessageIntent.ts` | 2.3 |
+| TD-04 | MessageIntent persisted from classifier (`message-intent.service`) | `MessageIntent.ts`, `task-intelligence.service.ts` | 2.3 ✓ |
 | TD-05 | Dead buildExecutionPlan | `index.ts` | 5.1 |
 | TD-06 | AgentRunner monolith (3223 LOC) | `agent-runner.ts` | 5.3 |
 | TD-07 | Global presence fan-out | `presence.handler.ts` | 6.1 |

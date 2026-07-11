@@ -227,10 +227,10 @@ flow.
 
 Tracked in [Production Roadmap V1](./PRODUCTION_ROADMAP_V1.md) Phase 2+:
 
-- **LLM message classifier** at ingress (replace `classifyMessage()` regex) — Milestone 2.1.
-- **`MessageIntent` persistence** from classifier output — schema exists at
-  `packages/db/models/MessageIntent.ts` but **no runtime writer** today; Milestone 2.3.
-- Expanded intent taxonomy (`chat`, `incident`, `scheduling`, etc.) — Milestone 2.2.
+- **LLM message classifier** at ingress — Milestone 2.1 (complete; `TASK_CLASSIFIER_MODE`).
+- **Expanded intent taxonomy** (`chat`, `incident`, `scheduling`, etc.) — Milestone 2.2 (complete).
+- **`MessageIntent` persistence** — Milestone 2.3 (complete; see `message-intent.service.ts`).
+- Per-intent confidence thresholds in execution policy — Milestone 2.4.
 
 ## 5. Data layer
 
@@ -239,8 +239,10 @@ Tracked in [Production Roadmap V1](./PRODUCTION_ROADMAP_V1.md) Phase 2+:
   `TaskExecutionEvent`, `TaskReflection`, `OutboxEvent`, `OTP`, `StepUpChallenge`,
   `Devices`, `Contact`, `TempMessage`. Auth-specific collections (`AuthSession`, auth events) are in
   `packages/auth/repositories/*`.
-  - **`MessageIntent`** (`packages/db/models/MessageIntent.ts`) — **schema only**; no production code
-    writes to this collection yet (see Planned / Future in §4).
+  - **`MessageIntent`** (`packages/db/models/MessageIntent.ts`) — written by
+    `packages/services/message-intent.service.ts` on classify / semantic override;
+    speech-act `intentType` mapped from `Message.semanticType`. Exposed via
+    `GET /api/messages/:id/semantic`.
 - **Redis** (`packages/redis/*`, `apps/socket/server/socket/services/presence.redis.service.ts`):
   presence/heartbeat with TTL, active-conversation tracking, message delivery state, the Socket.IO
   pub/sub adapter, worker idempotency/lease locks, and Upstash-based rate limiting
@@ -339,9 +341,8 @@ erDiagram
     }
 ```
 
-> **Note:** `MessageIntent` is defined in Mongoose but omitted from this diagram — it is
-> **Planned / Future** (Phase 2.3). Ingress classification today writes `Message.semanticType` and
-> related fields only.
+> **Note:** `MessageIntent` is omitted from this diagram for brevity. Ingress classification
+> writes both `Message.semanticType` and a `MessageIntent` row (speech-act + entities).
 
 ## 6. Authentication & authorization
 

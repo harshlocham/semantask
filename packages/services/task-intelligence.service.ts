@@ -20,8 +20,9 @@ import {
     classifyMessage,
     isActionableClassification,
 } from "./message-classifier.service.js";
+import { upsertMessageIntent } from "./message-intent.service.js";
 
-const AI_VERSION = "intelligent-v5-intent-taxonomy";
+const AI_VERSION = "intelligent-v6-message-intent";
 
 export interface ProcessMessageTaskIntelligenceInput {
     messageId: string;
@@ -103,6 +104,16 @@ export async function processMessageTaskIntelligence(
             semanticProcessedAt: processedAt,
         });
 
+        await upsertMessageIntent({
+            messageId: input.messageId,
+            conversationId: input.conversationId,
+            semanticType: "chat",
+            content: "",
+            confidence: 0,
+            rawSummary: "Empty message content",
+            extractorVersion: AI_VERSION,
+        });
+
         return {
             semanticPayload: {
                 messageId: input.messageId,
@@ -128,6 +139,16 @@ export async function processMessageTaskIntelligence(
             aiVersion: AI_VERSION,
             linkedTaskIds: [],
             semanticProcessedAt: processedAt,
+        });
+
+        await upsertMessageIntent({
+            messageId: input.messageId,
+            conversationId: input.conversationId,
+            semanticType,
+            content: input.content,
+            confidence: classification.confidence,
+            rawSummary: classification.reasoning,
+            extractorVersion: AI_VERSION,
         });
 
         return {
@@ -212,6 +233,16 @@ export async function processMessageTaskIntelligence(
         aiVersion: AI_VERSION,
         linkedTaskIds: [task._id.toString()],
         semanticProcessedAt: processedAt,
+    });
+
+    await upsertMessageIntent({
+        messageId: input.messageId,
+        conversationId: input.conversationId,
+        semanticType,
+        content: input.content,
+        confidence: classification.confidence,
+        rawSummary: classification.reasoning,
+        extractorVersion: AI_VERSION,
     });
 
     await enqueueOutboxEvent({
