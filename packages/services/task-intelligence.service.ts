@@ -192,7 +192,7 @@ export async function processMessageTaskIntelligence(
         source: "ai",
         sourceMessageIds: [input.messageId],
         latestContextMessageId: input.messageId,
-        confidence: 0.9,
+        confidence: classification.confidence,
         tags: ["preprocessed"],
         dedupeKey,
         createdBy: input.senderId,
@@ -260,9 +260,11 @@ export async function processMessageTaskIntelligence(
                 content: preprocessed.normalized,
                 titleHint: preprocessed.title,
                 descriptionHint: preprocessed.description,
+                semanticType,
             },
-            confidence: 1,
+            confidence: classification.confidence,
             needsApproval: false,
+            semanticType,
         },
     });
 
