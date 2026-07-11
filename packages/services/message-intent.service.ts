@@ -7,7 +7,7 @@ import {
     mapSemanticTypeToIntentType,
     type ExtractedMessageEntities,
     type MessageIntentType,
-} from "./message-intent.helpers.js";
+} from "./message-intent.helpers";
 
 export {
     extractEntitiesFromContent,
