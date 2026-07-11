@@ -18,10 +18,10 @@ import { connectToDatabase } from "@semantask/db";
 import { enqueueOutboxEvent } from "./outbox.service";
 import {
     classifyMessage,
-    isTaskClassification,
+    isActionableClassification,
 } from "./message-classifier.service.js";
 
-const AI_VERSION = "intelligent-v4-classifier";
+const AI_VERSION = "intelligent-v5-intent-taxonomy";
 
 export interface ProcessMessageTaskIntelligenceInput {
     messageId: string;
@@ -117,13 +117,12 @@ export async function processMessageTaskIntelligence(
         };
     }
 
-    // Classify the message before creating a task
     const classification = await classifyMessage(input.content);
+    const semanticType = classification.semanticType;
 
-    // If message is not classified as a task, mark it as chat and return
-    if (!isTaskClassification(classification)) {
+    if (!isActionableClassification(classification)) {
         await updateMessageSemanticState(input.messageId, {
-            semanticType: "chat",
+            semanticType,
             semanticConfidence: classification.confidence,
             aiStatus: "classified",
             aiVersion: AI_VERSION,
@@ -135,7 +134,7 @@ export async function processMessageTaskIntelligence(
             semanticPayload: {
                 messageId: input.messageId,
                 conversationId: input.conversationId,
-                semanticType: "chat",
+                semanticType,
                 semanticConfidence: classification.confidence,
                 aiStatus: "classified",
                 aiVersion: AI_VERSION,
@@ -145,7 +144,7 @@ export async function processMessageTaskIntelligence(
         };
     }
 
-    // Only create task if message is classified as task-like
+    // Create task for actionable intents (task, scheduling, incident, automation)
     const dedupeKey = deriveTaskDedupeKey({
         conversationId: input.conversationId,
         title: preprocessed.title,
@@ -203,10 +202,11 @@ export async function processMessageTaskIntelligence(
         conversationId: input.conversationId,
         linkType: "source",
         idempotencyKey: `link::${input.messageId}::${task._id.toString()}`,
+        semanticType,
     });
 
     await updateMessageSemanticState(input.messageId, {
-        semanticType: "task",
+        semanticType,
         semanticConfidence: classification.confidence,
         aiStatus: "classified",
         aiVersion: AI_VERSION,
@@ -304,7 +304,7 @@ export async function processMessageTaskIntelligence(
     const semanticPayload: MessageSemanticUpdatedPayload = {
         messageId: input.messageId,
         conversationId: input.conversationId,
-        semanticType: "task",
+        semanticType,
         semanticConfidence: classification.confidence,
         aiStatus: "classified",
         aiVersion: AI_VERSION,

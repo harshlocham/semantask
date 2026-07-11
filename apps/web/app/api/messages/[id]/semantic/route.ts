@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { MESSAGE_SEMANTIC_TYPES } from "@semantask/types";
 import { connectToDatabase } from "@/lib/Db/db";
 import Message from "@/models/Message";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
@@ -9,7 +10,7 @@ import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 const semanticOverrideSchema = z.object({
-    semanticType: z.enum(["chat", "task", "decision", "reminder", "unknown"]),
+    semanticType: z.enum(MESSAGE_SEMANTIC_TYPES),
     linkedTaskIds: z.array(z.string().min(1)).optional().default([]),
     confidence: z.number().min(0).max(1).optional().default(1),
 });

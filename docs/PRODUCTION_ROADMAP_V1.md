@@ -160,7 +160,7 @@
 | **Effort** | M |
 | **Dependencies** | 2.1 |
 | **Risk level** | Medium |
-| **Acceptance criteria** | Typed intent in DB + socket; web badge; old messages → `unknown` |
+| **Acceptance criteria** | Typed intent in DB + socket; web badge; old messages → `unknown` ✓ |
 
 ### Milestone 2.3 — MessageIntent Integration
 

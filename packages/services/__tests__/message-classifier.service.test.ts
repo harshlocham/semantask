@@ -3,20 +3,26 @@ import {
     classifyMessageWithRegex,
     configureMessageClassifier,
     getClassifierMode,
-    isTaskClassification,
+    isActionableClassification,
 } from "../message-classifier.service";
 
-const LABELED_MESSAGES: Array<{ content: string; expectTask: boolean }> = [
-    { content: "send a welcome email to user@example.com", expectTask: true },
-    { content: "schedule a meeting with the team tomorrow at 10am", expectTask: true },
-    { content: "create a github issue for the login bug", expectTask: true },
-    { content: "please remind me to call John on Friday", expectTask: true },
-    { content: "can you fix the broken deploy script?", expectTask: true },
-    { content: "hi there", expectTask: false },
-    { content: "thanks!", expectTask: false },
-    { content: "ok sounds good", expectTask: false },
-    { content: "lol", expectTask: false },
-    { content: "good morning everyone", expectTask: false },
+const LABELED_MESSAGES: Array<{ content: string; expectType: string; actionable?: boolean }> = [
+    { content: "send a welcome email to user@example.com", expectType: "task", actionable: true },
+    { content: "create a github issue for the login bug", expectType: "task", actionable: true },
+    { content: "can you fix the broken deploy script?", expectType: "task", actionable: true },
+    { content: "schedule a meeting with the team tomorrow at 10am", expectType: "scheduling", actionable: true },
+    { content: "please remind me to call John on Friday", expectType: "scheduling", actionable: true },
+    { content: "production is down and users cannot log in", expectType: "incident", actionable: true },
+    { content: "we have a critical bug in checkout", expectType: "incident", actionable: true },
+    { content: "automate the nightly backup workflow", expectType: "automation", actionable: true },
+    { content: "trigger the deployment pipeline script", expectType: "automation", actionable: true },
+    { content: "please approve the release plan", expectType: "approval", actionable: false },
+    { content: "this needs your sign-off before launch", expectType: "approval", actionable: false },
+    { content: "escalate this to leadership immediately", expectType: "escalation", actionable: false },
+    { content: "page the on-call team for urgent help", expectType: "escalation", actionable: false },
+    { content: "hi there", expectType: "chat", actionable: false },
+    { content: "thanks!", expectType: "chat", actionable: false },
+    { content: "ok sounds good", expectType: "chat", actionable: false },
 ];
 
 function restoreEnvVar(key: string, value: string | undefined) {
@@ -33,18 +39,25 @@ describe("message-classifier.service", () => {
         configureMessageClassifier({ llmClassify: null, onDisagreement: null });
     });
 
-    test("regex classifier labels common task and chat messages", () => {
+    test("regex classifier labels intent taxonomy samples", () => {
         let correct = 0;
         for (const sample of LABELED_MESSAGES) {
             const result = classifyMessageWithRegex(sample.content);
-            const predictedTask = isTaskClassification(result);
-            if (predictedTask === sample.expectTask) {
+            if (result.semanticType === sample.expectType) {
                 correct += 1;
             }
         }
 
         const accuracy = correct / LABELED_MESSAGES.length;
-        expect(accuracy).toBeGreaterThanOrEqual(0.8);
+        expect(accuracy).toBeGreaterThanOrEqual(0.7);
+    });
+
+    test("isActionableClassification gates task creation intents", () => {
+        const taskLike = classifyMessageWithRegex("send an email to the team");
+        const approvalLike = classifyMessageWithRegex("please approve the release plan");
+
+        expect(isActionableClassification(taskLike)).toBe(true);
+        expect(isActionableClassification(approvalLike)).toBe(false);
     });
 
     test("llm mode falls back to regex when LLM fn is unavailable", async () => {
@@ -54,7 +67,7 @@ describe("message-classifier.service", () => {
 
         const result = await classifyMessage("send an email to the team");
         expect(result.source).toBe("regex");
-        expect(isTaskClassification(result)).toBe(true);
+        expect(result.semanticType).toBe("task");
 
         restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
     });
@@ -64,15 +77,16 @@ describe("message-classifier.service", () => {
         process.env.TASK_CLASSIFIER_MODE = "llm";
         configureMessageClassifier({
             llmClassify: async () => ({
-                isTask: true,
+                semanticType: "incident",
                 confidence: 0.95,
-                reasoning: "Mock LLM classified as task",
+                reasoning: "Mock LLM classified as incident",
                 source: "llm",
             }),
         });
 
         const result = await classifyMessage("ambiguous phrase");
         expect(result.source).toBe("llm");
+        expect(result.semanticType).toBe("incident");
         expect(result.confidence).toBe(0.95);
 
         restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
@@ -85,7 +99,7 @@ describe("message-classifier.service", () => {
 
         configureMessageClassifier({
             llmClassify: async () => ({
-                isTask: false,
+                semanticType: "chat",
                 confidence: 0.9,
                 reasoning: "Mock LLM says chat",
                 source: "llm",
@@ -97,7 +111,7 @@ describe("message-classifier.service", () => {
 
         const result = await classifyMessage("send a welcome email to user@example.com");
         expect(result.source).toBe("regex");
-        expect(isTaskClassification(result)).toBe(true);
+        expect(result.semanticType).toBe("task");
         expect(disagreements.length).toBe(1);
 
         restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);

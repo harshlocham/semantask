@@ -15,7 +15,23 @@ export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export type TaskSource = "ai" | "manual" | "imported";
 
-export type MessageSemanticType = "chat" | "task" | "decision" | "reminder" | "unknown";
+import type { MessageSemanticType } from "./semantic.js";
+
+export type {
+    ActionableSemanticType,
+    LegacyMessageSemanticType,
+    MessageSemanticType,
+} from "./semantic.js";
+export {
+    ACTIONABLE_SEMANTIC_TYPES,
+    CLASSIFIABLE_SEMANTIC_TYPES,
+    LEGACY_SEMANTIC_TYPES,
+    MESSAGE_SEMANTIC_TYPES,
+    isActionableSemanticType,
+    isKnownMessageSemanticType,
+    mapLegacySemanticType,
+    normalizeSemanticTypeForClient,
+} from "./semantic.js";
 
 export type MessageAiStatus = "pending" | "classified" | "failed" | "overridden";
 

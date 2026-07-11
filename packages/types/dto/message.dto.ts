@@ -1,3 +1,5 @@
+import type { MessageAiStatus, MessageSemanticType } from "../task/task.js";
+
 export interface MessageDTO {
     _id: string;
     conversationId: string;
@@ -14,9 +16,9 @@ export interface MessageDTO {
     createdAt: string;   // ISO string
     updatedAt?: string;  // ISO string
 
-    semanticType?: "chat" | "task" | "decision" | "reminder" | "unknown";
+    semanticType?: MessageSemanticType;
     semanticConfidence?: number;
-    aiStatus?: "pending" | "classified" | "failed" | "overridden";
+    aiStatus?: MessageAiStatus;
     aiVersion?: string | null;
     linkedTaskIds?: string[];
     manualOverride?: boolean;

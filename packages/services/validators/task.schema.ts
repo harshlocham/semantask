@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MESSAGE_SEMANTIC_TYPES } from "@semantask/types";
 
 const taskStatusSchema = z.enum(["pending", "executing", "completed", "failed", "partial", "waiting_for_input"]);
 const taskLifecycleStateSchema = z.enum([
@@ -171,6 +172,7 @@ export const LinkMessageToTaskSchema = z.object({
     conversationId: z.string().min(1),
     linkType: z.enum(["source", "context", "decision"]),
     idempotencyKey: z.string().min(1).max(160),
+    semanticType: z.enum(MESSAGE_SEMANTIC_TYPES).optional(),
 });
 
 export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
