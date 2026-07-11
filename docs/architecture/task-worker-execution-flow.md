@@ -96,13 +96,13 @@ directly to inline `executeXxxAction` adapters in `apps/task-worker/index.ts`.
    │
    ├── topic = "message.created"
    │     └─ processMessageTaskIntelligence (task-intelligence.service.ts)
-   │            ├─ classifyMessage() — regex/heuristic ingress (not LLM)
-   │            ├─ update Message.semantic*; upsert Task when task-like
+   │            ├─ classifyMessage() — regex / shadow / LLM (`TASK_CLASSIFIER_MODE`)
+   │            ├─ update Message.semantic*; upsert Task when actionable
+   │            ├─ upsert MessageIntent (speech-act + entities)
    │            └─ emits internal bridge calls:
    │                 - /internal/message-semantic-updated
    │                 - /internal/task-created or /internal/task-updated
    │                 - /internal/task-linked-to-message
-   │            (does not write MessageIntent — schema only; see Planned below)
    │
    ├── topic = "task.execution.requested"
    │     └─ processTaskExecutionRequested
@@ -459,8 +459,8 @@ The combination of layered failure handling means most failures are
   (e.g. Redis Streams, Kafka, or a partitioned event table) so the
   `Task` document stops carrying the high-frequency write surface.
 - Replace `processMessageTaskIntelligence`'s regex heuristics with an LLM
-  call gated by `confidence` to avoid creating tasks for chit-chat (Phase 2.1).
-- Persist `MessageIntent` rows from classifier output (Phase 2.3; schema exists, no writer yet).
+  call gated by `confidence` to avoid creating tasks for chit-chat (Phase 2.1 — done).
+- Persist `MessageIntent` rows from classifier output (Phase 2.3 — done).
 - Wire cancellation through the outbox (`task.cancel.requested`) so a user
   click in the UI can stop a long-running run mid-flight.
 

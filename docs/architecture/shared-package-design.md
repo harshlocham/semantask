@@ -126,7 +126,7 @@ Sub-export points (`package.json` `exports`):
   `Task`, `TaskAction`, `TaskExecutionEvent`, `TaskMemory`, `TaskPlan`,
   `TaskReflection`, `OutboxEvent`, `OTP`, `StepUpChallenge`,
   `Contact`, `Devices`, `TempMessage`.
-  - `MessageIntent` — **schema only** (no runtime writer; Planned Phase 2.3).
+  - `MessageIntent` — persisted on classify / semantic override (`message-intent.service`; Phase 2.3).
 - **Constraints**: Server-only (`mongoose`). The `package.json` *does*
   list `dexie` — this exists for `apps/mobile` and the web client's
   offline-message cache (`offlineMessages.ts`). The package is therefore

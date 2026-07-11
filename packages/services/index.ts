@@ -1,6 +1,8 @@
 export { default as TaskPlanner } from "./task-planner.service";
 export * from "./task-planner.service";
 export * from "./task-intelligence.service";
+export * from "./message-classifier.service";
+export * from "./message-intent.service";
 export * from "./message.service";
 export * from "./outbox.service";
 export * from "./presence.service";

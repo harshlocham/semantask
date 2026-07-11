@@ -30,6 +30,11 @@
             "types": "./dist/services/message-classifier.service.d.ts",
             "default": "./dist/services/message-classifier.service.js"
         },
+        "./message-intent.service": {
+            "import": "./dist/services/message-intent.service.js",
+            "types": "./dist/services/message-intent.service.d.ts",
+            "default": "./dist/services/message-intent.service.js"
+        },
         "./repositories/task.repo": {
             "import": "./dist/services/repositories/task.repo.js",
             "types": "./dist/services/repositories/task.repo.d.ts",

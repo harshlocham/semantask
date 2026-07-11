@@ -6,14 +6,74 @@ import Message from "@/models/Message";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import { requireConversationAccess } from "@/lib/utils/auth/requireConversationAccess";
 import { updateMessageSemanticState } from "@/lib/repositories/task.repo";
+import {
+    getMessageIntentByMessageId,
+    upsertMessageIntent,
+} from "@/lib/services/message-intent.service";
 import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
+
+const MANUAL_OVERRIDE_VERSION = "manual-override-v1";
 
 const semanticOverrideSchema = z.object({
     semanticType: z.enum(MESSAGE_SEMANTIC_TYPES),
     linkedTaskIds: z.array(z.string().min(1)).optional().default([]),
     confidence: z.number().min(0).max(1).optional().default(1),
 });
+
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const { id } = await params;
+        const guard = await requireAuthUser();
+        if (guard.response) return guard.response;
+
+        await connectToDatabase();
+
+        const message = await Message.findById(id)
+            .select(
+                "conversationId content semanticType semanticConfidence aiStatus aiVersion linkedTaskIds manualOverride overrideBy overrideAt semanticProcessedAt"
+            )
+            .lean();
+
+        if (!message) {
+            return NextResponse.json({ error: "Message not found" }, { status: 404 });
+        }
+
+        const access = await requireConversationAccess(
+            message.conversationId.toString(),
+            guard.user
+        );
+        if (access.response) return access.response;
+
+        const intent = await getMessageIntentByMessageId(id);
+
+        return NextResponse.json(
+            {
+                messageId: id,
+                conversationId: message.conversationId.toString(),
+                content: message.content,
+                semanticType: message.semanticType ?? "unknown",
+                semanticConfidence: message.semanticConfidence ?? 0,
+                aiStatus: message.aiStatus ?? "pending",
+                aiVersion: message.aiVersion ?? null,
+                linkedTaskIds: (message.linkedTaskIds ?? []).map((taskId) => taskId.toString()),
+                manualOverride: Boolean(message.manualOverride),
+                overrideBy: message.overrideBy ? message.overrideBy.toString() : null,
+                overrideAt: message.overrideAt
+                    ? new Date(message.overrideAt).toISOString()
+                    : null,
+                semanticProcessedAt: message.semanticProcessedAt
+                    ? new Date(message.semanticProcessedAt).toISOString()
+                    : null,
+                intent,
+            },
+            { status: 200 }
+        );
+    } catch (error) {
+        console.error("GET /api/messages/:id/semantic error", error);
+        return NextResponse.json({ error: "Failed to load semantic state" }, { status: 500 });
+    }
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -24,7 +84,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await connectToDatabase();
 
         const body = semanticOverrideSchema.parse(await req.json());
-        const message = await Message.findById(id).select("conversationId").lean();
+        const message = await Message.findById(id).select("conversationId content").lean();
 
         if (!message) {
             return NextResponse.json({ error: "Message not found" }, { status: 404 });
@@ -41,12 +101,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             semanticType: body.semanticType,
             semanticConfidence: body.confidence,
             aiStatus: "overridden",
-            aiVersion: "manual-override-v1",
+            aiVersion: MANUAL_OVERRIDE_VERSION,
             manualOverride: true,
             overrideBy: guard.user.id,
             overrideAt: now,
             semanticProcessedAt: now,
             linkedTaskIds: body.linkedTaskIds,
+        });
+
+        const intent = await upsertMessageIntent({
+            messageId: id,
+            conversationId: message.conversationId.toString(),
+            semanticType: body.semanticType,
+            content: message.content ?? "",
+            confidence: body.confidence,
+            rawSummary: `Manual override to ${body.semanticType}`,
+            extractorVersion: MANUAL_OVERRIDE_VERSION,
         });
 
         await fetch(`${getInternalSocketServerUrl()}/internal/message-semantic-updated`, {
@@ -60,14 +130,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                     semanticType: body.semanticType,
                     semanticConfidence: body.confidence,
                     aiStatus: "overridden",
-                    aiVersion: "manual-override-v1",
+                    aiVersion: MANUAL_OVERRIDE_VERSION,
                     linkedTaskIds: body.linkedTaskIds,
                     semanticProcessedAt: now.toISOString(),
                 },
             }),
         });
 
-        return NextResponse.json({ success: true }, { status: 200 });
+        return NextResponse.json({ success: true, intent }, { status: 200 });
     } catch (error) {
         console.error("PATCH /api/messages/:id/semantic error", error);
         return NextResponse.json({ error: "Invalid semantic payload" }, { status: 400 });
