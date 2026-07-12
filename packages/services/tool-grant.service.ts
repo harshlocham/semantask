@@ -296,4 +296,5 @@ export async function seedExistingUsersToolGrants(grantedBy: string): Promise<{
     };
 }
 
+export type { HighRiskToolName };
 export { HIGH_RISK_TOOLS, isHighRiskToolName };

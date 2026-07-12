@@ -6,6 +6,8 @@ import ExecutionAuditLogModel, {
     type IExecutionAuditLog,
 } from "@semantask/db/models/ExecutionAuditLog";
 
+export type { ExecutionAuditAction };
+
 export type AppendExecutionAuditInput = {
     taskId: string;
     conversationId: string;

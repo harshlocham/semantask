@@ -5,7 +5,7 @@ import { revokeTool } from "@semantask/services/tool-grant.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
 
 type RouteContext = {
-    params: Promise<{ id: string }> | { id: string };
+    params: Promise<{ id: string }>;
 };
 
 export async function DELETE(_req: Request, context: RouteContext) {
@@ -16,8 +16,8 @@ export async function DELETE(_req: Request, context: RouteContext) {
 
     try {
         await connectToDatabase();
-        const params = await Promise.resolve(context.params);
-        const grant = await revokeTool(params.id);
+        const { id } = await context.params;
+        const grant = await revokeTool(id);
 
         return NextResponse.json({
             success: true,
