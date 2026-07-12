@@ -59,6 +59,9 @@ ExecutionAuditLogSchema.pre("updateMany", function () {
 ExecutionAuditLogSchema.pre("findOneAndUpdate", function () {
     throw new Error("ExecutionAuditLog is append-only; updates are not allowed");
 });
+ExecutionAuditLogSchema.pre("findOneAndReplace", function () {
+    throw new Error("ExecutionAuditLog is append-only; updates are not allowed");
+});
 ExecutionAuditLogSchema.pre("replaceOne", function () {
     throw new Error("ExecutionAuditLog is append-only; updates are not allowed");
 });
@@ -70,6 +73,30 @@ ExecutionAuditLogSchema.pre("deleteMany", function () {
 });
 ExecutionAuditLogSchema.pre("findOneAndDelete", function () {
     throw new Error("ExecutionAuditLog is append-only; deletes are not allowed");
+});
+
+ExecutionAuditLogSchema.pre("bulkWrite", function (_next, ops: unknown) {
+    const operations = Array.isArray(ops) ? ops : [];
+    for (const op of operations) {
+        if (!op || typeof op !== "object") {
+            throw new Error("ExecutionAuditLog is append-only; invalid bulkWrite operation");
+        }
+        const keys = Object.keys(op as Record<string, unknown>);
+        const destructive = keys.some((key) =>
+            key === "updateOne"
+            || key === "updateMany"
+            || key === "replaceOne"
+            || key === "deleteOne"
+            || key === "deleteMany"
+        );
+        if (destructive) {
+            throw new Error("ExecutionAuditLog is append-only; bulkWrite updates/replaces/deletes are not allowed");
+        }
+        const allowed = keys.every((key) => key === "insertOne");
+        if (!allowed) {
+            throw new Error("ExecutionAuditLog is append-only; bulkWrite only allows insertOne");
+        }
+    }
 });
 
 ExecutionAuditLogSchema.pre("save", function (next) {
