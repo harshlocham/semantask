@@ -19,8 +19,8 @@ import {
     getCorrelationId,
     prometheusContentType,
     renderPrometheusMetrics,
-    startTracing,
 } from "@semantask/observability";
+import { startTracing } from "@semantask/observability/tracing";
 import {
     isOriginAllowed,
     parseCommaSeparatedValues,

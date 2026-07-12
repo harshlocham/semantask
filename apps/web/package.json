@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "dev": "next dev",
-        "build": "pnpm --filter @semantask/types build && pnpm --filter @semantask/db build && pnpm --filter @semantask/services build && NEXT_IGNORE_INCORRECT_LOCKFILE=1 next build",
+        "build": "pnpm --filter @semantask/types build && pnpm --filter @semantask/db build && pnpm --filter @semantask/observability build && pnpm --filter @semantask/services build && NEXT_IGNORE_INCORRECT_LOCKFILE=1 next build",
         "start": "next start",
         "lint": "next lint",
         "typecheck": "tsc --noEmit -p tsconfig.json",
