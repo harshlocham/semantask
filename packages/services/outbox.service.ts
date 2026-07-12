@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import OutboxEventModel, { type IOutboxEvent, type OutboxTopic } from "@semantask/db/models/OutboxEvent";
 import { connectToDatabase } from "@semantask/db";
+import {
+    getActiveTraceparent,
+    mergeCorrelationIntoPayload,
+} from "@semantask/observability";
 
 export interface EnqueueOutboxEventInput {
     topic: OutboxTopic;
@@ -12,10 +16,16 @@ export interface EnqueueOutboxEventInput {
 export async function enqueueOutboxEvent(input: EnqueueOutboxEventInput) {
     await connectToDatabase();
 
+    const payload = mergeCorrelationIntoPayload(input.payload);
+    const traceparent = getActiveTraceparent();
+    if (traceparent && typeof payload.traceparent !== "string") {
+        payload.traceparent = traceparent;
+    }
+
     const doc = new OutboxEventModel({
         topic: input.topic,
         dedupeKey: input.dedupeKey,
-        payload: input.payload,
+        payload,
         status: "pending",
         attempts: 0,
         availableAt: new Date(),

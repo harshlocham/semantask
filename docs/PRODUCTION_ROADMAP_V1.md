@@ -252,7 +252,7 @@
 
 *Goal: Operate autonomous execution with eyes open.*
 
-### Milestone 4.1 — Structured Logging Unification
+### Milestone 4.1 — Structured Logging Unification ✓
 
 | Field | Detail |
 |-------|--------|
@@ -262,7 +262,7 @@
 | **Dependencies** | Phase 1 |
 | **Acceptance criteria** | API → outbox → worker → socket traceable via `correlationId` |
 
-### Milestone 4.2 — Metrics Export
+### Milestone 4.2 — Metrics Export ✓
 
 | Field | Detail |
 |-------|--------|
@@ -272,7 +272,7 @@
 | **Dependencies** | 1.1, 4.1 |
 | **Acceptance criteria** | `/metrics` scrapeable; outbox lag, task rates, LLM p95 visible |
 
-### Milestone 4.3 — Distributed Tracing
+### Milestone 4.3 — Distributed Tracing ✓
 
 | Field | Detail |
 |-------|--------|
@@ -281,7 +281,7 @@
 | **Dependencies** | 4.1 |
 | **Acceptance criteria** | message→task→tool span in Jaeger/Tempo |
 
-### Milestone 4.4 — Dashboards & Alerting
+### Milestone 4.4 — Dashboards & Alerting ✓
 
 | Field | Detail |
 |-------|--------|

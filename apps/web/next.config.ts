@@ -10,7 +10,7 @@ if (existsSync(rootEnvPath)) {
 }
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@semantask/auth", "@semantask/services", "@semantask/db"],
+  transpilePackages: ["@semantask/auth", "@semantask/services", "@semantask/db", "@semantask/observability", "@semantask/types"],
   images: {
     domains: ["lh3.googleusercontent.com", "ik.imagekit.io"],
     remotePatterns: [
@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
       ...(config.resolve.alias || {}),
       "@semantask/services": resolve(process.cwd(), "../../packages/services"),
       "@semantask/db": resolve(process.cwd(), "../../packages/db"),
+      "@semantask/observability": resolve(process.cwd(), "../../packages/observability"),
     };
 
     return config;
