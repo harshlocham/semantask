@@ -1,10 +1,15 @@
-import type { TaskExecutionActionType } from "@semantask/types";
+import type { MessageSemanticType, TaskExecutionActionType } from "@semantask/types";
+import {
+    getExecutionConfidenceThreshold,
+    GLOBAL_EXECUTION_CONFIDENCE_BASELINE,
+} from "./execution-confidence.js";
 
 type RequestedPayload = {
     actionType: TaskExecutionActionType;
     parameters?: Record<string, unknown>;
     confidence?: number;
     needsApproval?: boolean;
+    semanticType?: MessageSemanticType;
 };
 
 export type ExecutionPolicyOutcome = "auto_execute" | "approval_required" | "blocked";
@@ -15,6 +20,9 @@ export type ExecutionPolicyDecision = {
     outcome: ExecutionPolicyOutcome;
     riskLevel: ExecutionRiskLevel;
     reasons: string[];
+    semanticType?: MessageSemanticType;
+    confidence: number;
+    threshold: number;
 };
 
 function toStringArray(value: unknown): string[] {
@@ -43,24 +51,34 @@ function getAllowedEmailDomains(): string[] {
         .filter((entry) => entry.length > 0);
 }
 
+function resolveSemanticType(payload: RequestedPayload): MessageSemanticType | undefined {
+    if (payload.semanticType) {
+        return payload.semanticType;
+    }
+
+    const fromParams = payload.parameters?.semanticType;
+    if (typeof fromParams === "string") {
+        return fromParams as MessageSemanticType;
+    }
+
+    return undefined;
+}
+
 export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPolicyDecision {
     const confidence = typeof payload.confidence === "number" ? payload.confidence : 0.5;
+    const semanticType = resolveSemanticType(payload);
+    const threshold = getExecutionConfidenceThreshold(semanticType);
+    const intentLabel = semanticType ?? "unknown";
     const reasons: string[] = [];
-
-    if (payload.actionType === "none") {
-        return {
-            outcome: "auto_execute",
-            riskLevel: "low",
-            reasons: ["Autonomous mode: agent-runner will decide the next tool."],
-        };
-    }
 
     if (payload.needsApproval) {
         reasons.push("Upstream classifier marked action as requiring approval.");
     }
 
-    if (confidence < 0.7) {
-        reasons.push(`Low confidence (${confidence.toFixed(2)}).`);
+    if (confidence < threshold) {
+        reasons.push(
+            `Low confidence for intent "${intentLabel}" (${confidence.toFixed(2)} < ${threshold.toFixed(2)}).`
+        );
     }
 
     const parameters = payload.parameters ?? {};
@@ -72,6 +90,9 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
                 outcome: "blocked",
                 riskLevel: "high",
                 reasons: ["Email action has no valid recipients."],
+                semanticType,
+                confidence,
+                threshold,
             };
         }
 
@@ -108,10 +129,17 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
     }
 
     if (reasons.length === 0) {
+        const passReason = payload.actionType === "none"
+            ? `Policy passed for intent "${intentLabel}" (confidence ${confidence.toFixed(2)} ≥ ${threshold.toFixed(2)}); agent-runner will decide the next tool.`
+            : `Policy passed for intent "${intentLabel}" (confidence ${confidence.toFixed(2)} ≥ ${threshold.toFixed(2)}).`;
+
         return {
             outcome: "auto_execute",
             riskLevel: "low",
-            reasons: ["Policy checks passed for automatic execution."],
+            reasons: [passReason],
+            semanticType,
+            confidence,
+            threshold,
         };
     }
 
@@ -125,7 +153,12 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
         outcome: "approval_required",
         riskLevel: highRiskReason ? "high" : "medium",
         reasons,
+        semanticType,
+        confidence,
+        threshold,
     };
 }
+
+export { GLOBAL_EXECUTION_CONFIDENCE_BASELINE };
 
 export default evaluateExecutionPolicy;

@@ -186,7 +186,7 @@
 | **Effort** | M |
 | **Dependencies** | 2.2, 2.3 |
 | **Risk level** | Medium |
-| **Acceptance criteria** | Thresholds per intent; policy cites intent + confidence; false-auto-execute tracked |
+| **Acceptance criteria** | Thresholds per intent; policy cites intent + confidence; false-auto-execute tracked ✓ |
 
 ---
 

@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { TaskExecutionActionType, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload } from "@semantask/types";
+import type { MessageSemanticType, TaskExecutionActionType, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload } from "@semantask/types";
 import { claimOutboxEvents, markOutboxEventCompleted, markOutboxEventDeadLetter, markOutboxEventDeferred, markOutboxEventFailed } from "@semantask/services/outbox.service";
 import { processMessageTaskIntelligence as processMessageTaskIntelligenceFromService } from "@semantask/services/task-intelligence.service";
 import * as taskRepo from "@semantask/services/repositories/task.repo";
@@ -12,6 +12,7 @@ import * as taskModule from "@semantask/db/models/Task";
 import { RetryManager } from "./services/retry-manager.js";
 import AgentRunner from "./services/agent-runner.js";
 import { evaluateExecutionPolicy } from "./services/execution-policy.js";
+import { GLOBAL_EXECUTION_CONFIDENCE_BASELINE } from "./services/execution-confidence.js";
 import { assertExecutionLeaseCompleted, ExecutionLeaseBusyError, withExecutionLease } from "./services/lease.service.js";
 import { startRetryScheduler } from "./services/retry-scheduler.js";
 import { persistExecutionUpdatePayload } from "./services/execution-event.service.js";
@@ -163,6 +164,7 @@ type TaskExecutionRequestedPayload = {
     parameters?: Record<string, unknown>;
     confidence?: number;
     needsApproval?: boolean;
+    semanticType?: MessageSemanticType;
 };
 
 type TaskExecutionApprovedPayload = {
@@ -271,6 +273,19 @@ function normalizeTaskExecutionRequestedPayload(payload: Record<string, unknown>
         ? (payload.actionType as TaskExecutionActionType)
         : "none";
 
+    const parameters = payload.parameters && typeof payload.parameters === "object"
+        ? (payload.parameters as Record<string, unknown>)
+        : {};
+
+    const semanticTypeCandidate = typeof payload.semanticType === "string"
+        ? payload.semanticType
+        : typeof parameters.semanticType === "string"
+            ? parameters.semanticType
+            : undefined;
+
+    const semanticType = semanticTypeCandidate as MessageSemanticType | undefined;
+    const confidence = typeof payload.confidence === "number" ? payload.confidence : 0.5;
+
     return {
         taskId: String(payload.taskId),
         conversationId: String(payload.conversationId),
@@ -282,11 +297,12 @@ function normalizeTaskExecutionRequestedPayload(payload: Record<string, unknown>
             : "agent",
         requestedById: typeof payload.requestedById === "string" ? payload.requestedById : null,
         actionType,
-        parameters: payload.parameters && typeof payload.parameters === "object" ? (payload.parameters as Record<string, unknown>) : {},
-        confidence: typeof payload.confidence === "number" ? payload.confidence : 0.5,
+        parameters,
+        confidence,
+        semanticType,
         needsApproval: typeof payload.needsApproval === "boolean"
             ? payload.needsApproval
-            : actionType !== "none" && (typeof payload.confidence === "number" ? payload.confidence < 0.7 : true),
+            : false,
     };
 }
 
@@ -1277,15 +1293,50 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
         outcome: policyDecision.outcome,
         riskLevel: policyDecision.riskLevel,
         reasons: Array.isArray(policyDecision.reasons) ? policyDecision.reasons.slice(0, 3) : [],
+        semanticType: policyDecision.semanticType,
+        confidence: policyDecision.confidence,
+        threshold: policyDecision.threshold,
     };
-    const lowConfidence = confidence < 0.7;
+
+    logExecution("info", {
+        event: "execution.policy.decision",
+        workerId: WORKER_ID,
+        taskId: payload.taskId,
+        conversationId: payload.conversationId,
+        actionType: payload.actionType,
+        semanticType: policyDecision.semanticType ?? payload.semanticType ?? null,
+        confidence: policyDecision.confidence,
+        threshold: policyDecision.threshold,
+        outcome: policyDecision.outcome,
+        riskLevel: policyDecision.riskLevel,
+        reasons: safePolicyDecision.reasons,
+    });
+
+    if (
+        policyDecision.outcome === "auto_execute"
+        && policyDecision.confidence < GLOBAL_EXECUTION_CONFIDENCE_BASELINE
+        && policyDecision.confidence >= policyDecision.threshold
+    ) {
+        logExecution("warn", {
+            event: "execution.policy.false_auto_execute_risk",
+            workerId: WORKER_ID,
+            taskId: payload.taskId,
+            conversationId: payload.conversationId,
+            actionType: payload.actionType,
+            semanticType: policyDecision.semanticType ?? payload.semanticType ?? null,
+            confidence: policyDecision.confidence,
+            threshold: policyDecision.threshold,
+            baseline: GLOBAL_EXECUTION_CONFIDENCE_BASELINE,
+        });
+    }
+
     const unsafe = policyDecision.riskLevel === "high"
         && policyDecision.reasons.some((reason) =>
             reason.includes("outside allowed domains")
             || reason.includes("no valid recipients")
             || reason.includes("No executable action")
         );
-    const requiresApproval = policyDecision.outcome === "approval_required" || lowConfidence;
+    const requiresApproval = policyDecision.outcome === "approval_required";
 
     if (policyDecision.outcome === "blocked" || unsafe) {
         const blockedReason = unsafe
@@ -1369,7 +1420,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                         policyDecision: safePolicyDecision,
                     },
                 },
-                reason: `Action requires human approval before execution. ${[...policyDecision.reasons, ...(lowConfidence ? [`Low confidence (${confidence.toFixed(2)}).`] : [])].join(" ")}`,
+                reason: `Action requires human approval before execution. ${policyDecision.reasons.join(" ")}`,
                 idempotencyKey: `${payload.taskId}:${payload.actionType}:${payload.triggerMessageId}:approval_pending`,
             });
         } catch (error) {
@@ -1390,7 +1441,6 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                     reason: "approval_required",
                     requestedConfidence: confidence,
                     policyDecision: safePolicyDecision,
-                    lowConfidence,
                 },
                 error: "Approval required before executing this action.",
             },
@@ -1416,7 +1466,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             state: "approval_pending",
             actionType: payload.actionType,
             summary: "Awaiting human approval before execution.",
-            error: [...policyDecision.reasons, ...(lowConfidence ? [`Low confidence (${confidence.toFixed(2)}).`] : [])].join(" ") || "Approval required before executing this action.",
+            error: policyDecision.reasons.join(" ") || "Approval required before executing this action.",
             updatedAt: new Date().toISOString(),
             runId: provisionalRun,
             phase: "policy",
@@ -1460,6 +1510,21 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                     leaseHeld: true,
                     abortSignal,
                 });
+                if (!outcome.completed) {
+                    logExecution("warn", {
+                        event: "execution.policy.false_auto_execute",
+                        workerId: WORKER_ID,
+                        taskId: payload.taskId,
+                        conversationId: payload.conversationId,
+                        actionType: payload.actionType,
+                        semanticType: policyDecision.semanticType ?? payload.semanticType ?? null,
+                        confidence: policyDecision.confidence,
+                        threshold: policyDecision.threshold,
+                        failureSummary: outcome.result?.error
+                            ?? outcome.result?.summary
+                            ?? "Task failed after auto_execute policy decision.",
+                    });
+                }
                 await emitTaskExecutionUpdate({
                     taskId: payload.taskId,
                     conversationId: payload.conversationId,
@@ -1492,6 +1557,17 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 return outcome;
             } catch (error) {
                 const message = error instanceof Error ? error.message : "Task execution failed";
+                logExecution("warn", {
+                    event: "execution.policy.false_auto_execute",
+                    workerId: WORKER_ID,
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actionType: payload.actionType,
+                    semanticType: policyDecision.semanticType ?? payload.semanticType ?? null,
+                    confidence: policyDecision.confidence,
+                    threshold: policyDecision.threshold,
+                    failureSummary: message,
+                });
                 await emitTaskExecutionUpdate({
                     taskId: payload.taskId,
                     conversationId: payload.conversationId,

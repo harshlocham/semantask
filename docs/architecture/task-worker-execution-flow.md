@@ -53,7 +53,7 @@ mechanics live in
 | Event router | `apps/task-worker/index.ts:1479-1600` | Dispatches to topic-specific handlers. |
 | Lease service | `apps/task-worker/services/lease.service.ts` | `withExecutionLease` wraps a run with mutex + heartbeat. |
 | `RetryManager` | `apps/task-worker/services/retry-manager.ts` | In-process bounded retry with backoff schedule. |
-| `evaluateExecutionPolicy` | `apps/task-worker/services/execution-policy.ts` | Domain checks and approval gating. |
+| `evaluateExecutionPolicy` | `apps/task-worker/services/execution-policy.ts` | Per-intent confidence thresholds + domain checks; cites intent in reasons. |
 | `AgentRunner` | `apps/task-worker/services/agent-runner.ts` | The cross-iteration agent loop. |
 | `ToolRegistry` | `apps/task-worker/services/tools/tool-registry.ts` | Tool registration and lookup. |
 | LLM provider | `apps/task-worker/services/llm/*` | Provider abstraction over OpenAI-compatible and HuggingFace endpoints. |
@@ -107,16 +107,18 @@ directly to inline `executeXxxAction` adapters in `apps/task-worker/index.ts`.
    ├── topic = "task.execution.requested"
    │     └─ processTaskExecutionRequested
    │           ├─ evaluateExecutionPolicy(payload) → {auto_execute|approval_required|blocked}
+   │           │     uses semanticType + classifier confidence vs per-intent threshold (2.4)
    │           ├─ if blocked      → write failed result, emit "blocked"
    │           ├─ if approval req → createTaskAction(approval_pending), emit "approval_pending"
    │           └─ if auto_execute → withExecutionLease(taskId, workerId, fn)
    │                  └─ AgentRunner.runTask | runTaskPersistent
    │                        └─ emits "running" → tool exec → "succeeded"|"failed"
+   │                        └─ failed after auto_execute → log false_auto_execute
    │
    ├── topic = "task.execution.approved"
    │     └─ processTaskExecutionApproved
    │           └─ updateTaskActionExecutionState(approved)
-   │             └─ processTaskExecutionRequested(normalized with confidence≥0.7)
+   │             └─ processTaskExecutionRequested(normalized; policy re-evaluates confidence)
    │
    └── topic = "task.created" | "task.updated"   (socket bridge passthrough)
          └─ emitInternal(socketPath, conversationId, socketPayload)
