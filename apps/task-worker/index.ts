@@ -118,6 +118,7 @@ type TaskModelLike = {
         maxRetries?: number;
         result?: TaskResult;
         updatedBy: null | string;
+        createdBy?: { toString(): string } | string | null;
         cancelRequestedAt?: Date | null;
         cancelReason?: string | null;
         cancelRequestedByType?: "user" | "agent" | "system" | null;
