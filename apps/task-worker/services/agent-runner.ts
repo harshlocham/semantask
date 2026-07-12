@@ -27,6 +27,16 @@ import { parseJsonText } from "./llm/response-parser.js";
 import { resolveToolParameters, type ResolveToolParametersResult } from "./resolve-tool-params.js";
 import type { PendingResolution } from "./entity-resolution.service.js";
 import {
+    applyPromptGuardDecision,
+    buildFencedTaskFields,
+    getPromptGuardMode,
+    validateToolArgsAgainstContext,
+} from "./prompt-guard.js";
+import { loadPromptGuardEmailContext } from "./prompt-guard-context.js";
+import { assertToolGrant, listGrantedToolNames } from "@semantask/services/tool-grant.service";
+import { AuthorizationError } from "@semantask/services/authorization.service";
+import { appendExecutionAudit } from "@semantask/services/execution-audit.service";
+import {
     appendShadowHistory,
     createQueuedShadowState,
     isExecutionState,
@@ -37,6 +47,43 @@ import {
 } from "./execution-state-shadow.js";
 
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
+
+function extractExternalIds(evidence: unknown): Record<string, string> {
+    const ids: Record<string, string> = {};
+    if (!evidence || typeof evidence !== "object") {
+        return ids;
+    }
+
+    const record = evidence as Record<string, unknown>;
+    const nested = record.result && typeof record.result === "object"
+        ? (record.result as Record<string, unknown>)
+        : record;
+
+    const issue = nested.issue && typeof nested.issue === "object"
+        ? (nested.issue as Record<string, unknown>)
+        : null;
+
+    const body = nested.responseBody && typeof nested.responseBody === "object"
+        ? (nested.responseBody as Record<string, unknown>)
+        : null;
+
+    const candidates: Array<[string, unknown]> = [
+        ["resendId", body?.id ?? nested.id ?? nested.messageId ?? nested.resendId],
+        ["githubIssueNumber", issue?.number ?? nested.number ?? nested.issueNumber],
+        ["githubIssueUrl", issue?.html_url ?? nested.html_url ?? nested.htmlUrl ?? nested.url],
+        ["responseStatus", nested.responseStatus],
+    ];
+
+    for (const [key, value] of candidates) {
+        if (typeof value === "string" && value.trim()) {
+            ids[key] = value.trim();
+        } else if (typeof value === "number" && Number.isFinite(value)) {
+            ids[key] = String(value);
+        }
+    }
+
+    return ids;
+}
 
 type TaskModelLike = {
     findById: (id: string) => Promise<TaskDocumentLike | null>;
@@ -99,6 +146,8 @@ type ExecutionOptions = {
     userId?: string | null;
     clarificationReply?: string | null;
     pendingResolution?: PendingResolution | null;
+    participantEmails?: string[];
+    contactEmails?: string[];
 };
 
 type VerificationOutcome = {
@@ -583,6 +632,27 @@ export class AgentRunner {
         return null;
     }
 
+    private async listToolsForUser(task: TaskDocumentLike): Promise<AvailableToolForDecision[]> {
+        const allTools = this.toolRegistry.listForLLM();
+        const userId = this.getTaskUserId(task);
+        if (!userId) {
+            return allTools;
+        }
+
+        const granted = new Set(
+            await listGrantedToolNames(userId, task.conversationId?.toString?.() ?? String(task.conversationId))
+        );
+
+        return allTools.filter((tool) => {
+            // Non-high-risk tools always available; high-risk require grant (listGrantedToolNames
+            // returns all HIGH_RISK_TOOLS when RBAC is off).
+            if (!granted.has(tool.name) && ["send_email", "schedule_meeting", "create_github_issue"].includes(tool.name)) {
+                return false;
+            }
+            return true;
+        });
+    }
+
     private getPendingResolution(task: TaskDocumentLike): PendingResolution | null {
         const evidence = task.result?.evidence;
         if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
@@ -659,6 +729,7 @@ export class AgentRunner {
     ): Promise<NextActionDecision> {
         const model = process.env.TASK_AGENT_MODEL || "gpt-4o-mini";
         const confidenceThreshold = this.getConfidenceThreshold();
+        const fenced = buildFencedTaskFields(task.title, task.description);
 
         const systemPrompt = [
             "Return one JSON object only with keys: tool, confidence, parameters, reasoning, noAction, needsClarification, clarificationQuestion.",
@@ -668,6 +739,7 @@ export class AgentRunner {
             "Set noAction=true only when all requested outcomes are complete.",
             "For create_github_issue, always provide a detailed title and body.",
             "For send_email, set parameters.to to the literal recipient as the user wrote it: a name (e.g. \"harsh\") OR an exact email address the user provided. NEVER invent, fabricate, or guess an email address. NEVER use placeholder, example, or reserved domains (example.com, example.org, example.net, *.test, *.invalid, *.localhost, test.com, etc.). If the user gave only a name, put just the name in `to` — a downstream contact resolver will look it up. If you cannot determine the recipient, set needsClarification=true with a specific question such as \"What email address should I send to for <name>?\" and leave `to` empty.",
+            fenced.fenceInstruction,
         ].join(" ");
 
         const requestedOutcomes = Array.from(this.extractRequestedTools(task));
@@ -676,8 +748,8 @@ export class AgentRunner {
         const userPayload = {
             task: {
                 id: task._id.toString(),
-                title: task.title,
-                description: task.description,
+                title: fenced.title,
+                description: fenced.description,
                 status: task.status,
                 progress: typeof task.progress === "number" ? task.progress : 0,
                 result: task.result ?? null,
@@ -1214,7 +1286,7 @@ Reply to confirm receipt or contact support if you have questions.
                 observed: null,
                 verification: null,
             };
-            const availableTools = this.toolRegistry.listForLLM();
+            const availableTools = await this.listToolsForUser(task);
             const maxIterations = Math.max(1, Number(process.env.TASK_AGENT_MAX_ITERATIONS || 5));
             let iteration = 0;
             let goalAchieved = false;
@@ -2026,7 +2098,7 @@ Reply to confirm receipt or contact support if you have questions.
                     title: task.title,
                     description: task.description,
                     sourceMessageIds: (task.sourceMessageIds ?? []).map((id) => id.toString()),
-                    availableTools: this.toolRegistry.listForLLM().map((tool) => ({
+                    availableTools: (await this.listToolsForUser(task)).map((tool) => ({
                         name: tool.name,
                         description: tool.description,
                     })),
@@ -2181,12 +2253,13 @@ Reply to confirm receipt or contact support if you have questions.
 
         const model = process.env.TASK_AGENT_MODEL || "gpt-4o-mini";
         const confidenceThreshold = this.getConfidenceThreshold();
+        const fenced = buildFencedTaskFields(input.task.title, input.task.description);
 
         const userPayload = {
             task: {
                 id: input.task._id.toString(),
-                title: input.task.title,
-                description: input.task.description,
+                title: fenced.title,
+                description: fenced.description,
             },
             currentStep: input.step,
             rankedTools: ranked,
@@ -2205,6 +2278,7 @@ Reply to confirm receipt or contact support if you have questions.
             "Return one JSON object only with keys: tool, confidence, parameters, reasoning, needsClarification, clarificationQuestion.",
             "No extra text.",
             "For send_email, set parameters.to to the literal recipient as the user wrote it: a name (e.g. \"harsh\") OR an exact email address the user provided. NEVER invent, fabricate, or guess an email address. NEVER use placeholder, example, or reserved domains (example.com, example.org, example.net, *.test, *.invalid, *.localhost, test.com, etc.). If only a name was provided, pass that name as the recipient — the resolver will look it up. If the recipient is unknown, set needsClarification=true with a specific question.",
+            fenced.fenceInstruction,
         ].join(" ");
 
         console.log("agent-runner llm:step-request", { runId: this.currentRunId, taskId: input.task._id.toString(), stepId: input.step.stepId, model, payloadSummary: JSON.stringify(userPayload).slice(0, 2000) });
@@ -3099,6 +3173,17 @@ Reply to confirm receipt or contact support if you have questions.
                 reason: "execution_idempotency_guard",
                 idempotencyKey: payload.idempotencyKey,
             });
+
+            await appendExecutionAudit({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                actorId: null,
+                runId: this.currentRunId,
+                toolName: payload.toolName,
+                action: "started",
+                parameters: payload.parameters ?? {},
+                decision: "auto_execute",
+            });
         } catch (error) {
             const maybeMongo = error as { code?: number };
             if (maybeMongo?.code === 11000) {
@@ -3178,6 +3263,41 @@ Reply to confirm receipt or contact support if you have questions.
         }
 
         try {
+            await assertToolGrant(options?.userId ?? "", payload.toolName, payload.conversationId);
+        } catch (error) {
+            const message = error instanceof AuthorizationError
+                ? error.message
+                : (error instanceof Error ? error.message : "Tool grant denied");
+            logExecution("warn", {
+                event: "tool_grant.deny",
+                runId,
+                taskId: payload.taskId,
+                toolName: payload.toolName,
+                userId: options?.userId ?? null,
+            });
+            await appendExecutionAudit({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                actorId: options?.userId ?? null,
+                runId,
+                toolName: payload.toolName,
+                action: "denied",
+                parameters: payload.parameters ?? {},
+                decision: "TOOL_GRANT_DENIED",
+                reason: message,
+            });
+            return {
+                summary: `Tool grant denied for ${payload.toolName}.`,
+                adapterSuccess: false,
+                evidence: {
+                    toolName: payload.toolName,
+                    reason: "TOOL_GRANT_DENIED",
+                },
+                error: message,
+            };
+        }
+
+        try {
             const resolution = await resolveToolParameters({
                 toolName: payload.toolName,
                 params: payload.parameters ?? {},
@@ -3212,7 +3332,61 @@ Reply to confirm receipt or contact support if you have questions.
                 };
             }
 
-            const parsedInput = tool.inputSchema.parse(resolution.params ?? {});
+            const resolvedParams = resolution.params ?? {};
+            const promptGuardMode = getPromptGuardMode();
+            if (promptGuardMode !== "off") {
+                let participantEmails = options?.participantEmails;
+                let contactEmails = options?.contactEmails;
+
+                if (!participantEmails || !contactEmails) {
+                    const context = await loadPromptGuardEmailContext({
+                        conversationId: payload.conversationId,
+                        ownerUserId: options?.userId,
+                    });
+                    participantEmails = participantEmails ?? context.participantEmails;
+                    contactEmails = contactEmails ?? context.contactEmails;
+                }
+
+                const guardValidation = validateToolArgsAgainstContext({
+                    tool: payload.toolName,
+                    params: resolvedParams,
+                    participantEmails,
+                    contactEmails,
+                });
+                const guardDecision = applyPromptGuardDecision(guardValidation, {
+                    taskId: payload.taskId,
+                    tool: payload.toolName,
+                    mode: promptGuardMode,
+                });
+
+                if (!guardDecision.allow) {
+                    await appendExecutionAudit({
+                        taskId: payload.taskId,
+                        conversationId: payload.conversationId,
+                        actorId: options?.userId ?? null,
+                        runId,
+                        toolName: payload.toolName,
+                        action: "denied",
+                        parameters: resolvedParams,
+                        decision: "PROMPT_GUARD_BLOCKED",
+                        reason: guardValidation.reasons.join(" "),
+                    });
+                    return {
+                        summary: `Prompt guard blocked ${payload.toolName}.`,
+                        adapterSuccess: false,
+                        evidence: {
+                            toolName: payload.toolName,
+                            promptGuard: {
+                                mode: promptGuardMode,
+                                reasons: guardValidation.reasons,
+                            },
+                        },
+                        error: guardValidation.reasons.join(" ") || "prompt_guard_blocked",
+                    };
+                }
+            }
+
+            const parsedInput = tool.inputSchema.parse(resolvedParams);
             const startedAt = Date.now();
             const timeoutController = new AbortController();
             const timeoutHandle = setTimeout(() => timeoutController.abort(), toolTimeoutMs);
@@ -3233,6 +3407,19 @@ Reply to confirm receipt or contact support if you have questions.
                 });
 
                 await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, result);
+
+                await appendExecutionAudit({
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actorId: options?.userId ?? null,
+                    runId,
+                    toolName: tool.name,
+                    action: result.adapterSuccess ? "completed" : "failed",
+                    parameters: resolvedParams,
+                    externalIds: extractExternalIds(result.evidence),
+                    decision: result.adapterSuccess ? "succeeded" : "failed",
+                    reason: result.error ?? null,
+                });
 
                 logExecution("info", {
                     event: "tool.completed",
@@ -3519,7 +3706,7 @@ Reply to confirm receipt or contact support if you have questions.
     private async emitTaskUpdated(conversationId: string, payload: TaskUpdatedPayload) {
         await fetch(`${this.internalBaseUrl}/internal/task-updated`, {
             method: "POST",
-            headers: createInternalRequestHeaders(),
+            headers: createInternalRequestHeaders("socket"),
             body: JSON.stringify({
                 conversationId,
                 payload,

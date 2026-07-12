@@ -3,6 +3,7 @@ import TaskPlanModel, { type ITaskStep } from "@semantask/db/models/TaskPlan";
 import type { PlannerContext } from "@semantask/types";
 import { createDefaultLLMProvider } from "./llm/index.js";
 import { parseJsonText } from "./llm/response-parser.js";
+import { buildFencedTaskFields } from "./prompt-guard.js";
 
 const connectToDatabase =
     (dbModule as unknown as { connectToDatabase?: () => Promise<unknown> }).connectToDatabase
@@ -256,17 +257,19 @@ async function requestPlanFromLlm(
     context: PlannerContext,
     options?: CreateOrRefreshTaskPlanOptions
 ): Promise<{ goal: string; successDefinition: string; steps: ITaskStep[] } | null> {
+    const fenced = buildFencedTaskFields(context.title, context.description);
     const prompt = [
         "Return one JSON object only with keys: goal, successDefinition, steps.",
         "Each step must include: stepId, title, description, kind, dependencies, fallback, successCriteria, toolCandidates, input, output, maxAttempts.",
         "Keep steps minimal, dependency-aware, and executable one by one.",
         "Only use tools from availableTools.",
+        fenced.fenceInstruction,
     ].join(" ");
 
     const taskPayload = JSON.stringify({
         taskId: context.taskId,
-        title: context.title,
-        description: context.description,
+        title: fenced.title,
+        description: fenced.description,
         availableTools: context.availableTools,
     });
 

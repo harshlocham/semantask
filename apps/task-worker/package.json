@@ -8,7 +8,7 @@
         "build": "tsc --noEmit false --outDir dist",
         "start": "node dist/apps/task-worker/index.js",
         "typecheck": "tsc --noEmit -p tsconfig.json",
-        "test": "INTERNAL_SECRET=test-internal-secret tsx --test tests/**/*.test.ts"
+        "test": "INTERNAL_SECRET=test-internal-secret TASK_TOOL_RBAC=off tsx --test tests/**/*.test.ts"
     },
     "dependencies": {
         "@semantask/db": "workspace:*",

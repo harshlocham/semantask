@@ -59,6 +59,8 @@ services:
     environment:
       NODE_ENV: production
       INTERNAL_SECRET: ${INTERNAL_SECRET}
+      INTERNAL_SECRET_SOCKET: ${INTERNAL_SECRET_SOCKET:-${INTERNAL_SECRET}}
+      INTERNAL_SECRET_WORKER: ${INTERNAL_SECRET_WORKER:-${INTERNAL_SECRET}}
       ORIGIN: ${ORIGIN:-http://localhost}
       REDIS_URL: redis://redis:6379
       WEB_SERVER_URL: http://nextapp:3000
