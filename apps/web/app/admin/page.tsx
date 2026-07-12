@@ -95,6 +95,12 @@ export default function AdminDashboard() {
                         <Link href="/admin/auth-events" className="mt-3 inline-block text-sm font-semibold underline">
                             Open Auth Events
                         </Link>
+                        <Link href="/admin/tool-grants" className="mt-3 ml-4 inline-block text-sm font-semibold underline">
+                            Open Tool Grants
+                        </Link>
+                        <Link href="/api/admin/execution-audit" className="mt-3 ml-4 inline-block text-sm font-semibold underline">
+                            Execution Audit API
+                        </Link>
                     </CardContent>
                 </Card>
 

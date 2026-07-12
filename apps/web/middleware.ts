@@ -63,7 +63,9 @@ async function hasActiveAdminRole(
     userId: string,
     tokenVersion?: number
 ): Promise<boolean> {
-    const internalSecret = process.env.INTERNAL_SECRET;
+    const internalSecret =
+        process.env.INTERNAL_SECRET_WORKER?.trim()
+        || process.env.INTERNAL_SECRET?.trim();
     if (!internalSecret) {
         return false;
     }
@@ -97,7 +99,9 @@ async function getPendingStepUpChallengeId(
     req: NextRequest,
     userId: string
 ): Promise<string | null> {
-    const internalSecret = process.env.INTERNAL_SECRET;
+    const internalSecret =
+        process.env.INTERNAL_SECRET_WORKER?.trim()
+        || process.env.INTERNAL_SECRET?.trim();
     if (!internalSecret) {
         return null;
     }
