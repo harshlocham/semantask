@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestCorrelation } from "@/lib/observability/with-correlation";
 import { z } from "zod";
 import { enqueueOutboxEvent } from "@/lib/services/outbox.service";
 import { getPendingApprovalTaskActions, getTaskActionById, updateTaskActionExecutionState } from "@/lib/services/repositories/task.repo";
@@ -53,71 +54,74 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    const guard = await requireAdminUser();
-    if (guard.response) return guard.response;
+    return withRequestCorrelation(req, async () => {
+        const guard = await requireAdminUser();
+        if (guard.response) return guard.response;
 
-    const parse = decisionSchema.safeParse(await req.json());
-    if (!parse.success) {
-        return NextResponse.json({ error: "Invalid approval decision payload" }, { status: 400 });
-    }
+        const parse = decisionSchema.safeParse(await req.json());
+        if (!parse.success) {
+            return NextResponse.json({ error: "Invalid approval decision payload" }, { status: 400 });
+        }
 
-    const body = parse.data;
-    const action = await getTaskActionById(body.taskActionId);
+        const body = parse.data;
+        const action = await getTaskActionById(body.taskActionId);
 
-    if (!action) {
-        return NextResponse.json({ error: "Approval request not found" }, { status: 404 });
-    }
+        if (!action) {
+            return NextResponse.json({ error: "Approval request not found" }, { status: 404 });
+        }
 
-    if (action.executionState !== "approval_pending") {
-        return NextResponse.json({ error: `Approval request is not pending (state=${action.executionState ?? "null"})` }, { status: 409 });
-    }
+        if (action.executionState !== "approval_pending") {
+            return NextResponse.json({ error: `Approval request is not pending (state=${action.executionState ?? "null"})` }, { status: 409 });
+        }
 
-    if (body.decision === "reject") {
-        const rejectNote = body.reason ?? body.reviewerComment ?? "Rejected by reviewer.";
+        if (body.decision === "reject") {
+            const rejectNote = body.reason ?? body.reviewerComment ?? "Rejected by reviewer.";
+            const updated = await updateTaskActionExecutionState({
+                taskActionId: body.taskActionId,
+                executionState: "rejected",
+                summary: action.summary ?? null,
+                error: rejectNote,
+                reason: `${action.reason}${rejectNote ? ` | reviewer: ${rejectNote}` : ""}`,
+            });
+
+            return NextResponse.json({ approval: updated ? serializeTaskAction(updated) : null }, { status: 200 });
+        }
+
+        const approvedParameters = body.parameters ?? action.parameters ?? {};
+        const reviewerComment = body.reviewerComment ?? body.reason ?? "Approved by reviewer.";
+
         const updated = await updateTaskActionExecutionState({
             taskActionId: body.taskActionId,
-            executionState: "rejected",
+            executionState: "approved",
             summary: action.summary ?? null,
-            error: rejectNote,
-            reason: `${action.reason}${rejectNote ? ` | reviewer: ${rejectNote}` : ""}`,
+            error: null,
+            parameters: approvedParameters,
+            reason: `${action.reason}${reviewerComment ? ` | reviewer: ${reviewerComment}` : ""}`,
+            patch: {
+                before: action.patch?.before ?? null,
+                after: {
+                    ...asRecord(action.patch?.after),
+                    approvedParameters,
+                    reviewerComment,
+                    approvedAt: new Date().toISOString(),
+                },
+            },
+        });
+
+        await enqueueOutboxEvent({
+            topic: "task.execution.approved",
+            dedupeKey: `task.execution.approved:${body.taskActionId}`,
+            payload: {
+                taskId: action.taskId.toString(),
+                conversationId: action.conversationId.toString(),
+                taskActionId: body.taskActionId,
+                approvedByType: guard.user.role === "admin" ? "system" : "user",
+                approvedById: guard.user.id,
+                reason: reviewerComment,
+            },
         });
 
         return NextResponse.json({ approval: updated ? serializeTaskAction(updated) : null }, { status: 200 });
-    }
 
-    const approvedParameters = body.parameters ?? action.parameters ?? {};
-    const reviewerComment = body.reviewerComment ?? body.reason ?? "Approved by reviewer.";
-
-    const updated = await updateTaskActionExecutionState({
-        taskActionId: body.taskActionId,
-        executionState: "approved",
-        summary: action.summary ?? null,
-        error: null,
-        parameters: approvedParameters,
-        reason: `${action.reason}${reviewerComment ? ` | reviewer: ${reviewerComment}` : ""}`,
-        patch: {
-            before: action.patch?.before ?? null,
-            after: {
-                ...asRecord(action.patch?.after),
-                approvedParameters,
-                reviewerComment,
-                approvedAt: new Date().toISOString(),
-            },
-        },
     });
-
-    await enqueueOutboxEvent({
-        topic: "task.execution.approved",
-        dedupeKey: `task.execution.approved:${body.taskActionId}`,
-        payload: {
-            taskId: action.taskId.toString(),
-            conversationId: action.conversationId.toString(),
-            taskActionId: body.taskActionId,
-            approvedByType: guard.user.role === "admin" ? "system" : "user",
-            approvedById: guard.user.id,
-            reason: reviewerComment,
-        },
-    });
-
-    return NextResponse.json({ approval: updated ? serializeTaskAction(updated) : null }, { status: 200 });
 }

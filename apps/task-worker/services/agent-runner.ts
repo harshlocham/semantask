@@ -17,6 +17,7 @@ import { generateAndStoreReflection } from "./reflection-service.js";
 import { acquireTaskLease, heartbeatTaskLease, releaseTaskLease } from "./task-lease.js";
 import { scheduleTaskRetry } from "./schedule-retry.js";
 import { logExecution } from "./execution-logger.js";
+import { withSpan } from "@semantask/observability";
 import { maybeLogTaskStateDivergence } from "./state-divergence-check.js";
 import { finalizeTaskCancellation, isTaskCancellationRequested } from "./task-cancellation.js";
 import { assertTransition } from "./task-state-machine.js";
@@ -3418,7 +3419,11 @@ Reply to confirm receipt or contact support if you have questions.
             const signal = combineAbortSignals(this.currentExecutionSignal ?? undefined, timeoutController.signal) ?? timeoutController.signal;
 
             try {
-                const result = await tool.execute(parsedInput, {
+                const result = await withSpan("tool.execute", {
+                    "tool.name": payload.toolName,
+                    "task.id": payload.taskId,
+                    "run.id": runId ?? "",
+                }, async () => tool.execute(parsedInput, {
                     taskId: payload.taskId,
                     conversationId: payload.conversationId,
                     messageId: payload.messageId,
@@ -3429,7 +3434,7 @@ Reply to confirm receipt or contact support if you have questions.
                         attempt: payload.attempt ?? undefined,
                         idempotencyKey: payload.idempotencyKey ?? undefined,
                     },
-                });
+                }));
 
                 await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, result);
 

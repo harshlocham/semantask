@@ -22,6 +22,7 @@
     },
     "dependencies": {
         "@semantask/auth": "workspace:*",
+        "@semantask/observability": "workspace:*",
         "@semantask/services": "workspace:*",
         "@semantask/types": "workspace:*",
         "@tailwindcss/postcss": "^4.2.2",

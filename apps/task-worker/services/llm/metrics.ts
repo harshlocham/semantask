@@ -1,4 +1,5 @@
 import type { LLMProviderMetricSnapshot } from "./types.js";
+import { llmEventCounter, llmRequestDurationSeconds } from "@semantask/observability/metrics";
 
 type MetricEvent =
     | { provider: string; event: "request" }
@@ -36,6 +37,11 @@ function getOrCreate(provider: string): MutableSnapshot {
 
 export function recordLLMProviderMetric(event: MetricEvent) {
     const snapshot = getOrCreate(event.provider);
+
+    llmEventCounter.inc({ provider: event.provider, event: event.event });
+    if (event.event === "success") {
+        llmRequestDurationSeconds.observe({ provider: event.provider }, event.latencyMs / 1000);
+    }
 
     if (event.event === "request") {
         snapshot.requestCount += 1;

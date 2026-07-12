@@ -1,3 +1,5 @@
+import { createLogger } from "@semantask/observability/logger";
+
 export type ExecutionLogLevel = "info" | "warn" | "error";
 
 export interface ExecutionLogFields {
@@ -19,23 +21,16 @@ export interface ExecutionLogFields {
     [key: string]: unknown;
 }
 
+const logger = createLogger("task-worker");
+
 export function logExecution(level: ExecutionLogLevel, fields: ExecutionLogFields): void {
-    const line = JSON.stringify({
-        level,
-        ts: new Date().toISOString(),
-        component: "task-worker",
-        ...fields,
-    });
-
     if (level === "error") {
-        console.error(line);
+        logger.error(fields);
         return;
     }
-
     if (level === "warn") {
-        console.warn(line);
+        logger.warn(fields);
         return;
     }
-
-    console.info(line);
+    logger.info(fields);
 }

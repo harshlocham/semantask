@@ -126,7 +126,7 @@ function getThresholdForMetric(name: string): number {
 async function sendMetricToMonitoring(name: string, duration: number): Promise<void> {
     try {
         // Example: send to your monitoring endpoint
-        await fetch('/api/metrics', {
+        await fetch('/api/metrics/rum', {
             method: 'POST',
             body: JSON.stringify({ name, duration, timestamp: Date.now() }),
             headers: { 'Content-Type': 'application/json' },

@@ -15,6 +15,11 @@
             "types": "./dist/services/outbox.service.d.ts",
             "default": "./dist/services/outbox.service.js"
         },
+        "./outbox-metrics.service": {
+            "import": "./dist/services/outbox-metrics.service.js",
+            "types": "./dist/services/outbox-metrics.service.d.ts",
+            "default": "./dist/services/outbox-metrics.service.js"
+        },
         "./execution-event.service": {
             "import": "./dist/services/execution-event.service.js",
             "types": "./dist/services/execution-event.service.d.ts",
@@ -98,6 +103,7 @@
     },
     "dependencies": {
         "@semantask/db": "workspace:*",
+        "@semantask/observability": "workspace:*",
         "@semantask/types": "workspace:*",
         "zod": "^4.0.5"
     }
