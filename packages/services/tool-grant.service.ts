@@ -1,0 +1,332 @@
+import { Types } from "mongoose";
+import { connectToDatabase } from "@semantask/db";
+import ToolGrantModel, {
+    HIGH_RISK_TOOLS,
+    isHighRiskToolName,
+    type HighRiskToolName,
+    type IToolGrant,
+} from "@semantask/db/models/ToolGrant";
+import TaskModel from "@semantask/db/models/Task";
+import { AuthorizationError } from "./authorization.service";
+
+export type ToolRbacMode = "off" | "enforce";
+
+export function getToolRbacMode(): ToolRbacMode {
+    const raw = (process.env.TASK_TOOL_RBAC || "off").trim().toLowerCase();
+    if (raw === "enforce") return "enforce";
+    return "off";
+}
+
+function isValidObjectId(value: string | null | undefined): value is string {
+    return Boolean(value && Types.ObjectId.isValid(value));
+}
+
+export async function hasToolGrant(
+    userId: string,
+    toolName: string,
+    conversationId?: string | null
+): Promise<boolean> {
+    if (!isHighRiskToolName(toolName)) {
+        return true;
+    }
+
+    if (!isValidObjectId(userId)) {
+        return false;
+    }
+
+    await connectToDatabase();
+
+    const orClauses: Record<string, unknown>[] = [
+        { conversationId: null },
+    ];
+
+    if (isValidObjectId(conversationId)) {
+        orClauses.push({ conversationId: new Types.ObjectId(conversationId) });
+    }
+
+    const grant = await ToolGrantModel.findOne({
+        userId: new Types.ObjectId(userId),
+        toolName,
+        revokedAt: null,
+        $or: orClauses,
+    })
+        .select("_id")
+        .lean();
+
+    return Boolean(grant);
+}
+
+export async function assertToolGrant(
+    userId: string,
+    toolName: string,
+    conversationId?: string | null
+): Promise<void> {
+    if (getToolRbacMode() === "off") {
+        return;
+    }
+
+    if (!isHighRiskToolName(toolName)) {
+        return;
+    }
+
+    const allowed = await hasToolGrant(userId, toolName, conversationId);
+    if (allowed) {
+        return;
+    }
+
+    console.warn("tool_grant.deny", {
+        event: "tool_grant.deny",
+        userId,
+        toolName,
+        conversationId: conversationId ?? null,
+    });
+
+    throw new AuthorizationError(
+        "FORBIDDEN",
+        `Tool grant required for "${toolName}".`
+    );
+}
+
+export async function listGrantedToolNames(
+    userId: string,
+    conversationId?: string | null
+): Promise<string[]> {
+    if (getToolRbacMode() === "off") {
+        return [...HIGH_RISK_TOOLS];
+    }
+
+    if (!isValidObjectId(userId)) {
+        return [];
+    }
+
+    await connectToDatabase();
+
+    const orClauses: Record<string, unknown>[] = [{ conversationId: null }];
+    if (isValidObjectId(conversationId)) {
+        orClauses.push({ conversationId: new Types.ObjectId(conversationId) });
+    }
+
+    const grants = await ToolGrantModel.find({
+        userId: new Types.ObjectId(userId),
+        revokedAt: null,
+        $or: orClauses,
+    })
+        .select("toolName")
+        .lean<{ toolName: HighRiskToolName }[]>();
+
+    return Array.from(new Set(grants.map((grant) => grant.toolName)));
+}
+
+export type GrantToolInput = {
+    userId: string;
+    toolName: HighRiskToolName;
+    grantedBy: string;
+    conversationId?: string | null;
+};
+
+export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
+    if (!isValidObjectId(input.userId) || !isValidObjectId(input.grantedBy)) {
+        throw new AuthorizationError("FORBIDDEN", "Invalid user id");
+    }
+
+    if (input.conversationId && !isValidObjectId(input.conversationId)) {
+        throw new AuthorizationError("FORBIDDEN", "Invalid conversation id");
+    }
+
+    await connectToDatabase();
+
+    const conversationId = input.conversationId
+        ? new Types.ObjectId(input.conversationId)
+        : null;
+
+    const existing = await ToolGrantModel.findOne({
+        userId: new Types.ObjectId(input.userId),
+        toolName: input.toolName,
+        conversationId,
+        revokedAt: null,
+    });
+
+    if (existing) {
+        return existing;
+    }
+
+    // Re-activate a previously revoked grant with the same scope if present.
+    const revoked = await ToolGrantModel.findOne({
+        userId: new Types.ObjectId(input.userId),
+        toolName: input.toolName,
+        conversationId,
+        revokedAt: { $ne: null },
+    });
+
+    if (revoked) {
+        try {
+            revoked.revokedAt = null;
+            revoked.grantedBy = new Types.ObjectId(input.grantedBy);
+            await revoked.save();
+            return revoked;
+        } catch (error) {
+            const maybeMongo = error as { code?: number };
+            if (maybeMongo?.code === 11000) {
+                const raced = await ToolGrantModel.findOne({
+                    userId: new Types.ObjectId(input.userId),
+                    toolName: input.toolName,
+                    conversationId,
+                    revokedAt: null,
+                });
+                if (raced) {
+                    return raced;
+                }
+            }
+            throw error;
+        }
+    }
+
+    try {
+        return await ToolGrantModel.create({
+            userId: new Types.ObjectId(input.userId),
+            toolName: input.toolName,
+            conversationId,
+            grantedBy: new Types.ObjectId(input.grantedBy),
+            revokedAt: null,
+        });
+    } catch (error) {
+        const maybeMongo = error as { code?: number };
+        if (maybeMongo?.code === 11000) {
+            const raced = await ToolGrantModel.findOne({
+                userId: new Types.ObjectId(input.userId),
+                toolName: input.toolName,
+                conversationId,
+                revokedAt: null,
+            });
+            if (raced) {
+                return raced;
+            }
+        }
+        throw error;
+    }
+}
+
+export async function revokeTool(grantId: string): Promise<IToolGrant | null> {
+    if (!isValidObjectId(grantId)) {
+        throw new AuthorizationError("NOT_FOUND", "Grant not found");
+    }
+
+    await connectToDatabase();
+
+    const grant = await ToolGrantModel.findById(grantId);
+    if (!grant) {
+        throw new AuthorizationError("NOT_FOUND", "Grant not found");
+    }
+
+    if (!grant.revokedAt) {
+        grant.revokedAt = new Date();
+        await grant.save();
+    }
+
+    return grant;
+}
+
+export type ListToolGrantsInput = {
+    page?: number;
+    limit?: number;
+    userId?: string;
+    toolName?: string;
+    includeRevoked?: boolean;
+};
+
+export type ToolGrantListItem = {
+    id: string;
+    userId: string;
+    conversationId: string | null;
+    toolName: string;
+    grantedBy: string;
+    revokedAt: string | null;
+    createdAt: string;
+};
+
+export async function listToolGrants(input: ListToolGrantsInput = {}): Promise<{
+    grants: ToolGrantListItem[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+}> {
+    const page = Number.isFinite(input.page) ? Math.max(1, Number(input.page)) : 1;
+    const limit = Number.isFinite(input.limit) ? Math.min(100, Math.max(1, Number(input.limit))) : 20;
+
+    await connectToDatabase();
+
+    const query: Record<string, unknown> = {};
+    if (!input.includeRevoked) {
+        query.revokedAt = null;
+    }
+    if (isValidObjectId(input.userId)) {
+        query.userId = new Types.ObjectId(input.userId);
+    }
+    if (input.toolName && isHighRiskToolName(input.toolName)) {
+        query.toolName = input.toolName;
+    }
+
+    const [total, rows] = await Promise.all([
+        ToolGrantModel.countDocuments(query),
+        ToolGrantModel.find(query)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean<IToolGrant[]>(),
+    ]);
+
+    return {
+        grants: rows.map((row) => ({
+            id: row._id.toString(),
+            userId: row.userId.toString(),
+            conversationId: row.conversationId ? row.conversationId.toString() : null,
+            toolName: row.toolName,
+            grantedBy: row.grantedBy.toString(),
+            revokedAt: row.revokedAt ? new Date(row.revokedAt).toISOString() : null,
+            createdAt: new Date(row.createdAt).toISOString(),
+        })),
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / limit)),
+        },
+    };
+}
+
+/**
+ * Grant all high-risk tools (global scope) to every distinct task creator.
+ * Idempotent — skips users who already have active grants.
+ */
+export async function seedExistingUsersToolGrants(grantedBy: string): Promise<{
+    usersConsidered: number;
+    grantsCreated: number;
+}> {
+    if (!isValidObjectId(grantedBy)) {
+        throw new AuthorizationError("FORBIDDEN", "Invalid grantedBy");
+    }
+
+    await connectToDatabase();
+
+    const creators = await TaskModel.distinct("createdBy");
+    const userIds = creators
+        .map((id) => id?.toString?.() ?? String(id))
+        .filter((id) => isValidObjectId(id));
+
+    let grantsCreated = 0;
+
+    for (const userId of userIds) {
+        for (const toolName of HIGH_RISK_TOOLS) {
+            const before = await hasToolGrant(userId, toolName, null);
+            if (before) continue;
+            await grantTool({ userId, toolName, grantedBy, conversationId: null });
+            grantsCreated += 1;
+        }
+    }
+
+    return {
+        usersConsidered: userIds.length,
+        grantsCreated,
+    };
+}
+
+export type { HighRiskToolName };
+export { HIGH_RISK_TOOLS, isHighRiskToolName };

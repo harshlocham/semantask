@@ -51,7 +51,7 @@ export async function postToInternalWebApi<TResponse>(
         try {
             const response = await fetch(`${baseUrl}${options.path}`, {
                 method: "POST",
-                headers: createInternalRequestHeaders(),
+                headers: createInternalRequestHeaders("web"),
                 body: JSON.stringify(options.body),
                 signal: controller.signal,
             });

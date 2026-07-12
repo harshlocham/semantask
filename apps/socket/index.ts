@@ -9,7 +9,7 @@ import { initSocket } from "./server/socket/index.js";
 import { emitToConversation, emitToUser } from "./server/socket/emit.js";
 import { SocketEvents } from "@semantask/types";
 import {
-    getInternalSecret,
+    assertInternalAudienceConfigured,
     hasValidInternalSecret,
     INTERNAL_SECRET_HEADER,
 } from "@semantask/types/utils/internal-bridge-auth";
@@ -60,12 +60,12 @@ app.get("/health", (_req, res) => {
     });
 });
 
-const internalSecret = getInternalSecret();
+assertInternalAudienceConfigured("socket");
 
 app.use("/internal", (req, res, next) => {
     const providedSecret = req.header(INTERNAL_SECRET_HEADER);
 
-    if (!hasValidInternalSecret(providedSecret, internalSecret)) {
+    if (!hasValidInternalSecret(providedSecret, "socket")) {
         return res.status(401).json({ error: "Unauthorized internal request" });
     }
 

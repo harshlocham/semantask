@@ -17,7 +17,7 @@ Use this before promoting **staging** or **production** (web, socket, and task w
 |---|-------------|--------------|--------|
 | 1 | **MongoDB replica set** (or `mongos`) | Task retry scanner, transactional message+outbox writes | `rs.status()` succeeds; no `Transaction numbers are only allowed on a replica set` in worker logs |
 | 2 | **`REDIS_URL` reachable** from web, socket, task-worker | Socket.IO horizontal scale, outbox dedupe, presence, rate limits | Socket log does **not** show Redis adapter mock warning; worker has Redis connected |
-| 3 | **`INTERNAL_SECRET` identical** on web, socket, task-worker | Internal bridge (`/internal/*`, `/api/internal/socket/*`) | Worker starts in `NODE_ENV=production`; socket internal routes accept worker emits |
+| 3 | **Per-service internal secrets** (`INTERNAL_SECRET_SOCKET` / `INTERNAL_SECRET_WORKER`, or legacy `INTERNAL_SECRET`) | Internal bridge (`/internal/*`, `/api/internal/*`) | Worker starts in prod; socket accepts worker emits; see [rotation runbook](./INTERNAL_SECRET_ROTATION.md) |
 | 4 | **Auth secrets** (`ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, `NEXTAUTH_SECRET`) | Web + socket JWT validation | Login and socket handshake succeed |
 | 5 | **`ORIGIN` / `NEXT_PUBLIC_SOCKET_URL` aligned** with public URLs | CORS and socket connections | Browser connects to `/api/socket` without origin errors |
 | 6 | **`TASK_EXECUTION_FSM_SHADOW_MODE` understood** | FSM shadow telemetry (default: on) | Set `0` only when intentionally disabling shadow writes |
@@ -90,24 +90,34 @@ Confirm socket startup logs do not show the mock-adapter warning.
 
 ## Secrets and service auth
 
-### `INTERNAL_SECRET` (required in production)
+### `INTERNAL_SECRET` / per-service secrets (required in production)
 
-Shared header `x-internal-secret` secures:
+Header `x-internal-secret` secures:
 
-- Socket `POST /internal/*` (worker and web → socket fan-out)
-- Web `POST /api/internal/socket/*` (socket → web authorization)
-- Web `POST /api/internal/auth/*`
+- Socket `POST /internal/*` (web + worker → socket fan-out) — accepts `INTERNAL_SECRET_SOCKET` (+ `*_PREVIOUS` + legacy `INTERNAL_SECRET`)
+- Web `POST /api/internal/socket/*` and `/api/internal/auth/*` — accepts `INTERNAL_SECRET_WORKER` (+ `*_PREVIOUS` + legacy `INTERNAL_SECRET`)
+
+**Preferred (Phase 3.4):**
+
+| Variable | Held by | Accepted by |
+|----------|---------|-------------|
+| `INTERNAL_SECRET_SOCKET` | web, task-worker | socket |
+| `INTERNAL_SECRET_WORKER` | socket, web middleware | web `/api/internal/*` |
+
+Legacy `INTERNAL_SECRET` remains accepted on both audiences for a two-release deprecation window.
 
 **Must be:**
 
-- The **same value** on web, socket, and task-worker
 - Long, random, stored only in secrets managers / `.env` (never committed)
-- Rotated with a coordinated redeploy of all three services (per-service secrets are Phase 3.4)
+- Rotated with the [Internal Secret Rotation Runbook](./INTERNAL_SECRET_ROTATION.md) (supports `*_PREVIOUS` for zero-downtime)
 
 **Enforcement:**
 
-- `packages/types/utils/internal-bridge-auth.ts` — `getInternalSecret()` throws if unset when building outbound headers
-- `apps/task-worker/index.ts` — `assertInternalSecretConfigured()` throws at startup when `NODE_ENV=production` and secret is missing
+- `packages/types/utils/internal-bridge-auth.ts` — audience-aware headers and validation
+- `apps/task-worker/index.ts` — requires `INTERNAL_SECRET_SOCKET` or legacy `INTERNAL_SECRET` in production
+- `apps/socket/index.ts` — `assertInternalAudienceConfigured("socket")` at boot
+
+See also: [`INTERNAL_SECRET_ROTATION.md`](./INTERNAL_SECRET_ROTATION.md).
 
 ### Other required secrets (web)
 
@@ -184,10 +194,14 @@ Deploy script: `scripts/ci/deploy/vps-task-worker.sh`.
 |-----------|--------------|-----------------|-------------------|
 | `MONGODB_URI` | Yes | No (web handles DB) | Yes |
 | `REDIS_URL` | Recommended | **Required** for multi-instance | **Required** |
-| `INTERNAL_SECRET` | Yes | Yes | Yes |
+| `INTERNAL_SECRET_SOCKET` | Yes (caller → socket) | Accepts inbound | Yes (caller → socket) |
+| `INTERNAL_SECRET_WORKER` | Accepts inbound + middleware | Yes (caller → web) | No |
+| `INTERNAL_SECRET` (legacy) | Transitional fallback | Transitional fallback | Transitional fallback |
 | `SOCKET_SERVER_URL` / `WEB_SERVER_URL` | Yes | Yes | Yes (`SOCKET_SERVER_URL` for emits) |
 | `LLM_*`, tool API keys | Optional on web | No | **Required** for agent runs |
 | `ALLOWED_EMAIL_DOMAINS` | Optional | No | **Required** if email tools used |
+
+Prefer distinct `INTERNAL_SECRET_SOCKET` / `INTERNAL_SECRET_WORKER`. Legacy `INTERNAL_SECRET` remains accepted on both audiences during the deprecation window — remove it after rotation (see [INTERNAL_SECRET_ROTATION.md](./INTERNAL_SECRET_ROTATION.md)).
 
 ---
 
@@ -198,8 +212,9 @@ Deploy script: `scripts/ci/deploy/vps-task-worker.sh`.
 | Standalone Mongo + task worker | Retries promote via non-transactional fallback (weaker atomicity); enable `TASK_RETRY_SHADOW_EMIT=1` to align shadow FSM on promote |
 | No Redis on socket (multi pod) | Clients on different pods miss realtime events |
 | No Redis on worker | Duplicate outbox processing possible under race |
-| Mismatched `INTERNAL_SECRET` | Task updates never reach clients; 401 on internal routes |
-| Missing `INTERNAL_SECRET` (prod worker) | Worker refuses to start |
+| Mismatched `INTERNAL_SECRET_SOCKET` / callers vs socket | Task updates never reach clients; 401 on socket `/internal/*` |
+| Mismatched `INTERNAL_SECRET_WORKER` / callers vs web | Socket authz / step-up bridges fail; 401 on web `/api/internal/*` |
+| Missing socket secret (prod worker) | Worker refuses to start (`INTERNAL_SECRET_SOCKET` or legacy `INTERNAL_SECRET`) |
 | Empty email allowlist + email tool | Sends to arbitrary domains may auto-execute |
 | `ORIGIN` mismatch | Socket connection rejected |
 

@@ -13,3 +13,5 @@ export * from "./task.service";
 export * from "./tool-normalizers";
 export * from "./contact.service";
 export * from "./authorization.service";
+export * from "./tool-grant.service";
+export * from "./execution-audit.service";

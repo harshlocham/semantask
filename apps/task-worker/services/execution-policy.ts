@@ -3,6 +3,11 @@ import {
     getExecutionConfidenceThreshold,
     GLOBAL_EXECUTION_CONFIDENCE_BASELINE,
 } from "./execution-confidence.js";
+import {
+    applyPromptGuardDecision,
+    getPromptGuardMode,
+    validateToolArgsAgainstContext,
+} from "./prompt-guard.js";
 
 type RequestedPayload = {
     actionType: TaskExecutionActionType;
@@ -10,6 +15,11 @@ type RequestedPayload = {
     confidence?: number;
     needsApproval?: boolean;
     semanticType?: MessageSemanticType;
+    /** Pre-loaded conversation participant emails (lowercase). */
+    participantEmails?: string[];
+    /** Pre-loaded task-owner contact emails (lowercase). */
+    contactEmails?: string[];
+    taskId?: string;
 };
 
 export type ExecutionPolicyOutcome = "auto_execute" | "approval_required" | "blocked";
@@ -125,6 +135,39 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
         const title = typeof parameters.title === "string" ? parameters.title.trim() : "";
         if (title.length === 0) {
             reasons.push("GitHub issue action is missing a title.");
+        }
+    }
+
+    const promptGuardMode = getPromptGuardMode();
+    if (
+        promptGuardMode !== "off"
+        && (payload.actionType === "send_email" || payload.actionType === "schedule_meeting")
+    ) {
+        const guardValidation = validateToolArgsAgainstContext({
+            tool: payload.actionType,
+            params: parameters,
+            participantEmails: payload.participantEmails ?? [],
+            contactEmails: payload.contactEmails ?? [],
+        });
+        const guardDecision = applyPromptGuardDecision(guardValidation, {
+            taskId: payload.taskId,
+            tool: payload.actionType,
+            mode: promptGuardMode,
+        });
+
+        if (!guardValidation.ok && promptGuardMode === "enforce" && !guardDecision.allow) {
+            return {
+                outcome: "blocked",
+                riskLevel: "high",
+                reasons: guardValidation.reasons,
+                semanticType,
+                confidence,
+                threshold,
+            };
+        }
+
+        if (!guardValidation.ok && promptGuardMode === "monitor") {
+            reasons.push(...guardValidation.reasons.map((reason) => `[prompt_guard:monitor] ${reason}`));
         }
     }
 

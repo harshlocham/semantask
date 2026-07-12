@@ -13,6 +13,7 @@ import { RetryManager } from "./services/retry-manager.js";
 import AgentRunner from "./services/agent-runner.js";
 import { evaluateExecutionPolicy } from "./services/execution-policy.js";
 import { GLOBAL_EXECUTION_CONFIDENCE_BASELINE } from "./services/execution-confidence.js";
+import { loadPromptGuardEmailContext } from "./services/prompt-guard-context.js";
 import { assertExecutionLeaseCompleted, ExecutionLeaseBusyError, withExecutionLease } from "./services/lease.service.js";
 import { startRetryScheduler } from "./services/retry-scheduler.js";
 import { persistExecutionUpdatePayload } from "./services/execution-event.service.js";
@@ -23,6 +24,9 @@ import { isTaskCancelRequestedPayload, processTaskCancellation, type TaskCancelR
 import { startStuckTaskDetector } from "./services/stuck-task-detector.js";
 import { classifyMessageWithLlm } from "./services/message-classifier-llm.js";
 import { configureMessageClassifier } from "@semantask/services/message-classifier.service";
+import { assertToolGrant, isHighRiskToolName } from "@semantask/services/tool-grant.service";
+import { AuthorizationError } from "@semantask/services/authorization.service";
+import { appendExecutionAudit } from "@semantask/services/execution-audit.service";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -83,8 +87,13 @@ function assertInternalSecretConfigured(): void {
         return;
     }
 
-    if (!process.env.INTERNAL_SECRET?.trim()) {
-        throw new Error("INTERNAL_SECRET is required in production for task-worker");
+    const socketSecret =
+        process.env.INTERNAL_SECRET_SOCKET?.trim()
+        || process.env.INTERNAL_SECRET?.trim();
+    if (!socketSecret) {
+        throw new Error(
+            "INTERNAL_SECRET_SOCKET (or legacy INTERNAL_SECRET) is required in production for task-worker"
+        );
     }
 }
 const retryManager = new RetryManager([1000, 2000, 5000]);
@@ -109,6 +118,7 @@ type TaskModelLike = {
         maxRetries?: number;
         result?: TaskResult;
         updatedBy: null | string;
+        createdBy?: { toString(): string } | string | null;
         cancelRequestedAt?: Date | null;
         cancelReason?: string | null;
         cancelRequestedByType?: "user" | "agent" | "system" | null;
@@ -309,7 +319,7 @@ function normalizeTaskExecutionRequestedPayload(payload: Record<string, unknown>
 async function emitInternal(path: string, conversationId: string, payload: unknown) {
     const response = await fetch(`${internalBaseUrl}${path}`, {
         method: "POST",
-        headers: createInternalRequestHeaders(),
+        headers: createInternalRequestHeaders("socket"),
         body: JSON.stringify({
             conversationId,
             payload,
@@ -1288,7 +1298,105 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
     }
 
     const confidence = payload.confidence ?? 0.5;
-    const policyDecision = evaluateExecutionPolicy(payload);
+    const ownerUserId = existingTask?.createdBy?.toString?.()
+        ?? (typeof existingTask?.createdBy === "string" ? existingTask.createdBy : null)
+        ?? payload.requestedById;
+
+    if (ownerUserId && isHighRiskToolName(payload.actionType)) {
+        try {
+            await assertToolGrant(ownerUserId, payload.actionType, payload.conversationId);
+        } catch (error) {
+            if (!(error instanceof AuthorizationError)) {
+                logExecution("error", {
+                    event: "tool_grant.check_failed",
+                    workerId: WORKER_ID,
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actionType: payload.actionType,
+                    userId: ownerUserId,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                await appendExecutionAudit({
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actorId: ownerUserId,
+                    runId: provisionalRun,
+                    toolName: payload.actionType,
+                    action: "denied",
+                    parameters: payload.parameters ?? {},
+                    decision: "TOOL_GRANT_CHECK_ERROR",
+                    reason: error instanceof Error ? error.message : "Tool grant check failed",
+                });
+                // Fail-closed but retryable — do not permanently fail the task.
+                throw error;
+            }
+
+            const denyReason = error.message;
+
+            logExecution("warn", {
+                event: "tool_grant.deny",
+                workerId: WORKER_ID,
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                actionType: payload.actionType,
+                userId: ownerUserId,
+                reason: denyReason,
+            });
+
+            await appendExecutionAudit({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                actorId: ownerUserId,
+                runId: provisionalRun,
+                toolName: payload.actionType,
+                action: "denied",
+                parameters: payload.parameters ?? {},
+                decision: "TOOL_GRANT_DENIED",
+                reason: denyReason,
+            });
+
+            await updateTaskLifecycle({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                status: "failed",
+                result: {
+                    success: false,
+                    confidence: clampConfidence(confidence),
+                    evidence: {
+                        reason: "TOOL_GRANT_DENIED",
+                        toolName: payload.actionType,
+                    },
+                    error: denyReason,
+                },
+            });
+
+            await emitTaskExecutionUpdate({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                state: "failed",
+                actionType: payload.actionType,
+                summary: denyReason,
+                error: denyReason,
+                updatedAt: new Date().toISOString(),
+                runId: provisionalRun,
+                phase: "finalize",
+                step: "tool_grant_denied",
+                progress: 100,
+            });
+            return;
+        }
+    }
+
+    const promptGuardContext = await loadPromptGuardEmailContext({
+        conversationId: payload.conversationId,
+        ownerUserId,
+    });
+    const policyDecision = evaluateExecutionPolicy({
+        ...payload,
+        participantEmails: promptGuardContext.participantEmails,
+        contactEmails: promptGuardContext.contactEmails,
+        taskId: payload.taskId,
+    });
     const safePolicyDecision = {
         outcome: policyDecision.outcome,
         riskLevel: policyDecision.riskLevel,
@@ -1344,6 +1452,18 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             : (policyDecision.reasons.join(" ") || "Execution blocked by policy.");
 
         // reuse hoisted safePolicyDecision
+
+        await appendExecutionAudit({
+            taskId: payload.taskId,
+            conversationId: payload.conversationId,
+            actorId: ownerUserId,
+            runId: provisionalRun,
+            toolName: payload.actionType,
+            action: "denied",
+            parameters: payload.parameters ?? {},
+            decision: unsafe ? "POLICY_UNSAFE" : "POLICY_BLOCKED",
+            reason: blockedReason,
+        });
 
         await updateTaskLifecycle({
             taskId: payload.taskId,
@@ -1422,6 +1542,18 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 },
                 reason: `Action requires human approval before execution. ${policyDecision.reasons.join(" ")}`,
                 idempotencyKey: `${payload.taskId}:${payload.actionType}:${payload.triggerMessageId}:approval_pending`,
+            });
+
+            await appendExecutionAudit({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                actorId: payload.requestedById,
+                runId: provisionalRun,
+                toolName: payload.actionType,
+                action: "requested",
+                parameters: payload.parameters ?? {},
+                decision: "approval_required",
+                reason: policyDecision.reasons.join(" "),
             });
         } catch (error) {
             const maybeMongoError = error as { code?: number };

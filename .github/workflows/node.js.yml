@@ -32,6 +32,8 @@ env:
   ACCESS_TOKEN_SECRET: testAccessSecret
   REFRESH_TOKEN_SECRET: testRefreshSecret
   INTERNAL_SECRET: testInternalSecret
+  INTERNAL_SECRET_SOCKET: testInternalSecret
+  INTERNAL_SECRET_WORKER: testInternalWorkerSecret
   TURBO_ENV_MODE: loose
 
 jobs:
@@ -221,6 +223,8 @@ jobs:
             -e REDIS_URL=redis://host.docker.internal:6379 \
             -e WEB_SERVER_URL=http://host.docker.internal:3000 \
             -e INTERNAL_SECRET=testInternalSecret \
+            -e INTERNAL_SECRET_SOCKET=testInternalSecret \
+            -e INTERNAL_SECRET_WORKER=testInternalWorkerSecret \
             -e ACCESS_TOKEN_SECRET=testAccessSecret \
             -e ORIGIN=http://localhost \
             chat-socket:ci

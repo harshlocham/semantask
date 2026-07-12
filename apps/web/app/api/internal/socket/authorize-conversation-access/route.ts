@@ -4,7 +4,6 @@ import {
     AuthorizationError,
 } from "@semantask/services/authorization.service";
 import {
-    getInternalSecret,
     hasValidInternalSecret,
     INTERNAL_SECRET_HEADER,
 } from "@semantask/types/utils/internal-bridge-auth";
@@ -21,7 +20,7 @@ function deny(reason: string, status = 403) {
 
 export async function POST(req: Request) {
     const providedSecret = req.headers.get(INTERNAL_SECRET_HEADER);
-    if (!hasValidInternalSecret(providedSecret, getInternalSecret())) {
+    if (!hasValidInternalSecret(providedSecret, "web")) {
         return deny("unauthorized_internal_request", 401);
     }
 

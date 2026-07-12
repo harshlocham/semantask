@@ -253,6 +253,76 @@ export async function getAdminAuthEvents(params?: {
     return data.data;
 }
 
+export type AdminToolGrant = {
+    id: string;
+    userId: string;
+    conversationId: string | null;
+    toolName: string;
+    grantedBy: string;
+    revokedAt: string | null;
+    createdAt: string;
+};
+
+export type AdminToolGrantsResponse = {
+    grants: AdminToolGrant[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
+};
+
+export async function getAdminToolGrants(params?: {
+    page?: number;
+    limit?: number;
+    userId?: string;
+    toolName?: string;
+    includeRevoked?: boolean;
+}): Promise<AdminToolGrantsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", String(params.page));
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    if (params?.userId) searchParams.set("userId", params.userId);
+    if (params?.toolName) searchParams.set("toolName", params.toolName);
+    if (params?.includeRevoked) searchParams.set("includeRevoked", "1");
+
+    const query = searchParams.toString();
+    const data = await request<{ success: boolean; data: AdminToolGrantsResponse }>(
+        `/api/admin/tool-grants${query ? `?${query}` : ""}`
+    );
+    return data.data;
+}
+
+export async function createAdminToolGrant(input: {
+    userId: string;
+    toolName: string;
+    conversationId?: string | null;
+}): Promise<AdminToolGrant> {
+    const data = await request<{ success: boolean; data: AdminToolGrant }>("/api/admin/tool-grants", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    return data.data;
+}
+
+export async function seedAdminToolGrants(): Promise<{ usersConsidered: number; grantsCreated: number }> {
+    const data = await request<{ success: boolean; data: { usersConsidered: number; grantsCreated: number } }>(
+        "/api/admin/tool-grants",
+        {
+            method: "POST",
+            body: JSON.stringify({ action: "seed" }),
+        }
+    );
+    return data.data;
+}
+
+export async function revokeAdminToolGrant(grantId: string): Promise<void> {
+    await request<{ success: boolean }>(`/api/admin/tool-grants/${grantId}`, {
+        method: "DELETE",
+    });
+}
+
 export async function getTaskApprovals(conversationId?: string): Promise<TaskApprovalsResponse> {
     const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : "";
     return request<TaskApprovalsResponse>(`/api/task-approvals${query}`);
