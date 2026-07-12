@@ -80,7 +80,11 @@ app.get("/metrics", async (_req, res) => {
         res.setHeader("Content-Type", prometheusContentType());
         return res.status(200).send(body);
     } catch (error) {
-        return res.status(500).send(error instanceof Error ? error.message : "metrics error");
+        logSocketEvent("error", {
+            event: "socket.metrics.failed",
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return res.status(500).send("metrics unavailable");
     }
 });
 

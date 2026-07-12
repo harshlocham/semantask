@@ -12,7 +12,6 @@ groups:
 
       - alert: StuckTasksDetected
         expr: increase(task_stuck_detected_total[10m]) > 0
-        for: 10m
         labels:
           severity: warning
         annotations:

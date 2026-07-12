@@ -26,10 +26,10 @@ export function startTracing(serviceName: string): void {
         return;
     }
 
-    const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT!.trim();
+    const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT!.trim().replace(/\/+$/, "");
     const url = endpoint.endsWith("/v1/traces")
         ? endpoint
-        : `${endpoint.replace(/\/$/, "")}/v1/traces`;
+        : `${endpoint}/v1/traces`;
 
     const tracerProvider = new NodeTracerProvider({
         resource: new Resource({

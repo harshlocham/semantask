@@ -1,4 +1,4 @@
-import { trace, context, SpanStatusCode, type Span, type Tracer } from "@opentelemetry/api";
+import { trace, context, TraceFlags, SpanStatusCode, type Span, type Tracer } from "@opentelemetry/api";
 
 export function isTracingEnabled(): boolean {
     return Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim());
@@ -6,6 +6,40 @@ export function isTracingEnabled(): boolean {
 
 export function getTracer(name = "semantask"): Tracer {
     return trace.getTracer(name);
+}
+
+/** Restore a remote W3C `traceparent` into the active OTel context (no-op if invalid/missing). */
+export function runWithRemoteTraceparent<T>(
+    traceparent: string | undefined,
+    fn: () => T
+): T {
+    if (!traceparent?.trim()) {
+        return fn();
+    }
+
+    const parts = traceparent.trim().split("-");
+    if (parts.length < 4 || parts[0] !== "00") {
+        return fn();
+    }
+
+    const [, traceId, spanId, flagsHex] = parts;
+    if (!/^[0-9a-f]{32}$/i.test(traceId) || !/^[0-9a-f]{16}$/i.test(spanId)) {
+        return fn();
+    }
+
+    const flags = Number.parseInt(flagsHex, 16);
+    if (!Number.isFinite(flags)) {
+        return fn();
+    }
+
+    const parentContext = trace.setSpanContext(context.active(), {
+        traceId: traceId.toLowerCase(),
+        spanId: spanId.toLowerCase(),
+        traceFlags: flags & TraceFlags.SAMPLED,
+        isRemote: true,
+    });
+
+    return context.with(parentContext, fn);
 }
 
 /**

@@ -16,7 +16,7 @@ export type StructuredLogger = {
 
 function write(level: LogLevel, component: string, fields: LogFields): void {
     const ctx = getObservabilityContext();
-    const line = JSON.stringify({
+    const payload = {
         level,
         ts: new Date().toISOString(),
         component,
@@ -24,7 +24,20 @@ function write(level: LogLevel, component: string, fields: LogFields): void {
         ...(ctx.runId ? { runId: ctx.runId } : {}),
         ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
         ...fields,
-    });
+    };
+
+    let line: string;
+    try {
+        line = JSON.stringify(payload);
+    } catch {
+        line = JSON.stringify({
+            level,
+            ts: payload.ts,
+            component,
+            event: typeof fields.event === "string" ? fields.event : "log.serialize_failed",
+            error: "log payload not JSON-serializable",
+        });
+    }
 
     if (level === "error") {
         console.error(line);

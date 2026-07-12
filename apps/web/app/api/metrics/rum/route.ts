@@ -16,12 +16,16 @@ export async function POST(req: NextRequest) {
         const duration = typeof (body as { duration?: unknown }).duration === "number"
             ? (body as { duration: number }).duration
             : undefined;
+        const timestamp = typeof (body as { timestamp?: unknown }).timestamp === "number"
+            && Number.isFinite((body as { timestamp: number }).timestamp)
+            ? (body as { timestamp: number }).timestamp
+            : undefined;
 
         logger.info({
             event: "rum.metric",
             name,
             durationMs: duration,
-            timestamp: (body as { timestamp?: unknown }).timestamp,
+            ...(timestamp !== undefined ? { timestamp } : {}),
         });
 
         return NextResponse.json({ ok: true }, { status: 202 });

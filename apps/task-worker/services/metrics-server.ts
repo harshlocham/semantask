@@ -4,6 +4,7 @@ import {
     prometheusContentType,
     renderPrometheusMetrics,
 } from "@semantask/observability/metrics";
+import { logExecution } from "./execution-logger.js";
 
 /**
  * Lightweight scrape server for the task-worker (no Express).
@@ -26,6 +27,15 @@ export function startWorkerMetricsServer(port = Number(process.env.METRICS_PORT 
 
         res.writeHead(404, { "Content-Type": "text/plain" });
         res.end("not found");
+    });
+
+    server.on("error", (error: NodeJS.ErrnoException) => {
+        logExecution("error", {
+            event: "metrics_server.bind_failed",
+            port,
+            code: error.code,
+            error: error.message,
+        });
     });
 
     server.listen(port, "0.0.0.0");

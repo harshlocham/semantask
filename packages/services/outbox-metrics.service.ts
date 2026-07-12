@@ -34,6 +34,7 @@ export async function refreshOutboxMetrics(): Promise<void> {
             OutboxEventModel.findOne({
                 topic,
                 status: { $in: ["pending", "failed"] },
+                availableAt: { $lte: new Date(now) },
             })
                 .sort({ createdAt: 1 })
                 .select({ createdAt: 1 })

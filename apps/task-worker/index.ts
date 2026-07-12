@@ -31,7 +31,9 @@ import { createInternalRequestHeaders } from "@semantask/types/utils/internal-br
 import {
     correlationIdFromPayload,
     ensureCorrelationId,
+    getActiveTraceparent,
     runWithObservabilityContextAsync,
+    runWithRemoteTraceparent,
     withSpan,
 } from "@semantask/observability";
 import { taskExecutionCounter } from "@semantask/observability/metrics";
@@ -329,9 +331,15 @@ function normalizeTaskExecutionRequestedPayload(payload: Record<string, unknown>
 }
 
 async function emitInternal(path: string, conversationId: string, payload: unknown) {
+    const headers = createInternalRequestHeaders("socket");
+    const traceparent = getActiveTraceparent();
+    if (traceparent) {
+        headers.set("traceparent", traceparent);
+    }
+
     const response = await fetch(`${internalBaseUrl}${path}`, {
         method: "POST",
-        headers: createInternalRequestHeaders("socket"),
+        headers,
         body: JSON.stringify({
             conversationId,
             payload,
@@ -1704,6 +1712,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 });
                 return outcome;
             } catch (error) {
+                taskExecutionCounter.inc({ outcome: "failed" });
                 const message = error instanceof Error ? error.message : "Task execution failed";
                 logExecution("warn", {
                     event: "execution.policy.false_auto_execute",
@@ -1867,7 +1876,11 @@ async function processOneEvent(event: {
                 ? "task.execution"
                 : `outbox.${event.topic}`;
 
-        return withSpan(spanName, {
+        const remoteTraceparent = typeof event.payload.traceparent === "string"
+            ? event.payload.traceparent
+            : undefined;
+
+        return runWithRemoteTraceparent(remoteTraceparent, () => withSpan(spanName, {
             "outbox.topic": event.topic,
             "outbox.dedupe_key": event.dedupeKey,
             "correlation.id": correlationId,
@@ -1998,7 +2011,7 @@ async function processOneEvent(event: {
         }
         throw error;
     }
-        });
+        }));
     });
 }
 
