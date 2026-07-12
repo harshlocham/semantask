@@ -205,7 +205,7 @@
 | **Effort** | L |
 | **Dependencies** | 2.1 |
 | **Risk level** | High |
-| **Acceptance criteria** | Threat model doc; injection test suite; participant validation for email/meeting |
+| **Acceptance criteria** | Threat model doc; injection test suite; participant validation for email/meeting ✓ |
 
 ### Milestone 3.2 — Tool RBAC V1
 
@@ -218,7 +218,7 @@
 | **Effort** | L |
 | **Dependencies** | 3.1 |
 | **Risk level** | High |
-| **Acceptance criteria** | Block without grant; audit on deny; admin grant/revoke |
+| **Acceptance criteria** | Block without grant; audit on deny; admin grant/revoke ✓ |
 
 ### Milestone 3.3 — Execution Audit Trail
 
@@ -231,7 +231,7 @@
 | **Effort** | M |
 | **Dependencies** | 3.2 |
 | **Risk level** | Medium |
-| **Acceptance criteria** | Every tool exec writes immutable audit row with actor, tool, params hash, external IDs |
+| **Acceptance criteria** | Every tool exec writes immutable audit row with actor, tool, params hash, external IDs ✓ |
 
 ### Milestone 3.4 — Internal Service Auth Hardening
 
@@ -244,7 +244,7 @@
 | **Effort** | M |
 | **Dependencies** | Phase 0 runbook |
 | **Risk level** | Medium |
-| **Acceptance criteria** | Worker secret cannot call socket-only endpoints; rotation runbook; zero-downtime rotation in staging |
+| **Acceptance criteria** | Worker secret cannot call socket-only endpoints; rotation runbook; zero-downtime rotation in staging ✓ |
 
 ---
 
