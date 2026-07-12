@@ -30,4 +30,4 @@ Phase 3 Security — prompt injection boundaries, tool RBAC, execution audit tra
 
 - Prompt guard and tool RBAC default to `off`; enable after staging monitor / grant seed
 - Legacy `INTERNAL_SECRET` still accepted on both audiences during the deprecation window
-- Worker secret alone cannot authorize web `/api/internal/*` once per-service secrets are configured
+- When distinct secrets are active (no legacy fallback), the socket secret (`INTERNAL_SECRET_SOCKET`) alone cannot authorize web `/api/internal/*`

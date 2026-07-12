@@ -91,6 +91,9 @@ export default function AdminToolGrantsPage() {
     }
 
     async function handleRevoke(grantId: string) {
+        if (!window.confirm("Revoke this tool grant? The user will lose access until re-granted.")) {
+            return;
+        }
         setStatus(null);
         setError(null);
         try {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import {
     createInternalRequestHeaders,
     getInternalSecretForTarget,
@@ -7,12 +7,32 @@ import {
     INTERNAL_SECRET_HEADER,
 } from "@semantask/types/utils/internal-bridge-auth";
 
+const secretKeys = [
+    "INTERNAL_SECRET",
+    "INTERNAL_SECRET_SOCKET",
+    "INTERNAL_SECRET_WORKER",
+    "INTERNAL_SECRET_SOCKET_PREVIOUS",
+    "INTERNAL_SECRET_WORKER_PREVIOUS",
+] as const;
+
+const originalEnv = Object.fromEntries(
+    secretKeys.map((key) => [key, process.env[key]])
+);
+
+beforeEach(() => {
+    for (const key of secretKeys) {
+        delete process.env[key];
+    }
+});
+
 afterEach(() => {
-    delete process.env.INTERNAL_SECRET;
-    delete process.env.INTERNAL_SECRET_SOCKET;
-    delete process.env.INTERNAL_SECRET_WORKER;
-    delete process.env.INTERNAL_SECRET_SOCKET_PREVIOUS;
-    delete process.env.INTERNAL_SECRET_WORKER_PREVIOUS;
+    for (const key of secretKeys) {
+        if (originalEnv[key] === undefined) {
+            delete process.env[key];
+        } else {
+            process.env[key] = originalEnv[key];
+        }
+    }
 });
 
 test("createInternalRequestHeaders defaults to socket secret", () => {

@@ -2196,7 +2196,11 @@ Reply to confirm receipt or contact support if you have questions.
         ).exec();
     }
 
-    private rankStepTools(step: PlanStepLike, longTermMemory: Array<Record<string, unknown>>) {
+    private async rankStepTools(
+        task: TaskDocumentLike,
+        step: PlanStepLike,
+        longTermMemory: Array<Record<string, unknown>>
+    ) {
         const historyByTool = new Map<string, number[]>();
 
         for (const item of longTermMemory) {
@@ -2209,13 +2213,17 @@ Reply to confirm receipt or contact support if you have questions.
             historyByTool.set(toolName, list);
         }
 
-        const candidates = step.toolCandidates.length > 0
+        const allowedTools = await this.listToolsForUser(task);
+        const allowedNames = new Set(allowedTools.map((tool) => tool.name));
+
+        const candidates = (step.toolCandidates.length > 0
             ? step.toolCandidates
-            : this.toolRegistry.listForLLM().map((tool) => ({
+            : allowedTools.map((tool) => ({
                 toolName: tool.name,
                 confidence: 0.5,
                 riskLevel: "medium" as const,
-            }));
+            }))
+        ).filter((candidate) => allowedNames.has(candidate.toolName) || candidate.toolName === "none");
 
         const inputs: ToolRankingInput[] = candidates
             .filter((candidate) => candidate.toolName !== "none")
@@ -2485,7 +2493,7 @@ Reply to confirm receipt or contact support if you have questions.
                         limit: 10,
                     });
 
-                    const rankedTools = this.rankStepTools(step, memory.longTerm as Array<Record<string, unknown>>);
+                    const rankedTools = await this.rankStepTools(latestTask, step, memory.longTerm as Array<Record<string, unknown>>);
 
                     let decision: NextActionDecision;
                     try {
@@ -3122,7 +3130,8 @@ Reply to confirm receipt or contact support if you have questions.
     }
 
     private async guardIdempotentToolExecution(
-        payload: ExecutionActionRecord
+        payload: ExecutionActionRecord,
+        actorId?: string | null
     ): Promise<{ proceed: boolean; cached?: ActionExecutionResult }> {
         if (!payload.idempotencyKey || mongoose.connection.readyState !== 1) {
             return { proceed: true };
@@ -3161,7 +3170,7 @@ Reply to confirm receipt or contact support if you have questions.
                 taskId: payload.taskId,
                 conversationId: payload.conversationId,
                 actorType: "agent",
-                actorId: null,
+                actorId: actorId ?? null,
                 actionType: this.mapToolNameToActionType(payload.toolName),
                 toolName: payload.toolName,
                 messageId: payload.messageId,
@@ -3177,7 +3186,7 @@ Reply to confirm receipt or contact support if you have questions.
             await appendExecutionAudit({
                 taskId: payload.taskId,
                 conversationId: payload.conversationId,
-                actorId: null,
+                actorId: actorId ?? null,
                 runId: this.currentRunId,
                 toolName: payload.toolName,
                 action: "started",
@@ -3187,7 +3196,7 @@ Reply to confirm receipt or contact support if you have questions.
         } catch (error) {
             const maybeMongo = error as { code?: number };
             if (maybeMongo?.code === 11000) {
-                return this.guardIdempotentToolExecution(payload);
+                return this.guardIdempotentToolExecution(payload, actorId);
             }
             throw error;
         }
@@ -3226,18 +3235,6 @@ Reply to confirm receipt or contact support if you have questions.
     }
 
     private async execute(payload: ExecutionActionRecord, options?: ExecutionOptions): Promise<ActionExecutionResult> {
-        const idempotencyGuard = await this.guardIdempotentToolExecution(payload);
-        if (!idempotencyGuard.proceed && idempotencyGuard.cached) {
-            logExecution("info", {
-                event: "tool.idempotent_replay",
-                workerId: this.workerId,
-                runId: this.currentRunId ?? undefined,
-                taskId: payload.taskId,
-                toolName: payload.toolName,
-            });
-            return idempotencyGuard.cached;
-        }
-
         const tool = this.toolRegistry.get(payload.toolName);
         const runId = this.getCurrentRunId();
         const toolTimeoutMs = this.getToolTimeoutMs();
@@ -3265,9 +3262,19 @@ Reply to confirm receipt or contact support if you have questions.
         try {
             await assertToolGrant(options?.userId ?? "", payload.toolName, payload.conversationId);
         } catch (error) {
-            const message = error instanceof AuthorizationError
-                ? error.message
-                : (error instanceof Error ? error.message : "Tool grant denied");
+            if (!(error instanceof AuthorizationError)) {
+                logExecution("error", {
+                    event: "tool_grant.check_failed",
+                    runId,
+                    taskId: payload.taskId,
+                    toolName: payload.toolName,
+                    userId: options?.userId ?? null,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                throw error;
+            }
+
+            const message = error.message;
             logExecution("warn", {
                 event: "tool_grant.deny",
                 runId,
@@ -3295,6 +3302,18 @@ Reply to confirm receipt or contact support if you have questions.
                 },
                 error: message,
             };
+        }
+
+        const idempotencyGuard = await this.guardIdempotentToolExecution(payload, options?.userId);
+        if (!idempotencyGuard.proceed && idempotencyGuard.cached) {
+            logExecution("info", {
+                event: "tool.idempotent_replay",
+                workerId: this.workerId,
+                runId: this.currentRunId ?? undefined,
+                taskId: payload.taskId,
+                toolName: payload.toolName,
+            });
+            return idempotencyGuard.cached;
         }
 
         try {
@@ -3370,6 +3389,12 @@ Reply to confirm receipt or contact support if you have questions.
                         parameters: resolvedParams,
                         decision: "PROMPT_GUARD_BLOCKED",
                         reason: guardValidation.reasons.join(" "),
+                    });
+                    await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, {
+                        summary: `Prompt guard blocked ${payload.toolName}.`,
+                        adapterSuccess: false,
+                        evidence: { toolName: payload.toolName },
+                        error: "prompt_guard_blocked",
                     });
                     return {
                         summary: `Prompt guard blocked ${payload.toolName}.`,
@@ -3450,6 +3475,17 @@ Reply to confirm receipt or contact support if you have questions.
         } catch (error) {
             const message = error instanceof Error ? error.message : "unknown tool error";
             if (this.currentExecutionSignal?.aborted || /abort|timed out|lease lost/i.test(message)) {
+                await appendExecutionAudit({
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actorId: options?.userId ?? null,
+                    runId,
+                    toolName: tool.name,
+                    action: "failed",
+                    parameters: payload.parameters ?? {},
+                    decision: "aborted",
+                    reason: message,
+                });
                 throw new Error(message.includes("timed out") ? message : "Execution aborted.");
             }
             console.warn("agent-runner step:tool-failure", {
@@ -3461,7 +3497,7 @@ Reply to confirm receipt or contact support if you have questions.
                 idempotencyKey: payload.idempotencyKey ?? null,
             });
 
-            return {
+            const failedResult: ActionExecutionResult = {
                 summary: `Tool ${tool.name} failed.`,
                 adapterSuccess: false,
                 evidence: {
@@ -3476,6 +3512,21 @@ Reply to confirm receipt or contact support if you have questions.
                 },
                 error: message,
             };
+
+            await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, failedResult);
+            await appendExecutionAudit({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                actorId: options?.userId ?? null,
+                runId,
+                toolName: tool.name,
+                action: "failed",
+                parameters: payload.parameters ?? {},
+                decision: "failed",
+                reason: message,
+            });
+
+            return failedResult;
         }
     }
 

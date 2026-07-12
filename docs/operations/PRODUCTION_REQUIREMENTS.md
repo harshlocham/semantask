@@ -194,10 +194,14 @@ Deploy script: `scripts/ci/deploy/vps-task-worker.sh`.
 |-----------|--------------|-----------------|-------------------|
 | `MONGODB_URI` | Yes | No (web handles DB) | Yes |
 | `REDIS_URL` | Recommended | **Required** for multi-instance | **Required** |
-| `INTERNAL_SECRET` | Yes | Yes | Yes |
+| `INTERNAL_SECRET_SOCKET` | Yes (caller → socket) | Accepts inbound | Yes (caller → socket) |
+| `INTERNAL_SECRET_WORKER` | Accepts inbound + middleware | Yes (caller → web) | No |
+| `INTERNAL_SECRET` (legacy) | Transitional fallback | Transitional fallback | Transitional fallback |
 | `SOCKET_SERVER_URL` / `WEB_SERVER_URL` | Yes | Yes | Yes (`SOCKET_SERVER_URL` for emits) |
 | `LLM_*`, tool API keys | Optional on web | No | **Required** for agent runs |
 | `ALLOWED_EMAIL_DOMAINS` | Optional | No | **Required** if email tools used |
+
+Prefer distinct `INTERNAL_SECRET_SOCKET` / `INTERNAL_SECRET_WORKER`. Legacy `INTERNAL_SECRET` remains accepted on both audiences during the deprecation window — remove it after rotation (see [INTERNAL_SECRET_ROTATION.md](./INTERNAL_SECRET_ROTATION.md)).
 
 ---
 
@@ -208,8 +212,9 @@ Deploy script: `scripts/ci/deploy/vps-task-worker.sh`.
 | Standalone Mongo + task worker | Retries promote via non-transactional fallback (weaker atomicity); enable `TASK_RETRY_SHADOW_EMIT=1` to align shadow FSM on promote |
 | No Redis on socket (multi pod) | Clients on different pods miss realtime events |
 | No Redis on worker | Duplicate outbox processing possible under race |
-| Mismatched `INTERNAL_SECRET` | Task updates never reach clients; 401 on internal routes |
-| Missing `INTERNAL_SECRET` (prod worker) | Worker refuses to start |
+| Mismatched `INTERNAL_SECRET_SOCKET` / callers vs socket | Task updates never reach clients; 401 on socket `/internal/*` |
+| Mismatched `INTERNAL_SECRET_WORKER` / callers vs web | Socket authz / step-up bridges fail; 401 on web `/api/internal/*` |
+| Missing socket secret (prod worker) | Worker refuses to start (`INTERNAL_SECRET_SOCKET` or legacy `INTERNAL_SECRET`) |
 | Empty email allowlist + email tool | Sends to arbitrary domains may auto-execute |
 | `ORIGIN` mismatch | Socket connection rejected |
 

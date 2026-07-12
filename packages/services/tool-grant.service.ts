@@ -159,19 +159,51 @@ export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
     });
 
     if (revoked) {
-        revoked.revokedAt = null;
-        revoked.grantedBy = new Types.ObjectId(input.grantedBy);
-        await revoked.save();
-        return revoked;
+        try {
+            revoked.revokedAt = null;
+            revoked.grantedBy = new Types.ObjectId(input.grantedBy);
+            await revoked.save();
+            return revoked;
+        } catch (error) {
+            const maybeMongo = error as { code?: number };
+            if (maybeMongo?.code === 11000) {
+                const raced = await ToolGrantModel.findOne({
+                    userId: new Types.ObjectId(input.userId),
+                    toolName: input.toolName,
+                    conversationId,
+                    revokedAt: null,
+                });
+                if (raced) {
+                    return raced;
+                }
+            }
+            throw error;
+        }
     }
 
-    return ToolGrantModel.create({
-        userId: new Types.ObjectId(input.userId),
-        toolName: input.toolName,
-        conversationId,
-        grantedBy: new Types.ObjectId(input.grantedBy),
-        revokedAt: null,
-    });
+    try {
+        return await ToolGrantModel.create({
+            userId: new Types.ObjectId(input.userId),
+            toolName: input.toolName,
+            conversationId,
+            grantedBy: new Types.ObjectId(input.grantedBy),
+            revokedAt: null,
+        });
+    } catch (error) {
+        const maybeMongo = error as { code?: number };
+        if (maybeMongo?.code === 11000) {
+            const raced = await ToolGrantModel.findOne({
+                userId: new Types.ObjectId(input.userId),
+                toolName: input.toolName,
+                conversationId,
+                revokedAt: null,
+            });
+            if (raced) {
+                return raced;
+            }
+        }
+        throw error;
+    }
 }
 
 export async function revokeTool(grantId: string): Promise<IToolGrant | null> {

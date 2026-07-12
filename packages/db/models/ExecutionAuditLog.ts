@@ -47,10 +47,38 @@ const ExecutionAuditLogSchema = new Schema<IExecutionAuditLog>(
     {
         timestamps: { createdAt: true, updatedAt: false },
         versionKey: false,
-        // Append-only: disallow updates via mongoose by default is not enforced;
-        // writers must only use insert/create.
     }
 );
+
+ExecutionAuditLogSchema.pre("updateOne", function () {
+    throw new Error("ExecutionAuditLog is append-only; updates are not allowed");
+});
+ExecutionAuditLogSchema.pre("updateMany", function () {
+    throw new Error("ExecutionAuditLog is append-only; updates are not allowed");
+});
+ExecutionAuditLogSchema.pre("findOneAndUpdate", function () {
+    throw new Error("ExecutionAuditLog is append-only; updates are not allowed");
+});
+ExecutionAuditLogSchema.pre("replaceOne", function () {
+    throw new Error("ExecutionAuditLog is append-only; updates are not allowed");
+});
+ExecutionAuditLogSchema.pre("deleteOne", function () {
+    throw new Error("ExecutionAuditLog is append-only; deletes are not allowed");
+});
+ExecutionAuditLogSchema.pre("deleteMany", function () {
+    throw new Error("ExecutionAuditLog is append-only; deletes are not allowed");
+});
+ExecutionAuditLogSchema.pre("findOneAndDelete", function () {
+    throw new Error("ExecutionAuditLog is append-only; deletes are not allowed");
+});
+
+ExecutionAuditLogSchema.pre("save", function (next) {
+    if (!this.isNew) {
+        next(new Error("ExecutionAuditLog is append-only; document updates are not allowed"));
+        return;
+    }
+    next();
+});
 
 ExecutionAuditLogSchema.index({ taskId: 1, createdAt: -1 }, { name: "idx_execution_audit_task_created" });
 ExecutionAuditLogSchema.index({ toolName: 1, createdAt: -1 }, { name: "idx_execution_audit_tool_created" });

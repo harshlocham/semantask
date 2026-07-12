@@ -28,8 +28,15 @@ export function getPromptGuardMode(): PromptGuardMode {
     return "off";
 }
 
+/** Neutralize fence delimiter strings inside untrusted text so they cannot close the fence early. */
+export function sanitizeUntrustedContent(text: string): string {
+    return text
+        .replace(/<\/?\s*UNTRUSTED_USER_CONTENT\s*>/gi, "[REDACTED_FENCE_TAG]");
+}
+
 export function fenceUntrustedContent(text: string): string {
-    const safe = typeof text === "string" ? text : String(text ?? "");
+    const raw = typeof text === "string" ? text : String(text ?? "");
+    const safe = sanitizeUntrustedContent(raw);
     return `${UNTRUSTED_OPEN}\n${safe}\n${UNTRUSTED_CLOSE}`;
 }
 
@@ -66,10 +73,22 @@ function normalizeEmail(value: string): string {
     return value.trim().toLowerCase();
 }
 
+/** Redact local-part of an email for logs/audit reasons (keep domain for triage). */
+export function redactEmail(email: string): string {
+    const normalized = normalizeEmail(email);
+    const at = normalized.lastIndexOf("@");
+    if (at <= 0) {
+        return "[redacted]";
+    }
+    return `***@${normalized.slice(at + 1)}`;
+}
+
 /**
  * Pure validation: email/meeting recipients must belong to conversation participants
  * or (for send_email) the task owner's known contacts. Non-email tokens (names) are
  * allowed through for downstream contact resolution.
+ *
+ * Reasons never include raw email local-parts (PII-safe for logs/audit).
  */
 export function validateToolArgsAgainstContext(input: ToolArgsContext): PromptGuardValidationResult {
     const reasons: string[] = [];
@@ -83,7 +102,9 @@ export function validateToolArgsAgainstContext(input: ToolArgsContext): PromptGu
 
         for (const email of emailRecipients) {
             if (!allowedForEmail.has(email)) {
-                reasons.push(`Email recipient "${email}" is not a conversation participant or known contact.`);
+                reasons.push(
+                    `Email recipient ${redactEmail(email)} is not a conversation participant or known contact.`
+                );
             }
         }
     }
@@ -97,7 +118,9 @@ export function validateToolArgsAgainstContext(input: ToolArgsContext): PromptGu
 
         for (const email of emailAttendees) {
             if (!participantSet.has(email)) {
-                reasons.push(`Meeting attendee "${email}" is not a conversation participant.`);
+                reasons.push(
+                    `Meeting attendee ${redactEmail(email)} is not a conversation participant.`
+                );
             }
         }
     }

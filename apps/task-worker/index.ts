@@ -1306,10 +1306,32 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
         try {
             await assertToolGrant(ownerUserId, payload.actionType, payload.conversationId);
         } catch (error) {
-            const denied = error instanceof AuthorizationError;
-            const denyReason = denied
-                ? error.message
-                : (error instanceof Error ? error.message : "Tool grant check failed.");
+            if (!(error instanceof AuthorizationError)) {
+                logExecution("error", {
+                    event: "tool_grant.check_failed",
+                    workerId: WORKER_ID,
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actionType: payload.actionType,
+                    userId: ownerUserId,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                await appendExecutionAudit({
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actorId: ownerUserId,
+                    runId: provisionalRun,
+                    toolName: payload.actionType,
+                    action: "denied",
+                    parameters: payload.parameters ?? {},
+                    decision: "TOOL_GRANT_CHECK_ERROR",
+                    reason: error instanceof Error ? error.message : "Tool grant check failed",
+                });
+                // Fail-closed but retryable — do not permanently fail the task.
+                throw error;
+            }
+
+            const denyReason = error.message;
 
             logExecution("warn", {
                 event: "tool_grant.deny",
@@ -1430,6 +1452,18 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             : (policyDecision.reasons.join(" ") || "Execution blocked by policy.");
 
         // reuse hoisted safePolicyDecision
+
+        await appendExecutionAudit({
+            taskId: payload.taskId,
+            conversationId: payload.conversationId,
+            actorId: ownerUserId,
+            runId: provisionalRun,
+            toolName: payload.actionType,
+            action: "denied",
+            parameters: payload.parameters ?? {},
+            decision: unsafe ? "POLICY_UNSAFE" : "POLICY_BLOCKED",
+            reason: blockedReason,
+        });
 
         await updateTaskLifecycle({
             taskId: payload.taskId,
