@@ -69,10 +69,10 @@ export function applyLifecycleProjection(
                 source,
                 workerId: options?.workerId,
                 runId: options?.runId,
-                lifecycleState: currentLifecycle,
+                lifecycleState: currentLifecycle ?? undefined,
                 projectedLifecycleState: projectedLifecycle,
                 executionStateKind: executionState.kind,
-                status: currentStatus,
+                status: currentStatus ?? undefined,
                 projectedStatus,
             });
         }
