@@ -23,7 +23,12 @@ export function runWithRemoteTraceparent<T>(
     }
 
     const [, traceId, spanId, flagsHex] = parts;
-    if (!/^[0-9a-f]{32}$/i.test(traceId) || !/^[0-9a-f]{16}$/i.test(spanId)) {
+    if (
+        !/^[0-9a-f]{32}$/i.test(traceId)
+        || !/^[0-9a-f]{16}$/i.test(spanId)
+        || /^0+$/i.test(traceId)
+        || /^0+$/i.test(spanId)
+    ) {
         return fn();
     }
 
