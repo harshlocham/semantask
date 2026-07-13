@@ -59,9 +59,10 @@ export function applyLifecycleProjection(
     const projectedLifecycle = deriveLegacyLifecycleState(executionState);
     const projectedStatus = deriveLegacyTaskStatus(executionState);
     const currentLifecycle = typeof task.lifecycleState === "string" ? task.lifecycleState : null;
+    const currentStatus = typeof task.status === "string" ? task.status : null;
 
     if (mode === "shadow") {
-        if (currentLifecycle && currentLifecycle !== projectedLifecycle) {
+        if ((currentLifecycle && currentLifecycle !== projectedLifecycle) || (currentStatus && currentStatus !== projectedStatus)) {
             logExecution("warn", {
                 event: "state_projection_shadow",
                 taskId: task._id.toString(),
@@ -71,6 +72,7 @@ export function applyLifecycleProjection(
                 lifecycleState: currentLifecycle,
                 projectedLifecycleState: projectedLifecycle,
                 executionStateKind: executionState.kind,
+                status: currentStatus,
                 projectedStatus,
             });
         }
