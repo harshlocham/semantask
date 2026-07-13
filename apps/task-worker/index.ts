@@ -28,6 +28,20 @@ import { assertToolGrant, isHighRiskToolName } from "@semantask/services/tool-gr
 import { AuthorizationError } from "@semantask/services/authorization.service";
 import { appendExecutionAudit } from "@semantask/services/execution-audit.service";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
+import {
+    correlationIdFromPayload,
+    ensureCorrelationId,
+    getActiveTraceparent,
+    runWithObservabilityContextAsync,
+    runWithRemoteTraceparent,
+    withSpan,
+} from "@semantask/observability";
+import { taskExecutionCounter } from "@semantask/observability/metrics";
+import { refreshOutboxMetrics } from "@semantask/services/outbox-metrics.service";
+import { bootstrapWorkerObservability } from "./services/observability-bootstrap.js";
+import { startWorkerMetricsServer } from "./services/metrics-server.js";
+
+bootstrapWorkerObservability();
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const visitedEnvPaths = new Set<string>();
@@ -317,9 +331,15 @@ function normalizeTaskExecutionRequestedPayload(payload: Record<string, unknown>
 }
 
 async function emitInternal(path: string, conversationId: string, payload: unknown) {
+    const headers = createInternalRequestHeaders("socket");
+    const traceparent = getActiveTraceparent();
+    if (traceparent) {
+        headers.set("traceparent", traceparent);
+    }
+
     const response = await fetch(`${internalBaseUrl}${path}`, {
         method: "POST",
-        headers: createInternalRequestHeaders("socket"),
+        headers,
         body: JSON.stringify({
             conversationId,
             payload,
@@ -1512,6 +1532,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 },
             },
         });
+        taskExecutionCounter.inc({ outcome: "blocked" });
         return;
     }
 
@@ -1605,6 +1626,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             step: "approval_pending",
             progress: 20,
         });
+        taskExecutionCounter.inc({ outcome: "approval" });
         return;
     }
 
@@ -1636,12 +1658,14 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             });
 
             try {
+                taskExecutionCounter.inc({ outcome: "auto" });
                 const outcome = await agentRunner.runTask(payload.taskId, {
                     runId,
                     workerId: WORKER_ID,
                     leaseHeld: true,
                     abortSignal,
                 });
+                taskExecutionCounter.inc({ outcome: outcome.completed ? "succeeded" : "failed" });
                 if (!outcome.completed) {
                     logExecution("warn", {
                         event: "execution.policy.false_auto_execute",
@@ -1688,6 +1712,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 });
                 return outcome;
             } catch (error) {
+                taskExecutionCounter.inc({ outcome: "failed" });
                 const message = error instanceof Error ? error.message : "Task execution failed";
                 logExecution("warn", {
                     event: "execution.policy.false_auto_execute",
@@ -1840,6 +1865,27 @@ async function processOneEvent(event: {
     payload: Record<string, unknown>;
     attempts: number;
 }) {
+    const correlationId = ensureCorrelationId(correlationIdFromPayload(event.payload));
+    const taskId = typeof event.payload.taskId === "string" ? event.payload.taskId : undefined;
+    const runId = typeof event.payload.runId === "string" ? event.payload.runId : undefined;
+
+    return runWithObservabilityContextAsync({ correlationId, taskId, runId }, async () => {
+        const spanName = event.topic === "message.created"
+            ? "message.created"
+            : event.topic === "task.execution.requested" || event.topic === "task.execution.approved"
+                ? "task.execution"
+                : `outbox.${event.topic}`;
+
+        const remoteTraceparent = typeof event.payload.traceparent === "string"
+            ? event.payload.traceparent
+            : undefined;
+
+        return runWithRemoteTraceparent(remoteTraceparent, () => withSpan(spanName, {
+            "outbox.topic": event.topic,
+            "outbox.dedupe_key": event.dedupeKey,
+            "correlation.id": correlationId,
+            ...(taskId ? { "task.id": taskId } : {}),
+        }, async () => {
     const { complete } = getOutboxFns();
     const eventId = event._id.toString();
     const processedKey = `task-worker:processed:${event.dedupeKey}`;
@@ -1965,6 +2011,8 @@ async function processOneEvent(event: {
         }
         throw error;
     }
+        }));
+    });
 }
 
 async function run() {
@@ -1985,6 +2033,7 @@ async function run() {
         await redis.connect();
     }
 
+    startWorkerMetricsServer();
     startRetryScheduler(WORKER_ID);
     startStuckTaskDetector(WORKER_ID, {
         onTaskUpdated: async (task, conversationId) => {
@@ -1995,8 +2044,19 @@ async function run() {
         },
     });
 
+    let lastMetricsRefreshAt = 0;
+
     // eslint-disable-next-line no-constant-condition
     while (true) {
+        if (Date.now() - lastMetricsRefreshAt > 15_000) {
+            try {
+                await refreshOutboxMetrics();
+            } catch {
+                // metrics refresh is best-effort
+            }
+            lastMetricsRefreshAt = Date.now();
+        }
+
         const events = await claim(WORKER_ID, BATCH_SIZE);
 
         if (events.length === 0) {

@@ -1,6 +1,7 @@
 import TaskModel, { type ITask } from "@semantask/db/models/Task";
 import * as dbModule from "@semantask/db";
 import type { TaskExecutionUpdatedPayload, TaskResult } from "@semantask/types";
+import { taskStuckDetectedCounter } from "@semantask/observability/metrics";
 import { DEFAULT_LEASE_MS, getLeaseRenewalIntervalMs } from "./task-lease.js";
 import { scheduleTaskRetry } from "./schedule-retry.js";
 import { logExecution } from "./execution-logger.js";
@@ -95,6 +96,7 @@ export async function remediateStuckTask(
     });
 
     if (mode === "log") {
+        taskStuckDetectedCounter.inc({ remediation: "logged" });
         return "logged";
     }
 
@@ -159,6 +161,7 @@ export async function remediateStuckTask(
             progress: 100,
         });
 
+        taskStuckDetectedCounter.inc({ remediation: "failed" });
         return "failed";
     }
 
@@ -220,6 +223,7 @@ export async function remediateStuckTask(
         }, conversationId);
     }
 
+    taskStuckDetectedCounter.inc({ remediation: outcome });
     return outcome;
 }
 

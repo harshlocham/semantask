@@ -10,7 +10,19 @@ if (existsSync(rootEnvPath)) {
 }
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@semantask/auth", "@semantask/services", "@semantask/db"],
+  // Use prebuilt dist for observability (avoids webpack resolving .js ESM paths in TS sources
+  // and keeps @opentelemetry/sdk-node out of the Next compile graph).
+  transpilePackages: ["@semantask/auth", "@semantask/services", "@semantask/db", "@semantask/types"],
+  serverExternalPackages: [
+    "@semantask/observability",
+    "prom-client",
+    "@opentelemetry/sdk-trace-node",
+    "@opentelemetry/sdk-trace-base",
+    "@opentelemetry/exporter-trace-otlp-http",
+    "@opentelemetry/resources",
+    "@opentelemetry/api",
+    "@opentelemetry/semantic-conventions",
+  ],
   images: {
     domains: ["lh3.googleusercontent.com", "ik.imagekit.io"],
     remotePatterns: [

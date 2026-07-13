@@ -12,6 +12,7 @@
     },
     "dependencies": {
         "@semantask/db": "workspace:*",
+        "@semantask/observability": "workspace:*",
         "@semantask/services": "workspace:*",
         "@semantask/types": "workspace:*",
         "dotenv": "^17.2.3",

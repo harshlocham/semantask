@@ -1,0 +1,36 @@
+groups:
+  - name: semantask-slo
+    rules:
+      - alert: OutboxBacklogHigh
+        expr: sum(outbox_pending) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox backlog is high
+          description: Pending/failed outbox events have exceeded 100 for 5 minutes.
+
+      - alert: StuckTasksDetected
+        expr: increase(task_stuck_detected_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Stuck tasks detected
+          description: One or more stuck task remediations fired over the last 10 minutes.
+
+      - alert: TaskFailureRateHigh
+        expr: |
+          (
+            sum(rate(task_execution_total{outcome="failed"}[15m]))
+            /
+            clamp_min(
+              sum(rate(task_execution_total{outcome=~"succeeded|failed"}[15m])),
+              1e-9
+            )
+          ) > 0.10
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Task failure rate above 10%
+          description: Failed task executions exceed 10% of terminal outcomes over 15 minutes.

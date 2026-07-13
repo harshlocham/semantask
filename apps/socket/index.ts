@@ -12,11 +12,20 @@ import {
     assertInternalAudienceConfigured,
     hasValidInternalSecret,
     INTERNAL_SECRET_HEADER,
+    setCorrelationIdResolver,
 } from "@semantask/types/utils/internal-bridge-auth";
+import {
+    ensureDefaultMetrics,
+    getCorrelationId,
+    prometheusContentType,
+    renderPrometheusMetrics,
+} from "@semantask/observability";
+import { startTracing } from "@semantask/observability/tracing";
 import {
     isOriginAllowed,
     parseCommaSeparatedValues,
 } from "./server/socket/utils/url.js";
+import { correlationMiddleware, logSocketEvent } from "./server/socket/observability.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const visitedEnvPaths = new Set<string>();
@@ -52,12 +61,31 @@ app.use(cors({
 }));
 app.use(express.json());
 
+ensureDefaultMetrics("socket");
+startTracing("socket");
+setCorrelationIdResolver(() => getCorrelationId());
+app.use(correlationMiddleware);
+
 app.get("/health", (_req, res) => {
     return res.status(200).json({
         status: "ok",
         service: "socket",
         uptime: Math.floor(process.uptime()),
     });
+});
+
+app.get("/metrics", async (_req, res) => {
+    try {
+        const body = await renderPrometheusMetrics();
+        res.setHeader("Content-Type", prometheusContentType());
+        return res.status(200).send(body);
+    } catch (error) {
+        logSocketEvent("error", {
+            event: "socket.metrics.failed",
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return res.status(500).send("metrics unavailable");
+    }
 });
 
 assertInternalAudienceConfigured("socket");
@@ -196,6 +224,11 @@ app.post("/internal/task-execution-updated", (req, res) => {
         return res.status(400).json({ error: "Invalid payload" });
     }
 
+    logSocketEvent("info", {
+        event: "socket.fanout.task_execution_updated",
+        conversationId,
+        taskId: typeof payload.taskId === "string" ? payload.taskId : undefined,
+    });
     emitToConversation(conversationId, SocketEvents.TASK_EXECUTION_UPDATED, payload);
     return res.json({ success: true });
 });
@@ -207,11 +240,16 @@ app.post("/internal/message-semantic-updated", (req, res) => {
         return res.status(400).json({ error: "Invalid payload" });
     }
 
+    logSocketEvent("info", {
+        event: "socket.fanout.message_semantic_updated",
+        conversationId,
+        messageId: typeof payload.messageId === "string" ? payload.messageId : undefined,
+    });
     emitToConversation(conversationId, SocketEvents.MESSAGE_SEMANTIC_UPDATED, payload);
     return res.json({ success: true });
 });
 
 const port = parseInt(process.env.PORT || '3001', 10);
 server.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Server running on http://0.0.0.0:${port}`);
+    logSocketEvent("info", { event: "socket.listening", port });
 });

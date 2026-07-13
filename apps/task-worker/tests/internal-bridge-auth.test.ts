@@ -5,6 +5,8 @@ import {
     getInternalSecretForTarget,
     hasValidInternalSecret,
     INTERNAL_SECRET_HEADER,
+    CORRELATION_ID_HEADER,
+    setCorrelationIdResolver,
 } from "@semantask/types/utils/internal-bridge-auth";
 
 const secretKeys = [
@@ -26,6 +28,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    setCorrelationIdResolver(null);
     for (const key of secretKeys) {
         if (originalEnv[key] === undefined) {
             delete process.env[key];
@@ -33,6 +36,14 @@ afterEach(() => {
             process.env[key] = originalEnv[key];
         }
     }
+});
+
+test("createInternalRequestHeaders includes correlation id from resolver", () => {
+    process.env.INTERNAL_SECRET_SOCKET = "socket-secret";
+    setCorrelationIdResolver(() => "corr-test-123");
+    const headers = createInternalRequestHeaders();
+    assert.equal(headers.get(CORRELATION_ID_HEADER), "corr-test-123");
+    setCorrelationIdResolver(null);
 });
 
 test("createInternalRequestHeaders defaults to socket secret", () => {

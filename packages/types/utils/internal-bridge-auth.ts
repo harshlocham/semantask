@@ -1,8 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 
 export const INTERNAL_SECRET_HEADER = "x-internal-secret";
+export const CORRELATION_ID_HEADER = "x-correlation-id";
 
 export type InternalBridgeTarget = "socket" | "web";
+
+let correlationIdResolver: (() => string | undefined) | null = null;
+
+/** Optional hook so apps can inject ALS-backed correlation without types→observability coupling. */
+export function setCorrelationIdResolver(resolver: (() => string | undefined) | null): void {
+    correlationIdResolver = resolver;
+}
 
 function readEnv(...keys: string[]): string | undefined {
     for (const key of keys) {
@@ -85,6 +93,12 @@ export function createInternalRequestHeaders(
     const headers = new Headers(init);
     headers.set("Content-Type", "application/json");
     headers.set(INTERNAL_SECRET_HEADER, getInternalSecretForTarget(target));
+    if (!headers.get(CORRELATION_ID_HEADER)) {
+        const correlationId = correlationIdResolver?.();
+        if (correlationId) {
+            headers.set(CORRELATION_ID_HEADER, correlationId);
+        }
+    }
     return headers;
 }
 

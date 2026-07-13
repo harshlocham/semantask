@@ -1,0 +1,54 @@
+{
+    "name": "@semantask/observability",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.build.json",
+        "typecheck": "tsc --noEmit"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./logger": {
+            "types": "./dist/logger.d.ts",
+            "import": "./dist/logger.js"
+        },
+        "./context": {
+            "types": "./dist/context.d.ts",
+            "import": "./dist/context.js"
+        },
+        "./metrics": {
+            "types": "./dist/metrics.d.ts",
+            "import": "./dist/metrics.js"
+        },
+        "./spans": {
+            "types": "./dist/spans.d.ts",
+            "import": "./dist/spans.js"
+        },
+        "./tracing": {
+            "types": "./dist/tracing.d.ts",
+            "import": "./dist/tracing.js"
+        }
+    },
+    "dependencies": {
+        "@opentelemetry/api": "^1.9.0",
+        "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
+        "@opentelemetry/resources": "^1.30.0",
+        "@opentelemetry/sdk-trace-base": "^1.30.0",
+        "@opentelemetry/sdk-trace-node": "^1.30.0",
+        "@opentelemetry/semantic-conventions": "^1.28.0",
+        "prom-client": "^15.1.3"
+    },
+    "devDependencies": {
+        "@types/node": "^20",
+        "typescript": "^5.9.3"
+    }
+}
