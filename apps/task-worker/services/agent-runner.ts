@@ -19,6 +19,7 @@ import { scheduleTaskRetry } from "./schedule-retry.js";
 import { logExecution } from "./execution-logger.js";
 import { withSpan } from "@semantask/observability";
 import { maybeLogTaskStateDivergence } from "./state-divergence-check.js";
+import { applyLifecycleProjection } from "./state-projection.js";
 import { finalizeTaskCancellation, isTaskCancellationRequested } from "./task-cancellation.js";
 import { assertTransition } from "./task-state-machine.js";
 import { rankTools, type ToolRankingInput } from "./tool-ranking.js";
@@ -1003,6 +1004,10 @@ Reply to confirm receipt or contact support if you have questions.
 
         task.executionState = result.to;
         task.stateHistory = appendShadowHistory(task.stateHistory, result.historyEntry);
+        applyLifecycleProjection(task, "persistShadowExecutionState", {
+            workerId: this.workerId ?? undefined,
+            runId: this.currentRunId ?? undefined,
+        });
 
         try {
             await task.save();
