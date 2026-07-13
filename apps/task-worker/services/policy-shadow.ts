@@ -1,6 +1,5 @@
 import TaskModel from "@semantask/db/models/Task";
-import type { ExecutionEvent, ExecutionState, TaskLifecycleState } from "@semantask/types";
-import { deriveLegacyLifecycleState } from "@semantask/types";
+import type { ExecutionEvent, ExecutionState } from "@semantask/types";
 import {
     appendShadowHistory,
     createQueuedShadowState,
@@ -10,6 +9,7 @@ import {
 } from "./execution-state-shadow.js";
 import { logExecution } from "./execution-logger.js";
 import { maybeLogTaskStateDivergence } from "./state-divergence-check.js";
+import { applyLifecycleProjection } from "./state-projection.js";
 
 /**
  * Policy early-return paths in `processTaskExecutionRequested` (blocked / approval)
@@ -83,11 +83,12 @@ export async function emitPolicyShadowState(input: EmitPolicyShadowStateInput): 
         });
     }
 
-    const projectedLifecycle: TaskLifecycleState = deriveLegacyLifecycleState(current);
-
     task.executionState = current as unknown as typeof task.executionState;
     task.stateHistory = history as unknown as typeof task.stateHistory;
-    task.lifecycleState = projectedLifecycle;
+    applyLifecycleProjection(task, input.source ?? "policy_shadow", {
+        treatOffAs: "enforce",
+        workerId: input.workerId,
+    });
 
     try {
         await task.save();
