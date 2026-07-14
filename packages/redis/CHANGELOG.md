@@ -1,5 +1,15 @@
 # @semantask/redis
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [6343a6f]
+- Updated dependencies [1308ef0]
+- Updated dependencies [4a0b104]
+- Updated dependencies [8049e1b]
+  - @semantask/types@2.1.0
+
 ## 2.0.0
 
 ### Major Changes

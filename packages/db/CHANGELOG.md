@@ -1,5 +1,76 @@
 # @semantask/db
 
+## 3.1.0
+
+### Minor Changes
+
+- 1308ef0: ## Runtime
+
+  Phase 3 Security — prompt injection boundaries, tool RBAC, execution audit trail, and per-service internal secrets (Production Roadmap 3.1–3.4).
+
+  ### Added
+  - Prompt guard (`TASK_PROMPT_GUARD=off|monitor|enforce`) with untrusted content fencing and participant/contact validation for email/meeting tools
+  - `ToolGrant` model + admin grant/revoke/seed API and UI; `TASK_TOOL_RBAC=off|enforce`
+  - Append-only `ExecutionAuditLog` dual-write on tool start/complete/deny/approval + `GET /api/admin/execution-audit`
+  - Per-service secrets: `INTERNAL_SECRET_SOCKET` / `INTERNAL_SECRET_WORKER` (+ `*_PREVIOUS` rotation) with legacy `INTERNAL_SECRET` fallback
+  - Threat model doc, rotation runbook, and unit tests
+
+  ### Updated
+  - Planner and agent-runner fence task title/description before LLM calls
+  - Execution policy and agent execute path enforce prompt-guard + tool grants
+  - Socket and web internal bridges use audience-aware secret validation
+  - Production requirements / roadmap acceptance for 3.1–3.4
+
+  ### Compatibility
+  - Prompt guard and tool RBAC default to `off`; enable after staging monitor / grant seed
+  - Legacy `INTERNAL_SECRET` still accepted on both audiences during the deprecation window
+  - When distinct secrets are active (no legacy fallback), the socket secret (`INTERNAL_SECRET_SOCKET`) alone cannot authorize web `/api/internal/*`
+
+### Patch Changes
+
+- 6343a6f: ## Runtime
+
+  Implement intent taxonomy V1 for message ingress (Production Roadmap 2.2).
+
+  ### Added
+  - `MessageSemanticType` taxonomy: `chat`, `task`, `incident`, `scheduling`, `escalation`, `approval`, `automation`, `unknown`
+  - Semantic helpers (`ACTIONABLE_SEMANTIC_TYPES`, `normalizeSemanticTypeForClient`, legacy mapping)
+  - Classifier emits `semanticType` (regex + LLM); shadow mode compares full intents
+  - `IntentBadge` component in web chat UI
+
+  ### Updated
+  - `task-intelligence.service` writes full intent; actionable intents (`task`, `scheduling`, `incident`, `automation`) auto-create tasks
+  - `Message` model enum expanded; legacy `decision`/`reminder` mapped on read
+  - `aiVersion` bumped to `intelligent-v5-intent-taxonomy`
+
+  ### Compatibility
+
+  Additive enum expansion. Existing `task` and `unknown` messages remain valid. Clients tolerate unknown values via display fallback.
+
+- 8049e1b: ## Runtime
+
+  Implemented end-to-end task cancellation from the web API through the outbox to the task worker and agent runner.
+
+  ### Added
+  - `POST /api/tasks/:id/cancel` API (409 on terminal tasks; idempotent when already requested)
+  - `task.cancel.requested` outbox topic
+  - `task-cancellation` service (`CANCEL_REQUESTED` / `CANCEL_FINALIZED` shadow + legacy finalize)
+  - Per-iteration cancellation checks in `AgentRunner`
+  - Cancel button in task panel
+  - Unit tests
+
+  ### Updated
+  - Task model (`cancelRequestedAt`, `cancelReason`, …)
+  - Gap audit (P3-12)
+
+  ### Compatibility
+
+  No breaking changes to existing APIs.
+
+  Cancellation is idempotent on terminal tasks (409) and duplicate cancel requests (200).
+
+  Legacy `lifecycleState` remains `failed` for cancelled tasks (FSM `cancelled` projection).
+
 ## 3.0.0
 
 ### Major Changes

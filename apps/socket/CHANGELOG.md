@@ -1,5 +1,55 @@
 # @semantask/socket
 
+## 4.1.0
+
+### Minor Changes
+
+- 4a0b104: ## Runtime
+
+  Phase 4 Observability — structured correlation logs, Prometheus metrics, OpenTelemetry foundation, and SLO alerts (Production Roadmap 4.1–4.4).
+
+  ### Added
+  - `@semantask/observability` package: JSON logger + ALS `correlationId`, Prometheus registry, OTLP tracing bootstrap
+  - Outbox payloads carry `correlationId` (and `traceparent` when tracing); worker binds ALS on claim; `x-correlation-id` on internal bridges
+  - Scrape endpoints: web `GET /api/metrics`, socket `GET /metrics`, worker `METRICS_PORT` `/metrics`; RUM moved to `POST /api/metrics/rum`
+  - Manual spans `message.created` → `task.execution` → `tool.execute` when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
+  - `docs/operations/SLO.md` and `deploy/observability/` Prometheus/alerts/Grafana assets
+
+  ### Updated
+  - Task-worker execution logger wraps shared JSON logger; LLM metrics dual-write histogram/counters
+  - Production roadmap Phase 4 milestones marked complete
+
+### Patch Changes
+
+- 1308ef0: ## Runtime
+
+  Phase 3 Security — prompt injection boundaries, tool RBAC, execution audit trail, and per-service internal secrets (Production Roadmap 3.1–3.4).
+
+  ### Added
+  - Prompt guard (`TASK_PROMPT_GUARD=off|monitor|enforce`) with untrusted content fencing and participant/contact validation for email/meeting tools
+  - `ToolGrant` model + admin grant/revoke/seed API and UI; `TASK_TOOL_RBAC=off|enforce`
+  - Append-only `ExecutionAuditLog` dual-write on tool start/complete/deny/approval + `GET /api/admin/execution-audit`
+  - Per-service secrets: `INTERNAL_SECRET_SOCKET` / `INTERNAL_SECRET_WORKER` (+ `*_PREVIOUS` rotation) with legacy `INTERNAL_SECRET` fallback
+  - Threat model doc, rotation runbook, and unit tests
+
+  ### Updated
+  - Planner and agent-runner fence task title/description before LLM calls
+  - Execution policy and agent execute path enforce prompt-guard + tool grants
+  - Socket and web internal bridges use audience-aware secret validation
+  - Production requirements / roadmap acceptance for 3.1–3.4
+
+  ### Compatibility
+  - Prompt guard and tool RBAC default to `off`; enable after staging monitor / grant seed
+  - Legacy `INTERNAL_SECRET` still accepted on both audiences during the deprecation window
+  - When distinct secrets are active (no legacy fallback), the socket secret (`INTERNAL_SECRET_SOCKET`) alone cannot authorize web `/api/internal/*`
+
+- Updated dependencies [6343a6f]
+- Updated dependencies [1308ef0]
+- Updated dependencies [4a0b104]
+- Updated dependencies [8049e1b]
+  - @semantask/types@2.1.0
+  - @semantask/observability@1.1.0
+
 ## 4.0.0
 
 ### Major Changes
