@@ -26,10 +26,10 @@ properties. Authorization specifics live in
 - Admin dashboard fan-out (`admin:*`).
 
 The socket server is explicitly **not** the source of truth for messages.
-This is enforced in code: `apps/socket/server/socket/controllers/
-message.controller.ts` documents in a header comment that "Socket server is
-transport-only by architecture. Message persistence must happen in the
-web/API layer." The controller does not call MongoDB.
+Persistence lives in the Next.js API / `@semantask/services` layer. Socket
+handlers call web `POST /api/internal/socket/*` for authz and peer lookups,
+then fan out over Socket.IO + Redis. Socket must not import Mongoose models
+or open a database connection.
 
 ## Key Components
 

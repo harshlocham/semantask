@@ -317,10 +317,10 @@ Extract `ToolExecutor`, `StepLoop`, `ShadowFsmWriter`, `ClarificationHandler`. T
 
 ## Phase 6 — Scalability
 
-### 6.1 Presence Optimization (M) — conversation-scoped presence  
-### 6.2 Retry Scanner Throughput (S) — batch promotion  
-### 6.3 Outbox / Queue Scaling (L) — require Redis; partition workers  
-### 6.4 Mongo Optimizations (M) — indexes, outbox archival  
+### 6.1 Presence Optimization (M) — conversation-scoped presence ✓  
+### 6.2 Retry Scanner Throughput (S) — batch promotion ✓  
+### 6.3 Outbox / Queue Scaling (L) — require Redis; partition workers ✓  
+### 6.4 Mongo Optimizations (M) — indexes, outbox archival ✓  
 
 ---
 
@@ -354,8 +354,8 @@ Phase 0 → 1.1–1.3 → 2.1–2.2 → 3.1–3.2 → 4.1–4.2 → 1.4 → 5.2
 | TD-04 | MessageIntent persisted from classifier (`message-intent.service`) | `MessageIntent.ts`, `task-intelligence.service.ts` | 2.3 ✓ |
 | TD-05 | Dead buildExecutionPlan | `index.ts` | 5.1 ✓ |
 | TD-06 | AgentRunner monolith (3223 LOC) | `agent-runner.ts` | 5.3 |
-| TD-07 | Global presence fan-out | `presence.handler.ts` | 6.1 |
-| TD-08 | Retry scanner serial + txn-only | `retry-scheduler.ts` | 1.3, 6.2 |
+| TD-07 | Global presence fan-out | `presence.handler.ts` | 6.1 ✓ |
+| TD-08 | Retry scanner serial + txn-only | `retry-scheduler.ts` | 1.3, 6.2 ✓ |
 | TD-09 | No `/api/metrics` route | `performance.ts` | 4.2 |
 | TD-10 | Stuck detector log-only | `stuck-task-detector.ts` | 1.5 |
 | TD-11 | Cancellation FSM unwired | `execution-state-machine.ts` | 1.4 |

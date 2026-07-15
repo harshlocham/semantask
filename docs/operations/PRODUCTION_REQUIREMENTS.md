@@ -73,7 +73,7 @@ Watch task-worker logs for `retry.scanner_failed` with transaction errors.
 | Service | Symptom |
 |---------|---------|
 | Socket | `Running socket server without Redis adapter (development mock mode)` — **single pod only**, no cross-instance rooms |
-| Task worker | Outbox dedupe skipped when `redis === null` — weaker at-least-once protection |
+| Task worker | Outbox dedupe skipped when `redis === null` — weaker at-least-once protection (**production refuses to start** unless `TASK_WORKER_ALLOW_NO_REDIS=1`) |
 | Web | Depends on feature; rate limits may fail open or skip |
 
 Root `docker-compose.yml` includes a `redis` service for socket and worker. **Render/Vercel production** must set `REDIS_URL` to a managed Redis (not omitted).
@@ -85,6 +85,36 @@ redis-cli -u "$REDIS_URL" ping   # PONG
 ```
 
 Confirm socket startup logs do not show the mock-adapter warning.
+
+### Task-worker Redis enforcement (Phase 6.3)
+
+In `NODE_ENV=production`, task-worker requires `REDIS_URL` or `UPSTASH_REDIS_REST_URL` and exits on missing config. Emergency override: `TASK_WORKER_ALLOW_NO_REDIS=1` (dedupe remains skipped).
+
+### Outbox worker partitions (Phase 6.3)
+
+Optional horizontal scale for outbox claiming:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `OUTBOX_PARTITION_COUNT` | `1` | Number of stable shards (`$toHashedIndexKey($_id) % count`) |
+| `OUTBOX_PARTITION_ID` | `0` | Shard owned by this replica (`0 .. count-1`) |
+
+Deploy **one worker replica per partition id** (e.g. count=`3` → three replicas with ids `0`, `1`, `2`). Leave count at `1` for single-worker installs.
+
+### Outbox retention / archival (Phase 6.4)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `OUTBOX_RETENTION_DAYS` | `14` | Delete `completed` / `dead_letter` rows older than this |
+| `OUTBOX_ARCHIVE_INTERVAL_MS` | `3600000` (1h) | Archival job tick interval |
+
+Pending / failed / processing rows are never archived.
+
+### Retry scanner batch (Phase 6.2)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `TASK_RETRY_BATCH_SIZE` | `10` | Max due retries promoted per scanner tick |
 
 ---
 
@@ -211,7 +241,9 @@ Prefer distinct `INTERNAL_SECRET_SOCKET` / `INTERNAL_SECRET_WORKER`. Legacy `INT
 |------------------|----------------------------|
 | Standalone Mongo + task worker | Retries promote via non-transactional fallback (weaker atomicity); enable `TASK_RETRY_SHADOW_EMIT=1` to align shadow FSM on promote |
 | No Redis on socket (multi pod) | Clients on different pods miss realtime events |
-| No Redis on worker | Duplicate outbox processing possible under race |
+| No Redis on worker | Duplicate outbox processing possible under race; **production boot fails** unless `TASK_WORKER_ALLOW_NO_REDIS=1` |
+| Missing Redis (prod worker) | Worker refuses to start (`REDIS_URL` / `UPSTASH_REDIS_REST_URL`) |
+| Overlapping `OUTBOX_PARTITION_ID` | Two replicas may claim the same outbox `_id` — use one replica per partition id |
 | Mismatched `INTERNAL_SECRET_SOCKET` / callers vs socket | Task updates never reach clients; 401 on socket `/internal/*` |
 | Mismatched `INTERNAL_SECRET_WORKER` / callers vs web | Socket authz / step-up bridges fail; 401 on web `/api/internal/*` |
 | Missing socket secret (prod worker) | Worker refuses to start (`INTERNAL_SECRET_SOCKET` or legacy `INTERNAL_SECRET`) |

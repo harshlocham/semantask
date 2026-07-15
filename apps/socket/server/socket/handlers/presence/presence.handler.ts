@@ -13,11 +13,16 @@ import {
     trackSocketConnected,
     trackSocketDisconnected,
 } from "../../services/presence.redis.service.js";
+import {
+    emitPresenceToUsers,
+    getPresencePeers,
+    intersectPresenceAudience,
+} from "../../services/presence-peers.js";
 
 type IO = IOServer<ClientToServerEvents, ServerToClientEvents>;
 type Socket = import("socket.io").Socket<ClientToServerEvents, ServerToClientEvents>;
 
-export function presenceHandler(io: IO, socket: Socket, redis: Redis) {
+export function presenceHandler(_io: IO, socket: Socket, redis: Redis) {
     const userId = socket.data.userId;
 
     if (!userId) {
@@ -29,15 +34,19 @@ export function presenceHandler(io: IO, socket: Socket, redis: Redis) {
         try {
             await trackSocketConnected(redis, userId, socket.id);
 
-            const activeUsers = await getActiveUsers(redis);
-            for (const activeUserId of activeUsers) {
+            const [peers, activeUsers] = await Promise.all([
+                getPresencePeers(redis, userId),
+                getActiveUsers(redis),
+            ]);
+
+            const onlinePeers = intersectPresenceAudience(peers, activeUsers, userId);
+
+            for (const activeUserId of onlinePeers) {
                 socket.emit(SocketEvents.USER_ONLINE, { userId: activeUserId });
             }
 
-            // Always tell other sockets this user has a live connection (new tab, reconnect,
-            // or first connect). Relying only on becameOnline missed multi-tab joins and
-            // left peers stale until they reloaded.
-            socket.broadcast.emit(SocketEvents.USER_ONLINE, { userId });
+            // Announce only to mutual-conversation peers who are currently online.
+            emitPresenceToUsers(onlinePeers, SocketEvents.USER_ONLINE, { userId });
         } catch (error) {
             console.error("presence connect error", error);
         }
@@ -57,8 +66,8 @@ export function presenceHandler(io: IO, socket: Socket, redis: Redis) {
 
             if (wentOffline) {
                 const lastSeen = new Date();
-
-                io.emit(SocketEvents.USER_OFFLINE, {
+                const peers = await getPresencePeers(redis, userId);
+                emitPresenceToUsers(peers, SocketEvents.USER_OFFLINE, {
                     userId,
                     lastSeen,
                 });

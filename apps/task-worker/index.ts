@@ -16,6 +16,7 @@ import { GLOBAL_EXECUTION_CONFIDENCE_BASELINE } from "./services/execution-confi
 import { loadPromptGuardEmailContext } from "./services/prompt-guard-context.js";
 import { assertExecutionLeaseCompleted, ExecutionLeaseBusyError, withExecutionLease } from "./services/lease.service.js";
 import { startRetryScheduler } from "./services/retry-scheduler.js";
+import { startOutboxArchivalJob } from "./services/outbox-archival.js";
 import { persistExecutionUpdatePayload } from "./services/execution-event.service.js";
 import { logExecution } from "./services/execution-logger.js";
 import { maybeLogTaskStateDivergence } from "./services/state-divergence-check.js";
@@ -107,6 +108,27 @@ function assertInternalSecretConfigured(): void {
     if (!socketSecret) {
         throw new Error(
             "INTERNAL_SECRET_SOCKET (or legacy INTERNAL_SECRET) is required in production for task-worker"
+        );
+    }
+}
+
+function assertRedisConfiguredForProduction(): void {
+    if (process.env.NODE_ENV !== "production") {
+        return;
+    }
+    if (process.env.TASK_WORKER_ALLOW_NO_REDIS === "1") {
+        console.warn(
+            "task-worker starting without Redis in production (TASK_WORKER_ALLOW_NO_REDIS=1)"
+        );
+        return;
+    }
+
+    const hasRedis =
+        Boolean(process.env.REDIS_URL?.trim())
+        || Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim());
+    if (!hasRedis) {
+        throw new Error(
+            "REDIS_URL or UPSTASH_REDIS_REST_URL is required in production for task-worker (set TASK_WORKER_ALLOW_NO_REDIS=1 to override)"
         );
     }
 }
@@ -1217,6 +1239,7 @@ async function run() {
 
     startWorkerMetricsServer();
     startRetryScheduler(WORKER_ID);
+    startOutboxArchivalJob(WORKER_ID);
     startStuckTaskDetector(WORKER_ID, {
         onTaskUpdated: async (task, conversationId) => {
             await emitTaskUpdatedSnapshot(task, conversationId);
@@ -1285,6 +1308,7 @@ async function run() {
 }
 
 assertInternalSecretConfigured();
+assertRedisConfiguredForProduction();
 
 run().catch((error) => {
     console.error("task-worker fatal error", error);
