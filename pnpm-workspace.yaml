@@ -2,6 +2,14 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# pnpm 11: allow packages that ship install/build scripts we rely on.
+allowBuilds:
+  esbuild: true
+  mongodb-memory-server: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+
 overrides:
   react: "19.1.0"
   react-dom: "19.1.0"
