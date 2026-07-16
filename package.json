@@ -3,7 +3,7 @@
   "version": "2.0.11",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.14.0",
+  "packageManager": "pnpm@11.13.1",
   "scripts": {
     "dev": "turbo run dev --filter=./apps/* --filter=./packages/*",
     "mobile": "pnpm --filter mobile run start:mobile",
