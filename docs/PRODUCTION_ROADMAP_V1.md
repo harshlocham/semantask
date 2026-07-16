@@ -305,11 +305,11 @@ Delete `buildExecutionPlan` / `runExecutionPlan` in `apps/task-worker/index.ts`.
 
 `deriveLegacyLifecycleState` at write time. `TASK_STATE_PROJECTION_MODE=shadow|enforce`.
 
-### Milestone 5.3 — Split AgentRunner (XL)
+### Milestone 5.3 — Split AgentRunner (XL) ✓
 
 Extract `ToolExecutor`, `StepLoop`, `ShadowFsmWriter`, `ClarificationHandler`. Target <800 LOC facade.
 
-### Milestone 5.4 — Workflow Engine Boundaries (XL)
+### Milestone 5.4 — Workflow Engine Boundaries (XL) ✓
 
 `WorkflowTemplate` interface; route intents to templates. Default = current agent loop.
 
@@ -353,7 +353,7 @@ Phase 0 → 1.1–1.3 → 2.1–2.2 → 3.1–3.2 → 4.1–4.2 → 1.4 → 5.2
 | TD-03 | Dual task state without projection | `Task.ts`, `agent-runner.ts` | 1.1, 5.2 ✓ |
 | TD-04 | MessageIntent persisted from classifier (`message-intent.service`) | `MessageIntent.ts`, `task-intelligence.service.ts` | 2.3 ✓ |
 | TD-05 | Dead buildExecutionPlan | `index.ts` | 5.1 ✓ |
-| TD-06 | AgentRunner monolith (3223 LOC) | `agent-runner.ts` | 5.3 |
+| TD-06 | AgentRunner monolith (3223 LOC) | `agent-runner.ts` | 5.3 ✓ |
 | TD-07 | Global presence fan-out | `presence.handler.ts` | 6.1 |
 | TD-08 | Retry scanner serial + txn-only | `retry-scheduler.ts` | 1.3, 6.2 |
 | TD-09 | No `/api/metrics` route | `performance.ts` | 4.2 |
@@ -373,7 +373,7 @@ Phase 0 → 1.1–1.3 → 2.1–2.2 → 3.1–3.2 → 4.1–4.2 → 1.4 → 5.2
 | 9–11 | 3.1, 4.2, 3.2, 2.4 |
 | 12–13 | 3.3, 4.4, 5.2 shadow start |
 
-**Deferred past 90 days:** Phase 7, 5.3, 5.4, 4.3
+**Deferred past 90 days:** Phase 7, 4.3
 
 ---
 
