@@ -111,7 +111,7 @@ For deeper LLM wiring (vLLM, TGI, HF endpoints, AMD), see [`apps/task-worker/OSS
 ## Prerequisites
 
 - **Node.js** 20+
-- **pnpm** 10+ (see `packageManager` in root `package.json`)
+- **pnpm** 11+ (see `packageManager` in root `package.json`)
 - **MongoDB** (replica set for production — see [`docs/operations/PRODUCTION_REQUIREMENTS.md`](docs/operations/PRODUCTION_REQUIREMENTS.md))
 - **Redis** (required for production-like / multi-instance socket and task-worker dedupe)
 

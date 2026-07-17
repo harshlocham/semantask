@@ -22,6 +22,7 @@ let currentLlmIndex = 0;
 type MockTask = {
     _id: { toString(): string };
     conversationId: { toString(): string };
+    createdBy?: { toString(): string } | string | null;
     title: string;
     description: string;
     status: string;
@@ -146,6 +147,7 @@ function createMockTask(): MockTask {
     const task: MockTask = {
         _id: { toString: () => "task-1" },
         conversationId: { toString: () => "conv-1" },
+        createdBy: { toString: () => "user-1" },
         title: "Persistent loop task",
         description: "Run persistent step-based agent",
         status: "pending",

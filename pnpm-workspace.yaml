@@ -2,6 +2,14 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# pnpm 11: allow packages that ship install/build scripts we rely on.
+allowBuilds:
+  esbuild: true
+  mongodb-memory-server: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+
 overrides:
   react: "19.1.0"
   react-dom: "19.1.0"
@@ -10,6 +18,7 @@ overrides:
   shell-quote: "^1.8.4"
   postcss: "^8.5.10"
   esbuild: "^0.28.1"
+  jest-mock: "30.4.1"
   "ws@>=6.0.0 <6.2.4": "^6.2.4"
   "ws@>=7.0.0 <7.5.11": "^7.5.11"
   "ws@>=8.0.0 <8.21.0": "^8.21.0"

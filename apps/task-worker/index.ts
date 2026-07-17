@@ -11,6 +11,8 @@ import * as taskRepo from "@semantask/services/repositories/task.repo";
 import * as taskModule from "@semantask/db/models/Task";
 import { RetryManager } from "./services/retry-manager.js";
 import AgentRunner from "./services/agent-runner.js";
+import { WorkflowRegistry } from "./services/workflow/workflow-registry.js";
+import { DefaultAgentLoopTemplate } from "./services/workflow/default-agent-loop.template.js";
 import { evaluateExecutionPolicy } from "./services/execution-policy.js";
 import { GLOBAL_EXECUTION_CONFIDENCE_BASELINE } from "./services/execution-confidence.js";
 import { loadPromptGuardEmailContext } from "./services/prompt-guard-context.js";
@@ -118,6 +120,11 @@ const agentRunner = new AgentRunner({
         await emitTaskExecutionUpdate(payload);
     },
 });
+
+// Phase 5.4: route task execution through a workflow template. The default
+// template wraps the AgentRunner loop and handles every semantic type until
+// specialized templates are registered.
+const workflowRegistry = new WorkflowRegistry(new DefaultAgentLoopTemplate(agentRunner));
 
 const processMessageTaskIntelligence = processMessageTaskIntelligenceFromService;
 
@@ -841,7 +848,10 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
 
             try {
                 taskExecutionCounter.inc({ outcome: "auto" });
-                const outcome = await agentRunner.runTask(payload.taskId, {
+                const workflow = workflowRegistry.resolve(
+                    policyDecision.semanticType ?? payload.semanticType ?? null
+                );
+                const outcome = await workflow.run(payload.taskId, {
                     runId,
                     workerId: WORKER_ID,
                     leaseHeld: true,
