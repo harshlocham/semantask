@@ -10,8 +10,10 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm run clean:artifacts
 RUN pnpm --filter @semantask/types build
 RUN pnpm --filter @semantask/db build
+RUN pnpm --filter @semantask/observability build
 RUN pnpm --filter @semantask/services build
 RUN pnpm --filter @semantask/task-worker build
 
 EXPOSE 4444
+USER node
 CMD ["pnpm", "--filter", "@semantask/task-worker", "start"]

@@ -29,7 +29,8 @@ export class ShadowFsmWriter {
             return task.leaseExpiresAt.toISOString();
         }
 
-        const leaseMs = Math.max(1000, Number(process.env.TASK_LEASE_MS || 30000));
+        const parsed = Number(process.env.TASK_LEASE_MS || 30000);
+        const leaseMs = Number.isFinite(parsed) && parsed > 0 ? Math.max(1000, parsed) : 30000;
         return new Date(Date.now() + leaseMs).toISOString();
     }
 
@@ -37,6 +38,11 @@ export class ShadowFsmWriter {
         if (!this.isShadowExecutionStateEnabled()) {
             return;
         }
+
+        const previousExecutionState = task.executionState;
+        const previousStateHistory = task.stateHistory;
+        const previousLifecycleState = task.lifecycleState;
+        const previousStatus = task.status;
 
         const current = resolveCurrentShadowState(task.executionState);
         const result = reduceShadowExecutionEvent({
@@ -55,6 +61,10 @@ export class ShadowFsmWriter {
         try {
             await task.save();
         } catch (error) {
+            task.executionState = previousExecutionState;
+            task.stateHistory = previousStateHistory;
+            task.lifecycleState = previousLifecycleState;
+            task.status = previousStatus;
             logExecution("warn", {
                 event: "execution.fsm_shadow.persist_failed",
                 runId: this.ctx.currentRunId ?? undefined,

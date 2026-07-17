@@ -1,4 +1,6 @@
 import type { TaskCheckpoint, TaskExecutionActionType, TaskExecutionHistory, TaskExecutionUpdatedPayload } from "@semantask/types";
+import { createHash } from "node:crypto";
+import mongoose from "mongoose";
 import TaskPlanModel from "@semantask/db/models/TaskPlan";
 import { scheduleTaskRetry } from "../schedule-retry.js";
 import { logExecution } from "../execution-logger.js";
@@ -203,9 +205,10 @@ export class StepLoop {
 
     private async listToolsForUser(task: TaskDocumentLike): Promise<AvailableToolForDecision[]> {
         const allTools = this.ctx.toolRegistry.listForLLM();
+        const highRiskTools = new Set(["send_email", "schedule_meeting", "create_github_issue"]);
         const userId = this.getTaskUserId(task);
         if (!userId) {
-            return allTools;
+            return allTools.filter((tool) => !highRiskTools.has(tool.name));
         }
 
         const granted = new Set(
@@ -215,7 +218,7 @@ export class StepLoop {
         return allTools.filter((tool) => {
             // Non-high-risk tools always available; high-risk require grant (listGrantedToolNames
             // returns all HIGH_RISK_TOOLS when RBAC is off).
-            if (!granted.has(tool.name) && ["send_email", "schedule_meeting", "create_github_issue"].includes(tool.name)) {
+            if (!granted.has(tool.name) && highRiskTools.has(tool.name)) {
                 return false;
             }
             return true;
@@ -271,12 +274,19 @@ export class StepLoop {
             temperature: 0.0,
         };
 
-        // Log sanitized request
+        // Log sanitized request metadata only (no task/memory/email/model text payloads).
+        const requestInput = llmRequest.input;
         console.log("agent-runner llm:request", {
             runId: this.ctx.currentRunId,
             taskId: task._id.toString(),
             model,
-            inputSummary: JSON.stringify(userPayload).slice(0, 2000),
+            inputLength: requestInput.length,
+            inputHash: createHash("sha256").update(requestInput).digest("hex").slice(0, 16),
+            availableToolCount: availableTools.length,
+            availableToolNames: availableTools.map((tool) => tool.name),
+            requestedOutcomeCount: requestedOutcomes.length,
+            completedOutcomeCount: completedOutcomes.length,
+            iterationContextCount: iterationContext.length,
         });
 
         let res;
@@ -284,24 +294,29 @@ export class StepLoop {
             res = await this.requestLlmResponse(model, llmRequest.input);
         } catch (err) {
             const detail = err instanceof Error ? err.message : String(err);
-            console.error("agent-runner llm:error", { taskId: task._id.toString(), detail });
+            console.error("agent-runner llm:error", {
+                taskId: task._id.toString(),
+                runId: this.ctx.currentRunId,
+                errorCode: "llm_request_failed",
+                detailLength: detail.length,
+            });
             this.rethrowLlmFailure(err);
         }
 
-        // Log sanitized full response (avoid dumping headers / keys)
-        try {
-            console.log("agent-runner llm:response", {
-                runId: this.ctx.currentRunId,
-                taskId: task._id.toString(),
-                stepId: null,
-                responseText: (res.output_text ?? JSON.stringify(res.output ?? {}).slice(0, 2000)),
-            });
-        } catch { }
+        // Log sanitized response metadata only.
+        const responseText = String(res.output_text ?? (Array.isArray(res.output) ? JSON.stringify(res.output) : "")).trim();
+        console.log("agent-runner llm:response", {
+            runId: this.ctx.currentRunId,
+            taskId: task._id.toString(),
+            stepId: null,
+            responseLength: responseText.length,
+            responseHash: createHash("sha256").update(responseText).digest("hex").slice(0, 16),
+        });
 
-        const text = String(res.output_text ?? (Array.isArray(res.output) ? res.output.map((o: any) => (o.content ?? []).map((c: any) => c.text || c.url || JSON.stringify(c)).join('')).join('\n') : '')).trim();
+        const text = responseText;
 
         if (!text) {
-            console.error("agent-runner llm:empty-response", { taskId: task._id.toString() });
+            console.error("agent-runner llm:empty-response", { taskId: task._id.toString(), runId: this.ctx.currentRunId });
             throw new Error("LLM_ERROR: empty response from model");
         }
 
@@ -310,7 +325,14 @@ export class StepLoop {
             const parsedRaw = parseJsonText<unknown>(text).value ?? JSON.parse(text) as unknown;
             const parsed = llmDecisionSchema.safeParse(parsedRaw);
             if (!parsed.success) {
-                console.error("agent-runner llm:parse-failure", { taskId: task._id.toString(), errors: parsed.error.flatten(), text: text.slice(0, 2000) });
+                console.error("agent-runner llm:parse-failure", {
+                    taskId: task._id.toString(),
+                    runId: this.ctx.currentRunId,
+                    errorCode: "llm_schema_invalid",
+                    responseLength: text.length,
+                    responseHash: createHash("sha256").update(text).digest("hex").slice(0, 16),
+                    issueCount: parsed.error.issues.length,
+                });
                 throw new Error("LLM_ERROR: response parsing failed");
             }
 
@@ -336,7 +358,17 @@ export class StepLoop {
                     : decision.clarificationQuestion ?? undefined,
             };
         } catch (err) {
-            console.error("agent-runner llm:parse-failure", { taskId: task._id.toString(), err: err instanceof Error ? err.message : String(err), text: text.slice(0, 2000) });
+            if (err instanceof Error && err.message.startsWith("LLM_ERROR:")) {
+                throw err;
+            }
+            console.error("agent-runner llm:parse-failure", {
+                taskId: task._id.toString(),
+                runId: this.ctx.currentRunId,
+                errorCode: "llm_parse_failed",
+                responseLength: text.length,
+                responseHash: createHash("sha256").update(text).digest("hex").slice(0, 16),
+                err: err instanceof Error ? err.message : String(err),
+            });
             throw new Error("LLM_ERROR: response parsing failed");
         }
     }
@@ -436,7 +468,7 @@ Reply to confirm receipt or contact support if you have questions.
             const body = this.generateEmailBody(task.title, task.description || "", task._id.toString());
 
             return {
-                to: recipientEmail || process.env.RESEND_FROM_EMAIL || "noreply@task-execution.local",
+                ...(recipientEmail ? { to: recipientEmail } : {}),
                 subject: subject.length > 0 ? subject : "Task Notification",
                 body,
             };
@@ -444,7 +476,6 @@ Reply to confirm receipt or contact support if you have questions.
         if (toolName === "schedule_meeting") {
             return {
                 summary: task.title,
-                whenText: "tomorrow 10am",
             };
         }
         if (toolName === "create_github_issue") {
@@ -719,7 +750,7 @@ Reply to confirm receipt or contact support if you have questions.
 
             await this.shadow.persistShadowExecutionState(task, { type: "PLAN_READY" });
 
-            while (!goalAchieved && iteration < maxIterations && task.status !== "completed") {
+            while (!goalAchieved && iteration < maxIterations && context.retryCount <= context.maxRetries && task.status !== "completed") {
                 iteration += 1;
 
                 const latestForCancel = await this.ctx.taskModel.findById(taskId);
@@ -1012,25 +1043,27 @@ Reply to confirm receipt or contact support if you have questions.
                     iterationContext.push({
                         iteration,
                         decision: {
-                            toolName: decision.toolName,
+                            toolName: effectiveToolName,
                             reasoning: decision.reasoning,
                             noAction: decision.noAction,
                             needsClarification: decision.needsClarification,
                         },
                     });
 
-                    const toolIdempotencyKey = this.toolExecutor.buildToolIdempotencyKey({
-                        taskId,
-                        stepId: context.action.toolName,
-                        toolName: context.attemptPayload.toolName,
-                        params: context.attemptPayload.parameters,
-                    });
+                    const toolIdempotencyKey = mongoose.connection.readyState === 1
+                        ? this.toolExecutor.buildToolIdempotencyKey({
+                            taskId,
+                            stepId: context.action.stepId ?? context.action.toolName,
+                            toolName: context.attemptPayload.toolName,
+                            params: context.attemptPayload.parameters,
+                        })
+                        : null;
                     await this.shadow.persistShadowExecutionState(task, {
                         type: "TOOL_STARTED",
                         stepId: context.action.toolName,
                         toolName: context.attemptPayload.toolName,
                         attempt: context.retryCount + 1,
-                        idempotencyKey: toolIdempotencyKey,
+                        idempotencyKey: toolIdempotencyKey ?? "persistence_unavailable",
                     });
 
                     await this.appendCheckpoint(task, {
@@ -1062,12 +1095,13 @@ Reply to confirm receipt or contact support if you have questions.
 
                     const executed = await this.toolExecutor.execute({
                         ...context.attemptPayload,
-                        stepId: context.action.toolName,
+                        stepId: context.action.stepId ?? context.action.toolName,
                         attempt: context.retryCount + 1,
                         idempotencyKey: toolIdempotencyKey,
                     }, {
                         userId: this.getTaskUserId(task),
-                        clarificationReply: typeof task.pausedReason === "string" ? task.pausedReason : null,
+                        clarificationReply: ctx?.clarificationReply
+                            ?? (typeof task.pausedReason === "string" ? task.pausedReason : null),
                         pendingResolution: this.clarification.getPendingResolution(task),
                     });
 
@@ -1079,7 +1113,7 @@ Reply to confirm receipt or contact support if you have questions.
                             question: clarification.question,
                             pendingResolution: clarification.pendingResolution ?? undefined,
                         });
-                        await this.clarification.pauseForClarification(task, clarification.question, context.action.toolName, clarification.pendingResolution);
+                        await this.clarification.pauseForClarification(task, clarification.question, context.action.stepId ?? undefined, clarification.pendingResolution);
                         return {
                             completed: false,
                             retryCount: context.retryCount,
@@ -1245,6 +1279,33 @@ Reply to confirm receipt or contact support if you have questions.
                         reason: context.observed.error ?? "verification failed",
                     });
 
+                    if (context.retryCount > context.maxRetries) {
+                        const retryResult = await scheduleTaskRetry(task, new Error(context.observed.error ?? "verification failed"), {
+                            runId: this.ctx.currentRunId,
+                            actionType: this.ctx.mapToolNameToActionType(context.attemptPayload.toolName),
+                            emit: async (payload) => {
+                                await this.ctx.onExecutionUpdate?.(payload);
+                            },
+                        });
+                        await this.shadow.persistShadowExecutionState(task, {
+                            type: "ERROR_OCCURRED",
+                            reason: context.observed.error ?? "verification failed",
+                            retryable: retryResult.outcome === "scheduled",
+                            category: retryResult.decision.category,
+                            retryCount: retryResult.retryCount,
+                            maxRetries: context.maxRetries,
+                            ...(retryResult.outcome === "scheduled" ? { nextRetryAt: retryResult.nextRetryAt.toISOString() } : {}),
+                            finishedAt: new Date().toISOString(),
+                        });
+                        return {
+                            completed: false,
+                            retryCount: retryResult.retryCount,
+                            maxRetries: context.maxRetries,
+                            result: context.observed,
+                            verification: context.verification,
+                        };
+                    }
+
                     await this.ctx.updateTask(task, {
                         status: "executing",
                         retryCount: context.retryCount,
@@ -1371,6 +1432,23 @@ Reply to confirm receipt or contact support if you have questions.
                         maxRetries: context.maxRetries,
                     });
 
+                    if (context.retryCount > context.maxRetries) {
+                        const retryResult = await scheduleTaskRetry(task, error, {
+                            runId: this.ctx.currentRunId,
+                            actionType: this.ctx.mapToolNameToActionType(context.attemptPayload.toolName),
+                            emit: async (payload) => {
+                                await this.ctx.onExecutionUpdate?.(payload);
+                            },
+                        });
+                        return {
+                            completed: false,
+                            retryCount: retryResult.retryCount,
+                            maxRetries: context.maxRetries,
+                            result: context.observed,
+                            verification: context.verification,
+                        };
+                    }
+
                     await this.ctx.updateTask(task, {
                         status: "executing",
                         retryCount: context.retryCount,
@@ -1391,11 +1469,15 @@ Reply to confirm receipt or contact support if you have questions.
                 }
             }
 
+            const exhaustedByRetries = context.retryCount > context.maxRetries;
+            const exhaustionReason = exhaustedByRetries
+                ? "Retry budget exhausted before goal achievement."
+                : "Max iterations reached before goal achievement.";
             await this.shadow.persistShadowExecutionState(task, {
                 type: "ERROR_OCCURRED",
-                reason: "Max iterations reached before goal achievement.",
+                reason: exhaustionReason,
                 retryable: false,
-                category: "max_iterations",
+                category: exhaustedByRetries ? "retry_budget" : "max_iterations",
                 retryCount: context.retryCount,
                 maxRetries: context.maxRetries,
                 finishedAt: new Date().toISOString(),
@@ -1409,7 +1491,7 @@ Reply to confirm receipt or contact support if you have questions.
                     success: false,
                     confidence: context.verification?.confidence ?? 0,
                     evidence: context.observed?.evidence ?? null,
-                    error: "Max iterations reached before goal achievement.",
+                    error: exhaustionReason,
                 },
             });
 
@@ -1420,10 +1502,10 @@ Reply to confirm receipt or contact support if you have questions.
             });
             await this.emitExecutionUpdate(task, {
                 state: "failed",
-                summary: "Max iterations reached before goal achievement.",
-                error: "Max iterations reached before goal achievement.",
+                summary: exhaustionReason,
+                error: exhaustionReason,
                 phase: "finalize",
-                step: "max_iterations_reached",
+                step: exhaustedByRetries ? "retry_budget_exhausted" : "max_iterations_reached",
                 progress: 100,
                 details: {
                     toolName: context.attemptPayload.toolName,
@@ -1663,13 +1745,29 @@ Reply to confirm receipt or contact support if you have questions.
             fenced.fenceInstruction,
         ].join(" ");
 
-        console.log("agent-runner llm:step-request", { runId: this.ctx.currentRunId, taskId: input.task._id.toString(), stepId: input.step.stepId, model, payloadSummary: JSON.stringify(userPayload).slice(0, 2000) });
+        console.log("agent-runner llm:step-request", {
+            runId: this.ctx.currentRunId,
+            taskId: input.task._id.toString(),
+            stepId: input.step.stepId,
+            model,
+            rankedToolCount: ranked.length,
+            rankedToolNames: ranked.map((entry) => entry.toolName),
+            hasClarificationReply: Boolean(input.clarificationReply),
+            hasPreviousError: Boolean(input.previousError),
+            iteration: input.iteration,
+        });
 
         let res;
         try {
             res = await this.requestLlmResponse(model, JSON.stringify({ systemPrompt, userPayload }));
         } catch (err) {
-            console.error("agent-runner llm:step-error", { runId: this.ctx.currentRunId, taskId: input.task._id.toString(), stepId: input.step.stepId, err: err instanceof Error ? err.message : String(err) });
+            console.error("agent-runner llm:step-error", {
+                runId: this.ctx.currentRunId,
+                taskId: input.task._id.toString(),
+                stepId: input.step.stepId,
+                errorCode: "llm_request_failed",
+                err: err instanceof Error ? err.message : String(err),
+            });
             this.rethrowLlmFailure(err);
         }
 
@@ -1683,7 +1781,15 @@ Reply to confirm receipt or contact support if you have questions.
             const parsedRaw = parseJsonText<unknown>(text).value ?? JSON.parse(text) as unknown;
             const parsed = llmDecisionSchema.safeParse(parsedRaw);
             if (!parsed.success) {
-                console.error("agent-runner llm:step-parse-failure", { runId: this.ctx.currentRunId, taskId: input.task._id.toString(), stepId: input.step.stepId, errors: parsed.error.flatten(), text: text.slice(0, 2000) });
+                console.error("agent-runner llm:step-parse-failure", {
+                    runId: this.ctx.currentRunId,
+                    taskId: input.task._id.toString(),
+                    stepId: input.step.stepId,
+                    errorCode: "llm_schema_invalid",
+                    responseLength: text.length,
+                    responseHash: createHash("sha256").update(text).digest("hex").slice(0, 16),
+                    issueCount: parsed.error.issues.length,
+                });
                 throw new Error("LLM_ERROR: response parsing failed");
             }
 
@@ -1710,7 +1816,18 @@ Reply to confirm receipt or contact support if you have questions.
                     : decision.clarificationQuestion ?? undefined,
             };
         } catch (err) {
-            console.error("agent-runner llm:step-parse-failure", { runId: this.ctx.currentRunId, taskId: input.task._id.toString(), stepId: input.step.stepId, err: err instanceof Error ? err.message : String(err), text: text.slice(0, 2000) });
+            if (err instanceof Error && err.message.startsWith("LLM_ERROR:")) {
+                throw err;
+            }
+            console.error("agent-runner llm:step-parse-failure", {
+                runId: this.ctx.currentRunId,
+                taskId: input.task._id.toString(),
+                stepId: input.step.stepId,
+                errorCode: "llm_parse_failed",
+                responseLength: text.length,
+                responseHash: createHash("sha256").update(text).digest("hex").slice(0, 16),
+                err: err instanceof Error ? err.message : String(err),
+            });
             throw new Error("LLM_ERROR: response parsing failed");
         }
     }
@@ -1769,7 +1886,18 @@ Reply to confirm receipt or contact support if you have questions.
                 this.ctx.currentExecutionSignal = combineAbortSignals(runAbortController.signal, iterationAbortController.signal) ?? runAbortController.signal;
 
                 try {
-                    await this.ctx.heartbeatTaskLeaseFn(taskId, this.ctx.workerId);
+                    const leaseAlive = await this.ctx.heartbeatTaskLeaseFn(taskId, this.ctx.workerId);
+                    if (!leaseAlive) {
+                        console.warn("agent-runner lease:lost", { runId, taskId, workerId: this.ctx.workerId });
+                        runAbortController.abort();
+                        return {
+                            completed: false,
+                            retryCount: typeof task.retryCount === "number" ? task.retryCount : 0,
+                            maxRetries: typeof task.maxRetries === "number" ? task.maxRetries : 2,
+                            result: lastResult,
+                            verification: lastVerification,
+                        };
+                    }
 
                     const latestTask = await this.ctx.taskModel.findById(taskId);
                     if (!latestTask) {
@@ -1853,10 +1981,13 @@ Reply to confirm receipt or contact support if you have questions.
                     });
 
                     const previousStepOutputs = this.buildPreviousStepOutputs(plan);
-                    const clarificationReply = typeof latestTask.pausedReason === "string" && latestTask.pausedReason.trim().length > 0
-                        ? latestTask.pausedReason
-                        : null;
-                    if (clarificationReply) {
+                    const clarificationReply = (typeof ctx?.clarificationReply === "string" && ctx.clarificationReply.trim().length > 0
+                        ? ctx.clarificationReply
+                        : null)
+                        ?? (typeof latestTask.pausedReason === "string" && latestTask.pausedReason.trim().length > 0
+                            ? latestTask.pausedReason
+                            : null);
+                    if (clarificationReply && latestTask.pausedReason) {
                         await this.ctx.updateTask(latestTask, { pausedReason: null });
                     }
 
@@ -2021,12 +2152,14 @@ Reply to confirm receipt or contact support if you have questions.
                     let activeNormalizedInput = normalizedInput;
 
                     const attemptNumber = (step.attempts ?? 0) + 1;
-                    const idempotencyKey = this.toolExecutor.buildToolIdempotencyKey({
-                        taskId,
-                        stepId: step.stepId,
-                        toolName: activeToolName,
-                        params: activeNormalizedInput,
-                    });
+                    const idempotencyKey = mongoose.connection.readyState === 1
+                        ? this.toolExecutor.buildToolIdempotencyKey({
+                            taskId,
+                            stepId: step.stepId,
+                            toolName: activeToolName,
+                            params: activeNormalizedInput,
+                        })
+                        : null;
 
                     let executionPayload: ExecutionActionRecord = {
                         taskId,
@@ -2045,7 +2178,7 @@ Reply to confirm receipt or contact support if you have questions.
                         stepId: step.stepId,
                         toolName: activeToolName,
                         attempt: attemptNumber,
-                        idempotencyKey,
+                        idempotencyKey: idempotencyKey ?? "persistence_unavailable",
                     });
 
                     await this.updatePlanStepState(taskId, step.stepId, {
@@ -2063,13 +2196,13 @@ Reply to confirm receipt or contact support if you have questions.
                         return sideEffectCancellation;
                     }
 
-                    let executed = await this.toolExecutor.execute(executionPayload, {
+                    const executed = await this.toolExecutor.execute(executionPayload, {
                         userId: this.getTaskUserId(latestTask),
                         clarificationReply,
                         pendingResolution: this.clarification.getPendingResolution(latestTask),
                     });
 
-                    let clarification = this.clarification.getClarificationPayload(executed);
+                    const clarification = this.clarification.getClarificationPayload(executed);
                     if (clarification) {
                         await this.shadow.persistShadowExecutionState(latestTask, {
                             type: "CLARIFICATION_REQUIRED",
@@ -2148,70 +2281,30 @@ Reply to confirm receipt or contact support if you have questions.
                                     const correctedValidationError = validateToolParameters(correctedTool, correctedNormalizedInput);
 
                                     if (!correctedValidationError) {
-                                        activeDecision = correctedDecision;
-                                        activeToolName = correctedDecision.toolName;
-                                        activeNormalizedInput = correctedNormalizedInput;
-                                        executionPayload = {
-                                            ...executionPayload,
-                                            toolName: activeToolName,
-                                            parameters: activeNormalizedInput,
-                                            idempotencyKey: this.toolExecutor.buildToolIdempotencyKey({
+                                        // attempts already incremented when the step entered `running`
+                                        if ((step.attempts ?? 0) >= (step.maxAttempts ?? 3)) {
+                                            // No remaining attempt budget for a corrected re-run.
+                                        } else {
+                                            activeDecision = correctedDecision;
+                                            activeToolName = correctedDecision.toolName;
+                                            activeNormalizedInput = correctedNormalizedInput;
+
+                                            await this.updatePlanStepState(taskId, step.stepId, {
+                                                state: "retry_scheduled",
+                                                selectedToolName: activeToolName,
+                                                input: activeNormalizedInput,
+                                                attempts: step.attempts ?? 0,
+                                                lastError: executed.error ?? "Execution failed",
+                                            });
+
+                                            console.log("agent-runner llm:self-heal-scheduled", {
                                                 taskId,
                                                 stepId: step.stepId,
                                                 toolName: activeToolName,
-                                                params: activeNormalizedInput,
-                                            }),
-                                        };
-
-                                        await this.updatePlanStepState(taskId, step.stepId, {
-                                            selectedToolName: activeToolName,
-                                            input: activeNormalizedInput,
-                                            lastError: null,
-                                        });
-
-                                        const retrySideEffectCancellation = await this.resolveCancellationBeforeSideEffect(
-                                            taskId,
-                                            runAbortController,
-                                            runId,
-                                        );
-                                        if (retrySideEffectCancellation) {
-                                            return retrySideEffectCancellation;
-                                        }
-
-                                        executed = await this.toolExecutor.execute(executionPayload, {
-                                            userId: this.getTaskUserId(latestTask),
-                                            clarificationReply,
-                                            pendingResolution: this.clarification.getPendingResolution(latestTask),
-                                        });
-
-                                        clarification = this.clarification.getClarificationPayload(executed);
-                                        if (clarification) {
-                                            await this.shadow.persistShadowExecutionState(latestTask, {
-                                                type: "CLARIFICATION_REQUIRED",
-                                                reason: "Tool execution requires clarification.",
-                                                question: clarification.question,
-                                                pendingResolution: clarification.pendingResolution ?? undefined,
+                                                attempts: step.attempts ?? 0,
+                                                maxAttempts: step.maxAttempts ?? 3,
                                             });
-                                            await this.updatePlanStepState(taskId, step.stepId, {
-                                                state: "blocked",
-                                                lastError: clarification.question,
-                                                output: {
-                                                    summary: "Clarification required",
-                                                    data: {
-                                                        clarificationQuestion: clarification.question,
-                                                        pendingResolution: clarification.pendingResolution,
-                                                    },
-                                                },
-                                            });
-
-                                            await this.clarification.pauseForClarification(latestTask, clarification.question, step.stepId, clarification.pendingResolution);
-                                            return {
-                                                completed: false,
-                                                retryCount: typeof latestTask.retryCount === "number" ? latestTask.retryCount : 0,
-                                                maxRetries: typeof latestTask.maxRetries === "number" ? latestTask.maxRetries : 2,
-                                                result: executed,
-                                                verification: null,
-                                            };
+                                            continue;
                                         }
                                     }
                                 }
@@ -2260,7 +2353,7 @@ Reply to confirm receipt or contact support if you have questions.
                             },
                         });
 
-                        if (plan.steps.every((entry) => entry.state === "completed")) {
+                        if (plan.steps.every((entry) => entry.stepId === step.stepId || entry.state === "completed")) {
                             await this.shadow.persistShadowExecutionState(latestTask, {
                                 type: "GOAL_ACHIEVED",
                                 finishedAt: new Date().toISOString(),
@@ -2369,6 +2462,59 @@ Reply to confirm receipt or contact support if you have questions.
                 } finally {
                     clearTimeout(iterationTimeoutHandle);
                     this.ctx.currentExecutionSignal = runAbortController.signal;
+                }
+            }
+
+            const provisionalTask = await this.ctx.taskModel.findById(taskId);
+            if (!provisionalTask) {
+                throw new Error(`Task disappeared before finalization: ${taskId}`);
+            }
+
+            const isTerminal =
+                ["completed", "failed", "paused", "blocked", "waiting_for_approval", "retry_scheduled"].includes(String(provisionalTask.lifecycleState ?? ""))
+                || ["completed", "failed", "waiting_for_input"].includes(String(provisionalTask.status ?? ""));
+
+            if (iteration >= maxIterations && !isTerminal) {
+                if (provisionalTask.currentStepId) {
+                    await this.updatePlanStepState(taskId, provisionalTask.currentStepId, {
+                        state: "failed",
+                        lastError: "Persistent iteration budget exhausted.",
+                    });
+                }
+
+                const retryResult = await scheduleTaskRetry(provisionalTask, new Error("Persistent iteration budget exhausted."), {
+                    runId: this.ctx.currentRunId,
+                    actionType: this.ctx.mapToolNameToActionType(
+                        lastResult && typeof (lastResult.evidence as Record<string, unknown>)?.toolName === "string"
+                            ? (lastResult.evidence as Record<string, unknown>).toolName as string
+                            : null
+                    ),
+                    emit: async (payload) => {
+                        await this.ctx.onExecutionUpdate?.(payload);
+                    },
+                });
+
+                if (retryResult.outcome !== "scheduled") {
+                    await this.shadow.persistShadowExecutionState(provisionalTask, {
+                        type: "ERROR_OCCURRED",
+                        reason: "Persistent iteration budget exhausted.",
+                        retryable: false,
+                        category: "max_iterations",
+                        retryCount: retryResult.retryCount,
+                        maxRetries: typeof provisionalTask.maxRetries === "number" ? provisionalTask.maxRetries : 2,
+                        finishedAt: new Date().toISOString(),
+                    });
+                    await this.transitionLifecycle(provisionalTask, "failed");
+                    await this.ctx.updateTask(provisionalTask, {
+                        status: "failed",
+                        progress: 100,
+                        result: {
+                            success: false,
+                            confidence: lastVerification?.confidence ?? 0,
+                            evidence: lastResult?.evidence ?? null,
+                            error: "Persistent iteration budget exhausted.",
+                        },
+                    });
                 }
             }
 

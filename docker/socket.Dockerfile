@@ -14,4 +14,6 @@ RUN pnpm --filter @semantask/socket build
 
 EXPOSE 3001
 
+USER node
+
 CMD ["pnpm", "--filter", "@semantask/socket", "start"]

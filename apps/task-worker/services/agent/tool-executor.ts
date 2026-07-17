@@ -71,7 +71,11 @@ export class ToolExecutor {
     constructor(private readonly ctx: AgentContext) {}
 
     getToolTimeoutMs() {
-        return Math.max(1000, Number(process.env.TASK_AGENT_TOOL_TIMEOUT_MS || 60000));
+        const parsed = Number(process.env.TASK_AGENT_TOOL_TIMEOUT_MS || 60000);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return 60000;
+        }
+        return Math.max(1000, parsed);
     }
 
     stableStringify(value: unknown): string {
@@ -114,12 +118,72 @@ export class ToolExecutor {
             .slice(0, 64);
     }
 
-    private async guardIdempotentToolExecution(
+    private persistenceUnavailableResult(toolName: string): ActionExecutionResult {
+        return {
+            summary: "Tool execution persistence unavailable.",
+            adapterSuccess: false,
+            evidence: { toolName, retriable: true, reason: "persistence_unavailable" },
+            error: "persistence_unavailable",
+        };
+    }
+
+    private async lookupIdempotentToolExecution(
+        payload: ExecutionActionRecord
+    ): Promise<{ proceed: boolean; cached?: ActionExecutionResult }> {
+        if (!payload.idempotencyKey) {
+            return { proceed: true };
+        }
+
+        if (mongoose.connection.readyState !== 1) {
+            return { proceed: false, cached: this.persistenceUnavailableResult(payload.toolName) };
+        }
+
+        const existing = await TaskActionModel.findOne({ idempotencyKey: payload.idempotencyKey }).lean().exec();
+        if (!existing) {
+            return { proceed: true };
+        }
+
+        if (existing.executionState === "succeeded" && existing.summary) {
+            return {
+                proceed: false,
+                cached: {
+                    summary: existing.summary,
+                    adapterSuccess: true,
+                    evidence: {
+                        toolName: payload.toolName,
+                        idempotentReplay: true,
+                        parameters: existing.parameters ?? {},
+                    },
+                },
+            };
+        }
+
+        if (existing.executionState === "failed") {
+            // Retryable failed reservations may resume; reservation is claimed later.
+            return { proceed: true };
+        }
+
+        return {
+            proceed: false,
+            cached: {
+                summary: "Skipped duplicate in-flight tool execution.",
+                adapterSuccess: false,
+                evidence: { toolName: payload.toolName, idempotentReplay: true },
+                error: "duplicate_in_flight",
+            },
+        };
+    }
+
+    private async reserveIdempotentToolExecution(
         payload: ExecutionActionRecord,
         actorId?: string | null
     ): Promise<{ proceed: boolean; cached?: ActionExecutionResult }> {
-        if (!payload.idempotencyKey || mongoose.connection.readyState !== 1) {
+        if (!payload.idempotencyKey) {
             return { proceed: true };
+        }
+
+        if (mongoose.connection.readyState !== 1) {
+            return { proceed: false, cached: this.persistenceUnavailableResult(payload.toolName) };
         }
 
         const existing = await TaskActionModel.findOne({ idempotencyKey: payload.idempotencyKey }).lean().exec();
@@ -137,6 +201,37 @@ export class ToolExecutor {
                         },
                     },
                 };
+            }
+
+            if (existing.executionState === "failed") {
+                const claimed = await TaskActionModel.updateOne(
+                    { idempotencyKey: payload.idempotencyKey, executionState: "failed" },
+                    {
+                        $set: {
+                            executionState: "running",
+                            summary: `Tool execution restarted: ${payload.toolName}`,
+                            error: null,
+                            parameters: payload.parameters ?? {},
+                            patch: { before: null, after: { runId: this.ctx.currentRunId, stepId: payload.stepId, attempt: payload.attempt } },
+                        },
+                    }
+                ).exec();
+
+                if ((claimed.modifiedCount ?? 0) === 0) {
+                    return this.reserveIdempotentToolExecution(payload, actorId);
+                }
+
+                await appendExecutionAudit({
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actorId: actorId ?? null,
+                    runId: this.ctx.currentRunId,
+                    toolName: payload.toolName,
+                    action: "started",
+                    parameters: payload.parameters ?? {},
+                    decision: "auto_execute",
+                });
+                return { proceed: true };
             }
 
             return {
@@ -181,7 +276,7 @@ export class ToolExecutor {
         } catch (error) {
             const maybeMongo = error as { code?: number };
             if (maybeMongo?.code === 11000) {
-                return this.guardIdempotentToolExecution(payload, actorId);
+                return this.reserveIdempotentToolExecution(payload, actorId);
             }
             throw error;
         }
@@ -193,8 +288,12 @@ export class ToolExecutor {
         idempotencyKey: string | undefined,
         result: ActionExecutionResult
     ): Promise<void> {
-        if (!idempotencyKey || mongoose.connection.readyState !== 1) {
+        if (!idempotencyKey) {
             return;
+        }
+
+        if (mongoose.connection.readyState !== 1) {
+            throw new Error("persistence_unavailable");
         }
 
         await TaskActionModel.updateOne(
@@ -289,16 +388,18 @@ export class ToolExecutor {
             };
         }
 
-        const idempotencyGuard = await this.guardIdempotentToolExecution(payload, options?.userId);
-        if (!idempotencyGuard.proceed && idempotencyGuard.cached) {
+        const earlyIdempotency = await this.lookupIdempotentToolExecution(payload);
+        if (!earlyIdempotency.proceed && earlyIdempotency.cached) {
             logExecution("info", {
-                event: "tool.idempotent_replay",
+                event: earlyIdempotency.cached.error === "persistence_unavailable"
+                    ? "tool.idempotency_unavailable"
+                    : "tool.idempotent_replay",
                 workerId: this.ctx.workerId,
                 runId: this.ctx.currentRunId ?? undefined,
                 taskId: payload.taskId,
                 toolName: payload.toolName,
             });
-            return idempotencyGuard.cached;
+            return earlyIdempotency.cached;
         }
 
         try {
@@ -375,12 +476,6 @@ export class ToolExecutor {
                         decision: "PROMPT_GUARD_BLOCKED",
                         reason: guardValidation.reasons.join(" "),
                     });
-                    await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, {
-                        summary: `Prompt guard blocked ${payload.toolName}.`,
-                        adapterSuccess: false,
-                        evidence: { toolName: payload.toolName },
-                        error: "prompt_guard_blocked",
-                    });
                     return {
                         summary: `Prompt guard blocked ${payload.toolName}.`,
                         adapterSuccess: false,
@@ -394,6 +489,20 @@ export class ToolExecutor {
                         error: guardValidation.reasons.join(" ") || "prompt_guard_blocked",
                     };
                 }
+            }
+
+            const idempotencyGuard = await this.reserveIdempotentToolExecution(payload, options?.userId);
+            if (!idempotencyGuard.proceed && idempotencyGuard.cached) {
+                logExecution("info", {
+                    event: idempotencyGuard.cached.error === "persistence_unavailable"
+                        ? "tool.idempotency_unavailable"
+                        : "tool.idempotent_replay",
+                    workerId: this.ctx.workerId,
+                    runId: this.ctx.currentRunId ?? undefined,
+                    taskId: payload.taskId,
+                    toolName: payload.toolName,
+                });
+                return idempotencyGuard.cached;
             }
 
             const parsedInput = tool.inputSchema.parse(resolvedParams);
@@ -420,20 +529,32 @@ export class ToolExecutor {
                     },
                 }));
 
-                await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, result);
-
-                await appendExecutionAudit({
-                    taskId: payload.taskId,
-                    conversationId: payload.conversationId,
-                    actorId: options?.userId ?? null,
-                    runId,
-                    toolName: tool.name,
-                    action: result.adapterSuccess ? "completed" : "failed",
-                    parameters: resolvedParams,
-                    externalIds: extractExternalIds(result.evidence),
-                    decision: result.adapterSuccess ? "succeeded" : "failed",
-                    reason: result.error ?? null,
-                });
+                try {
+                    await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, result);
+                    await appendExecutionAudit({
+                        taskId: payload.taskId,
+                        conversationId: payload.conversationId,
+                        actorId: options?.userId ?? null,
+                        runId,
+                        toolName: tool.name,
+                        action: result.adapterSuccess ? "completed" : "failed",
+                        parameters: resolvedParams,
+                        externalIds: extractExternalIds(result.evidence),
+                        decision: result.adapterSuccess ? "succeeded" : "failed",
+                        reason: result.error ?? null,
+                    });
+                } catch (bookkeepingError) {
+                    logExecution("error", {
+                        event: "tool.bookkeeping_indeterminate",
+                        runId,
+                        stepId: payload.stepId ?? null,
+                        toolName: tool.name,
+                        taskId: payload.taskId,
+                        idempotencyKey: payload.idempotencyKey ?? null,
+                        adapterSuccess: result.adapterSuccess,
+                        error: bookkeepingError instanceof Error ? bookkeepingError.message : String(bookkeepingError),
+                    });
+                }
 
                 logExecution("info", {
                     event: "tool.completed",
@@ -502,18 +623,31 @@ export class ToolExecutor {
                 error: message,
             };
 
-            await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, failedResult);
-            await appendExecutionAudit({
-                taskId: payload.taskId,
-                conversationId: payload.conversationId,
-                actorId: options?.userId ?? null,
-                runId,
-                toolName: tool.name,
-                action: "failed",
-                parameters: payload.parameters ?? {},
-                decision: "failed",
-                reason: message,
-            });
+            try {
+                await this.finalizeIdempotentToolExecution(payload.idempotencyKey ?? undefined, failedResult);
+                await appendExecutionAudit({
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    actorId: options?.userId ?? null,
+                    runId,
+                    toolName: tool.name,
+                    action: "failed",
+                    parameters: payload.parameters ?? {},
+                    decision: "failed",
+                    reason: message,
+                });
+            } catch (bookkeepingError) {
+                logExecution("error", {
+                    event: "tool.bookkeeping_indeterminate",
+                    runId,
+                    stepId: payload.stepId ?? null,
+                    toolName: tool.name,
+                    taskId: payload.taskId,
+                    idempotencyKey: payload.idempotencyKey ?? null,
+                    adapterSuccess: false,
+                    error: bookkeepingError instanceof Error ? bookkeepingError.message : String(bookkeepingError),
+                });
+            }
 
             return failedResult;
         }
@@ -527,10 +661,10 @@ export class ToolExecutor {
 
         console.log("agent-runner step:verify", {
             toolName: context.action.toolName,
-            evidence: result.evidence,
             validator: validationLog.validator,
             passed: validationLog.passed,
-            checks: validationLog.checks,
+            passedChecks,
+            totalChecks,
         });
 
         return {

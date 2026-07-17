@@ -43,7 +43,7 @@ export class AgentRunner {
 
         await this.clarification.resume(task, userReply);
 
-        return this.stepLoop.runTask(taskId);
+        return this.stepLoop.runTask(taskId, { clarificationReply: userReply });
     }
 }
 

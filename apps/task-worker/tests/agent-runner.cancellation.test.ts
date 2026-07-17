@@ -8,6 +8,7 @@ import ToolRegistry, { type Tool } from "../services/tools/tool-registry.js";
 type MockTask = {
     _id: { toString(): string };
     conversationId: { toString(): string };
+    createdBy?: { toString(): string } | string | null;
     title: string;
     description: string;
     status: string;
@@ -51,6 +52,7 @@ function createMockTask(overrides?: Partial<MockTask>): MockTask {
     const task: MockTask = {
         _id: { toString: () => "task-cancel-1" },
         conversationId: { toString: () => "conv-cancel-1" },
+        createdBy: { toString: () => "user-1" },
         title: "send welcome email to user@example.com",
         description: "Send welcome email",
         status: "pending",

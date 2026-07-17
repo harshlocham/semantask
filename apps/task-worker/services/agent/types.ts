@@ -134,6 +134,7 @@ export type RunTaskContext = {
     workerId?: string;
     leaseHeld?: boolean;
     abortSignal?: AbortSignal;
+    clarificationReply?: string | null;
 };
 
 export type ExecutionUpdateEmitter = (payload: TaskExecutionUpdatedPayload) => Promise<void> | void;
@@ -266,12 +267,29 @@ export function combineAbortSignals(...signals: Array<AbortSignal | undefined>):
     }
 
     const controller = new AbortController();
+    const listeners: Array<{ signal: AbortSignal; onAbort: () => void }> = [];
+
+    const cleanup = () => {
+        for (const { signal, onAbort } of listeners) {
+            signal.removeEventListener("abort", onAbort);
+        }
+        listeners.length = 0;
+    };
+
     for (const signal of activeSignals) {
         if (signal.aborted) {
+            cleanup();
             controller.abort();
             return controller.signal;
         }
-        signal.addEventListener("abort", () => controller.abort(), { once: true });
+        const onAbort = () => {
+            cleanup();
+            if (!controller.signal.aborted) {
+                controller.abort();
+            }
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        listeners.push({ signal, onAbort });
     }
 
     return controller.signal;

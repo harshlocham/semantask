@@ -21,6 +21,7 @@ let currentLlmIndex = 0;
 type MockTask = {
     _id: { toString(): string };
     conversationId: { toString(): string };
+    createdBy?: { toString(): string } | string | null;
     title: string;
     description: string;
     status: string;
@@ -79,6 +80,7 @@ function createMockTask(overrides?: { title?: string; description?: string }): M
     const task: MockTask = {
         _id: { toString: () => "task-1" },
         conversationId: { toString: () => "conv-1" },
+        createdBy: { toString: () => "user-1" },
         title: overrides?.title ?? "Autonomy test task",
         description: overrides?.description ?? "Validate autonomous multi-step execution",
         status: "pending",
@@ -410,7 +412,7 @@ test("autonomy: chained tasks adapt after a failed step", async () => {
     await withMockedFetch(
         [
             toolCallPayload("create_github_issue", { title: "Primary attempt" }),
-            toolCallPayload("schedule_meeting", { summary: "Fallback sync" }),
+            toolCallPayload("schedule_meeting", { summary: "Fallback sync", whenText: "tomorrow 10am" }),
             toolCallPayload("send_email", { to: ["team@chatapp.dev"], subject: "Update" }),
         ],
         async () => {

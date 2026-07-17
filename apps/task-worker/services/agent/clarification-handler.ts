@@ -86,11 +86,11 @@ export class ClarificationHandler {
      * Marks a paused task ready to resume with the user's reply. Mirrors the
      * pre-split `resumeTask` persistence step; the caller re-runs the loop.
      */
-    async resume(task: TaskDocumentLike, userReply: string) {
+    async resume(task: TaskDocumentLike, _userReply: string) {
         await this.ctx.updateTask(task, {
             status: "executing",
             lifecycleState: "ready",
-            pausedReason: userReply,
+            pausedReason: null,
             blockedReason: null,
         });
     }
