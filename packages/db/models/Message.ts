@@ -152,6 +152,7 @@ const MessageSchema = new Schema<IMessage>({
     timestamps: true,
 });
 
+MessageSchema.index({ conversationId: 1, createdAt: -1 });
 MessageSchema.index({ conversationId: 1, semanticType: 1, createdAt: -1 });
 MessageSchema.index({ conversationId: 1, aiStatus: 1, createdAt: -1 });
 MessageSchema.index({ linkedTaskIds: 1, createdAt: -1 });

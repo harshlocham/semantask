@@ -6,22 +6,20 @@
     "scripts": {
         "dev": "tsx index.ts",
         "build": "tsc --noEmit false --outDir dist",
-        "start": "node dist/apps/socket/index.js",
-        "typecheck": "tsc --noEmit -p tsconfig.json"
+        "start": "node dist/index.js",
+        "typecheck": "tsc --noEmit -p tsconfig.json",
+        "test": "tsx --test tests/**/*.test.ts"
     },
     "dependencies": {
         "@imagekit/nodejs": "^7.3.0",
         "@semantask/observability": "workspace:*",
         "@semantask/types": "workspace:*",
         "@socket.io/redis-adapter": "^8.3.0",
-        "bcryptjs": "^3.0.2",
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
         "express": "^5.1.0",
         "ioredis": "^5.10.0",
         "jsonwebtoken": "^9.0.2",
-        "mongodb": "^4.17.2",
-        "mongoose": "^8.16.2",
         "redis": "^5.9.0",
         "socket.io": "^4.8.1",
         "uuid": "^14.0.0",

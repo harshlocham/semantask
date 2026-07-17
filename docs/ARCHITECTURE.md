@@ -52,8 +52,8 @@ expects an external **MongoDB**:
 
 A key architectural decision: **the socket server is transport-only**. All persistence happens in
 the Next.js API layer; the socket server just authenticates, authorizes (by calling back into the
-web app), and fans out events. This is stated explicitly in
-`apps/socket/server/socket/controllers/message.controller.ts`.
+web app), and fans out events. It must not import Mongoose models or open a MongoDB connection —
+data lookups go through `POST /api/internal/socket/*` via `internal-web-bridge.ts`.
 
 ### High-level architecture diagram
 
@@ -448,8 +448,9 @@ sequenceDiagram
 
 - **Ingress classification is regex-based**, not LLM-based. See `classifyMessage()` in
   `packages/services/task-intelligence.service.ts` and Planned / Future in §4.
-- The socket server **does not persist messages** — `message.controller.ts` returns a plain object and
-  comments that persistence belongs to the web/API layer.
+- The socket server **does not persist messages** — handlers authorize via the web internal bridge
+  and fan out only; persistence belongs to the web/API layer. Socket does not depend on
+  `mongoose` / `@semantask/db`.
 - Delivery/seen receipts are computed from **Redis presence**, not a DB read, on the hot path
   (`message.handler.ts` + `presence.redis.service.ts`); the DB `deliveredTo`/`seenBy` arrays are updated
   through the dedicated `/api/messages/[id]/delivered` and `/seen` routes.

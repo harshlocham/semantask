@@ -10,6 +10,10 @@ import { deliveredHandler } from "./handlers/delivery/delivered.handler.js";
 import { SeenHandler } from "./handlers/delivery/seen.handler.js";
 import { cleanupStaleActiveUsers } from "./services/presence.redis.service.js";
 import { SocketEvents } from "@semantask/types";
+import {
+    emitPresenceToUsers,
+    getPresencePeers,
+} from "./services/presence-peers.js";
 
 import { typingHandler } from "./handlers/typing/typing.handler.js";
 import type { Socket } from "socket.io";
@@ -27,11 +31,17 @@ export async function initSocket(server: HTTPServer) {
                 const staleUsers = await cleanupStaleActiveUsers(redis.appClient);
                 if (staleUsers.length === 0) return;
 
+                const lastSeen = new Date();
                 for (const userId of staleUsers) {
-                    io.emit(SocketEvents.USER_OFFLINE, {
-                        userId,
-                        lastSeen: new Date(),
-                    });
+                    try {
+                        const peers = await getPresencePeers(redis.appClient, userId);
+                        emitPresenceToUsers(peers, SocketEvents.USER_OFFLINE, {
+                            userId,
+                            lastSeen,
+                        });
+                    } catch (error) {
+                        console.error("presence sweep user error", { userId, error });
+                    }
                 }
             } catch (error) {
                 console.error("presence sweep error", error);

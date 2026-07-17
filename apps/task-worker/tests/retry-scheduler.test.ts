@@ -45,6 +45,17 @@ function createRetryStore() {
             outbox.push(dedupeKey);
             return 1;
         },
+        scheduleBatch(now: number, batchSize: number) {
+            let promoted = 0;
+            for (let i = 0; i < batchSize; i += 1) {
+                const result = this.scheduleOnce(now);
+                if (result === 0) {
+                    break;
+                }
+                promoted += result;
+            }
+            return promoted;
+        },
     };
 }
 
@@ -115,4 +126,28 @@ test("retry scheduler does not double-enqueue same retry count", () => {
     const again = store.scheduleOnce(Date.now());
     assert.equal(again, 0);
     assert.equal(store.outbox.length, 1);
+});
+
+test("retry scanner batch promotes up to TASK_RETRY_BATCH_SIZE candidates", () => {
+    const store = createRetryStore();
+    const now = Date.now();
+
+    for (let i = 1; i <= 5; i += 1) {
+        store.tasks.set(`task-${i}`, {
+            id: `task-${i}`,
+            lifecycleState: "retry_scheduled",
+            nextRetryAt: now - i,
+            retryCount: 0,
+            leaseOwner: null,
+            leaseExpiresAt: 0,
+        });
+    }
+
+    const promoted = store.scheduleBatch(now, 3);
+    assert.equal(promoted, 3);
+    assert.equal(store.outbox.length, 3);
+
+    const remaining = store.scheduleBatch(now, 10);
+    assert.equal(remaining, 2);
+    assert.equal(store.outbox.length, 5);
 });

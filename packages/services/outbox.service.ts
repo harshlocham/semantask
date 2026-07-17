@@ -5,6 +5,17 @@ import {
     getActiveTraceparent,
     mergeCorrelationIntoPayload,
 } from "@semantask/observability";
+import {
+    buildOutboxArchivalFilter,
+    buildOutboxClaimFilter,
+} from "./outbox.helpers";
+
+export type { OutboxPartitionConfig } from "./outbox.helpers";
+export {
+    buildOutboxArchivalFilter,
+    buildOutboxClaimFilter,
+    getOutboxPartitionConfig,
+} from "./outbox.helpers";
 
 export interface EnqueueOutboxEventInput {
     topic: OutboxTopic;
@@ -41,21 +52,11 @@ export async function claimOutboxEvents(workerId: string, limit = 10): Promise<I
     const now = new Date();
     const staleProcessingCutoff = new Date(Date.now() - 5 * 60 * 1000);
     const claimed: IOutboxEvent[] = [];
+    const filter = buildOutboxClaimFilter(now, staleProcessingCutoff);
 
     for (let i = 0; i < limit; i += 1) {
         const doc = await OutboxEventModel.findOneAndUpdate(
-            {
-                $or: [
-                    {
-                        status: { $in: ["pending", "failed"] },
-                        availableAt: { $lte: now },
-                    },
-                    {
-                        status: "processing",
-                        lockedAt: { $lte: staleProcessingCutoff },
-                    },
-                ],
-            },
+            filter,
             {
                 $set: {
                     status: "processing",
@@ -75,6 +76,23 @@ export async function claimOutboxEvents(workerId: string, limit = 10): Promise<I
     }
 
     return claimed;
+}
+
+export async function archiveTerminalOutboxEvents(options?: {
+    retentionDays?: number;
+    now?: Date;
+}): Promise<number> {
+    await connectToDatabase();
+
+    const rawDays = options?.retentionDays
+        ?? Number(process.env.OUTBOX_RETENTION_DAYS || 14);
+    const retentionDays =
+        Number.isFinite(rawDays) && rawDays > 0 ? Math.floor(rawDays) : 14;
+    const now = options?.now ?? new Date();
+    const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+
+    const result = await OutboxEventModel.deleteMany(buildOutboxArchivalFilter(cutoff));
+    return result.deletedCount ?? 0;
 }
 
 export async function markOutboxEventCompleted(id: string) {

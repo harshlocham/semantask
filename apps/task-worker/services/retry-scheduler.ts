@@ -14,6 +14,14 @@ const connectToDatabase =
 
 export const RETRY_SCAN_INTERVAL_MS = Number(process.env.TASK_RETRY_SCAN_INTERVAL_MS || 5000);
 
+export function getRetryBatchSize(): number {
+    const raw = Number(process.env.TASK_RETRY_BATCH_SIZE || 10);
+    if (!Number.isFinite(raw) || raw < 1) {
+        return 10;
+    }
+    return Math.floor(raw);
+}
+
 function buildRetryPayload(task: ITask): Record<string, unknown> {
     const taskId = task._id.toString();
     const conversationId = task.conversationId.toString();
@@ -156,24 +164,43 @@ export async function runRetryScannerOnce(workerId: string): Promise<number> {
     await connectToDatabase();
 
     const now = new Date();
+    const batchSize = getRetryBatchSize();
     const session = await mongoose.startSession();
 
     try {
-        let enqueued = 0;
+        let totalEnqueued = 0;
 
-        try {
-            await session.withTransaction(async () => {
-                enqueued = await promoteAndEnqueueRetry(workerId, now, session);
-            });
-        } catch (error) {
-            if (!isMongoTransactionUnsupported(error)) {
-                throw error;
+        for (let i = 0; i < batchSize; i += 1) {
+            let enqueued = 0;
+
+            try {
+                await session.withTransaction(async () => {
+                    enqueued = await promoteAndEnqueueRetry(workerId, now, session);
+                });
+            } catch (error) {
+                if (!isMongoTransactionUnsupported(error)) {
+                    throw error;
+                }
+
+                enqueued = await promoteAndEnqueueRetry(workerId, now);
             }
 
-            enqueued = await promoteAndEnqueueRetry(workerId, now);
+            if (enqueued === 0) {
+                break;
+            }
+
+            totalEnqueued += enqueued;
         }
 
-        return enqueued;
+        if (totalEnqueued > 0) {
+            console.info("task-worker retry.batch_promoted", {
+                workerId,
+                promoted: totalEnqueued,
+                batchSize,
+            });
+        }
+
+        return totalEnqueued;
     } finally {
         await session.endSession();
     }
