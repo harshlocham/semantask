@@ -33,11 +33,15 @@ export async function initSocket(server: HTTPServer) {
 
                 const lastSeen = new Date();
                 for (const userId of staleUsers) {
-                    const peers = await getPresencePeers(redis.appClient, userId);
-                    emitPresenceToUsers(peers, SocketEvents.USER_OFFLINE, {
-                        userId,
-                        lastSeen,
-                    });
+                    try {
+                        const peers = await getPresencePeers(redis.appClient, userId);
+                        emitPresenceToUsers(peers, SocketEvents.USER_OFFLINE, {
+                            userId,
+                            lastSeen,
+                        });
+                    } catch (error) {
+                        console.error("presence sweep user error", { userId, error });
+                    }
                 }
             } catch (error) {
                 console.error("presence sweep error", error);
