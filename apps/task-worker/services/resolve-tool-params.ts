@@ -201,12 +201,13 @@ async function resolveSendEmailParams(
             return buildPlaceholderClarificationResult(reference, params);
         }
 
-        if (!userId) {
-            if (isValidEmail(reference)) {
-                resolvedEmails.push(reference.trim().toLowerCase());
-                continue;
-            }
+        // Literal emails do not need contact-book resolution.
+        if (isValidEmail(reference)) {
+            resolvedEmails.push(reference.trim().toLowerCase());
+            continue;
+        }
 
+        if (!userId) {
             return {
                 status: "failed",
                 error: `Missing user context for resolving recipient '${reference}'.`,
@@ -216,11 +217,6 @@ async function resolveSendEmailParams(
         const resolved = await contactService.resolveContactReference(userId, reference);
         if (resolved.success && resolved.resolved) {
             resolvedEmails.push(resolved.resolved.email);
-            continue;
-        }
-
-        if (isValidEmail(reference)) {
-            resolvedEmails.push(reference.trim().toLowerCase());
             continue;
         }
 

@@ -1,4 +1,4 @@
-FROM node:22-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -13,5 +13,7 @@ RUN pnpm --filter @semantask/types build
 RUN pnpm --filter @semantask/socket build
 
 EXPOSE 3001
+
+USER node
 
 CMD ["pnpm", "--filter", "@semantask/socket", "start"]

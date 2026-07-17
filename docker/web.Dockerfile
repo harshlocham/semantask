@@ -12,7 +12,9 @@ COPY packages ./packages
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @semantask/types build
 RUN pnpm --filter @semantask/db build
+RUN pnpm --filter @semantask/observability build
 RUN pnpm --filter @semantask/services build
 RUN pnpm --filter @semantask/web build
 EXPOSE 3000
+USER node
 CMD ["pnpm", "--filter", "@semantask/web", "start"]

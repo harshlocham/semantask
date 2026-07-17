@@ -94,17 +94,19 @@
     "scripts": {
         "build": "tsc -p tsconfig.build.json && node ./scripts/postbuild-fix.cjs && node ./scripts/postbuild-resolve-imports.cjs",
         "typecheck": "tsc --noEmit",
-        "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --config ./jest.config.cjs"
+        "test": "NODE_OPTIONS='--experimental-vm-modules' jest --config ./jest.config.cjs"
     },
     "devDependencies": {
+        "@jest/globals": "30.4.1",
         "@types/jest": "^30.0.0",
-        "jest": "^30.0.5",
+        "jest": "^30.4.1",
         "ts-jest": "^29.4.4"
     },
     "dependencies": {
         "@semantask/db": "workspace:*",
         "@semantask/observability": "workspace:*",
         "@semantask/types": "workspace:*",
+        "mongoose": "^8.24.0",
         "zod": "^4.0.5"
     }
 }
