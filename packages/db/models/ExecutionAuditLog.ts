@@ -15,6 +15,8 @@ export interface IExecutionAuditLog extends Document {
     _id: mongoose.Types.ObjectId;
     taskId: mongoose.Types.ObjectId;
     conversationId: mongoose.Types.ObjectId;
+    /** Denormalized for org-scoped audit queries. */
+    organizationId?: mongoose.Types.ObjectId | null;
     actorId?: mongoose.Types.ObjectId | null;
     runId?: string | null;
     toolName: string;
@@ -30,6 +32,7 @@ const ExecutionAuditLogSchema = new Schema<IExecutionAuditLog>(
     {
         taskId: { type: Schema.Types.ObjectId, ref: "Task", required: true, index: true },
         conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
+        organizationId: { type: Schema.Types.ObjectId, ref: "Organization", default: null, index: true },
         actorId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
         runId: { type: String, trim: true, maxlength: 200, default: null, index: true },
         toolName: { type: String, required: true, trim: true, maxlength: 120, index: true },
@@ -109,6 +112,10 @@ ExecutionAuditLogSchema.pre("save", function (next) {
 
 ExecutionAuditLogSchema.index({ taskId: 1, createdAt: -1 }, { name: "idx_execution_audit_task_created" });
 ExecutionAuditLogSchema.index({ toolName: 1, createdAt: -1 }, { name: "idx_execution_audit_tool_created" });
+ExecutionAuditLogSchema.index(
+    { organizationId: 1, createdAt: -1 },
+    { name: "idx_execution_audit_org_created" }
+);
 
 /** Stable JSON hash for tool parameters (sorted keys). */
 export function hashExecutionParams(params: Record<string, unknown> | null | undefined): string {

@@ -9,6 +9,7 @@ import { rankTools, type ToolRankingInput } from "../tool-ranking.js";
 import { collectPreviousStepOutputs, llmDecisionSchema, normalizeParams, resolveStepTemplates, type PreviousStepOutputs, validateToolParameters } from "../step-execution-utils.js";
 import { createDefaultLLMProvider } from "../llm/index.js";
 import { parseJsonText } from "../llm/response-parser.js";
+import { runWithLLMUsageContext } from "../llm/usage-context.js";
 import { buildFencedTaskFields } from "../prompt-guard.js";
 import { listGrantedToolNames } from "@semantask/services/tool-grant.service";
 import type { AgentContext } from "./context.js";
@@ -165,12 +166,15 @@ export class StepLoop {
         const provider = createDefaultLLMProvider();
         const startedAt = Date.now();
 
-        const response = await provider.generate({
-            model,
-            input,
-        }, {
-            signal: this.ctx.currentExecutionSignal ?? undefined,
-        });
+        const response = await runWithLLMUsageContext(
+            this.ctx.currentUsageContext ?? {},
+            () => provider.generate({
+                model,
+                input,
+            }, {
+                signal: this.ctx.currentExecutionSignal ?? undefined,
+            })
+        );
 
         console.log("agent-runner llm:provider", {
             runId: this.ctx.currentRunId,
@@ -184,6 +188,14 @@ export class StepLoop {
         return {
             output_text: response.output_text,
             output: response.output ?? response.raw,
+        };
+    }
+
+    private setUsageContextFromTask(task: TaskDocumentLike): void {
+        this.ctx.currentUsageContext = {
+            taskId: task._id.toString(),
+            userId: this.getTaskUserId(task),
+            organizationId: task.organizationId?.toString?.() ?? null,
         };
     }
 
@@ -674,6 +686,8 @@ Reply to confirm receipt or contact support if you have questions.
                 throw new Error(`Task not found: ${taskId}`);
             }
 
+            this.setUsageContextFromTask(task);
+
             const action = await this.ctx.getLatestExecutionTaskAction(taskId);
             if (!action) {
                 throw new Error(`No execution action found for task: ${taskId}`);
@@ -1100,6 +1114,7 @@ Reply to confirm receipt or contact support if you have questions.
                         idempotencyKey: toolIdempotencyKey,
                     }, {
                         userId: this.getTaskUserId(task),
+                        organizationId: task.organizationId?.toString?.() ?? null,
                         clarificationReply: ctx?.clarificationReply
                             ?? (typeof task.pausedReason === "string" ? task.pausedReason : null),
                         pendingResolution: this.clarification.getPendingResolution(task),
@@ -1540,6 +1555,7 @@ Reply to confirm receipt or contact support if you have questions.
             }
         } finally {
             this.ctx.currentRunId = null;
+            this.ctx.currentUsageContext = null;
         }
     }
 
@@ -1837,6 +1853,8 @@ Reply to confirm receipt or contact support if you have questions.
         if (!task) {
             throw new Error(`Task not found: ${taskId}`);
         }
+
+        this.setUsageContextFromTask(task);
 
         const leaseHeld = Boolean(ctx?.leaseHeld);
         if (!leaseHeld) {
@@ -2198,6 +2216,7 @@ Reply to confirm receipt or contact support if you have questions.
 
                     const executed = await this.toolExecutor.execute(executionPayload, {
                         userId: this.getTaskUserId(latestTask),
+                        organizationId: latestTask.organizationId?.toString?.() ?? null,
                         clarificationReply,
                         pendingResolution: this.clarification.getPendingResolution(latestTask),
                     });

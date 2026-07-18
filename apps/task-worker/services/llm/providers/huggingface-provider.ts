@@ -188,6 +188,7 @@ export class HuggingFaceProvider extends BaseLLMProvider {
             }
 
             this.recordMetric({ provider: this.config.provider, event: "success", latencyMs: Date.now() - startedAt });
+            this.recordUsage(llmResponse);
             return llmResponse;
         } catch (error) {
             const normalized = LLMError.fromUnknown(error, {

@@ -17,6 +17,7 @@ const taskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
 
 export const CreateTaskSchema = z.object({
     conversationId: z.string().min(1),
+    organizationId: z.string().min(1).nullable().optional(),
     parentTaskId: z.string().min(1).nullable().optional().default(null),
     title: z.string().min(3).max(200),
     description: z.string().max(8000).optional().default(""),

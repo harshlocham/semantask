@@ -14,6 +14,9 @@ import AgentRunner from "./services/agent-runner.js";
 import { WorkflowRegistry } from "./services/workflow/workflow-registry.js";
 import { DefaultAgentLoopTemplate } from "./services/workflow/default-agent-loop.template.js";
 import { evaluateExecutionPolicy } from "./services/execution-policy.js";
+import { resolveOrganizationPolicy } from "@semantask/services/organization-policy.service";
+import { assertExecutionQuotas, OrgQuotaExceededError } from "@semantask/services/organization-quota.service";
+import { getOrganizationById } from "@semantask/services/organization.service";
 import { GLOBAL_EXECUTION_CONFIDENCE_BASELINE } from "./services/execution-confidence.js";
 import { loadPromptGuardEmailContext } from "./services/prompt-guard-context.js";
 import { assertExecutionLeaseCompleted, ExecutionLeaseBusyError, withExecutionLease } from "./services/lease.service.js";
@@ -162,6 +165,7 @@ type TaskModelLike = {
         result?: TaskResult;
         updatedBy: null | string;
         createdBy?: { toString(): string } | string | null;
+        organizationId?: { toString(): string } | null;
         cancelRequestedAt?: Date | null;
         cancelReason?: string | null;
         cancelRequestedByType?: "user" | "agent" | "system" | null;
@@ -532,10 +536,67 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
     const ownerUserId = existingTask?.createdBy?.toString?.()
         ?? (typeof existingTask?.createdBy === "string" ? existingTask.createdBy : null)
         ?? payload.requestedById;
+    const organizationId = existingTask?.organizationId?.toString?.() ?? null;
+
+    if (organizationId) {
+        const org = await getOrganizationById(organizationId);
+        if (!org || org.status === "suspended") {
+            const reason = "Organization is suspended; execution blocked.";
+            await updateTaskLifecycle({
+                taskId: payload.taskId,
+                conversationId: payload.conversationId,
+                status: "failed",
+                result: {
+                    success: false,
+                    confidence: 0,
+                    evidence: { reason: "org_suspended" },
+                    error: reason,
+                },
+            });
+            return;
+        }
+
+        try {
+            await assertExecutionQuotas(organizationId);
+        } catch (quotaError) {
+            if (quotaError instanceof OrgQuotaExceededError) {
+                await updateTaskLifecycle({
+                    taskId: payload.taskId,
+                    conversationId: payload.conversationId,
+                    status: "failed",
+                    result: {
+                        success: false,
+                        confidence: 0,
+                        evidence: { reason: "org_quota_exceeded", code: "ORG_QUOTA_EXCEEDED" },
+                        error: quotaError.message,
+                    },
+                });
+                return;
+            }
+            throw quotaError;
+        }
+    }
+
+    const orgPolicyResolved = await resolveOrganizationPolicy(organizationId);
+    const orgPolicyOverlay = orgPolicyResolved
+        ? {
+            version: orgPolicyResolved.version,
+            confidenceThresholds: orgPolicyResolved.confidenceThresholds,
+            allowedEmailDomains: orgPolicyResolved.allowedEmailDomains,
+            requireApprovalFor: orgPolicyResolved.requireApprovalFor,
+            toolDenyList: orgPolicyResolved.toolDenyList,
+            promptGuardMode: orgPolicyResolved.promptGuardMode,
+        }
+        : null;
 
     if (ownerUserId && isHighRiskToolName(payload.actionType)) {
         try {
-            await assertToolGrant(ownerUserId, payload.actionType, payload.conversationId);
+            await assertToolGrant(
+                ownerUserId,
+                payload.actionType,
+                payload.conversationId,
+                organizationId
+            );
         } catch (error) {
             if (!(error instanceof AuthorizationError)) {
                 logExecution("error", {
@@ -550,6 +611,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 await appendExecutionAudit({
                     taskId: payload.taskId,
                     conversationId: payload.conversationId,
+                    organizationId,
                     actorId: ownerUserId,
                     runId: provisionalRun,
                     toolName: payload.actionType,
@@ -562,7 +624,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 throw error;
             }
 
-            const denyReason = error.message;
+            const denyReason = error instanceof Error ? error.message : "Tool grant denied";
 
             logExecution("warn", {
                 event: "tool_grant.deny",
@@ -627,6 +689,8 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
         participantEmails: promptGuardContext.participantEmails,
         contactEmails: promptGuardContext.contactEmails,
         taskId: payload.taskId,
+        organizationId,
+        orgPolicy: orgPolicyOverlay,
     });
     const safePolicyDecision = {
         outcome: policyDecision.outcome,
@@ -635,6 +699,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
         semanticType: policyDecision.semanticType,
         confidence: policyDecision.confidence,
         threshold: policyDecision.threshold,
+        orgPolicyVersion: policyDecision.orgPolicyVersion ?? null,
     };
 
     logExecution("info", {

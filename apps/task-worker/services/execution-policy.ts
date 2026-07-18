@@ -6,8 +6,18 @@ import {
 import {
     applyPromptGuardDecision,
     getPromptGuardMode,
+    type PromptGuardMode,
     validateToolArgsAgainstContext,
 } from "./prompt-guard.js";
+
+export type OrganizationPolicyOverlay = {
+    version: number;
+    confidenceThresholds?: Record<string, number> | null;
+    allowedEmailDomains?: string[] | null;
+    requireApprovalFor?: string[];
+    toolDenyList?: string[];
+    promptGuardMode?: PromptGuardMode | null;
+};
 
 type RequestedPayload = {
     actionType: TaskExecutionActionType;
@@ -20,6 +30,8 @@ type RequestedPayload = {
     /** Pre-loaded task-owner contact emails (lowercase). */
     contactEmails?: string[];
     taskId?: string;
+    organizationId?: string | null;
+    orgPolicy?: OrganizationPolicyOverlay | null;
 };
 
 export type ExecutionPolicyOutcome = "auto_execute" | "approval_required" | "blocked";
@@ -33,6 +45,7 @@ export type ExecutionPolicyDecision = {
     semanticType?: MessageSemanticType;
     confidence: number;
     threshold: number;
+    orgPolicyVersion?: number | null;
 };
 
 function toStringArray(value: unknown): string[] {
@@ -53,12 +66,45 @@ function emailDomain(email: string): string {
     return email.slice(at + 1).toLowerCase();
 }
 
-function getAllowedEmailDomains(): string[] {
+function getEnvAllowedEmailDomains(): string[] {
     const raw = process.env.TASK_WORKER_ALLOWED_EMAIL_DOMAINS || process.env.ALLOWED_EMAIL_DOMAINS || "";
     return raw
         .split(",")
         .map((entry) => entry.trim().toLowerCase())
         .filter((entry) => entry.length > 0);
+}
+
+function resolveAllowedEmailDomains(orgPolicy?: OrganizationPolicyOverlay | null): string[] {
+    if (orgPolicy?.allowedEmailDomains && orgPolicy.allowedEmailDomains.length > 0) {
+        return orgPolicy.allowedEmailDomains.map((d) => d.toLowerCase());
+    }
+    return getEnvAllowedEmailDomains();
+}
+
+function resolveConfidenceThreshold(
+    semanticType: MessageSemanticType | undefined,
+    orgPolicy?: OrganizationPolicyOverlay | null
+): number {
+    if (orgPolicy?.confidenceThresholds && semanticType) {
+        const override = orgPolicy.confidenceThresholds[semanticType];
+        if (typeof override === "number" && Number.isFinite(override)) {
+            return Math.max(0, Math.min(1, override));
+        }
+    }
+    if (orgPolicy?.confidenceThresholds?.unknown != null) {
+        const override = orgPolicy.confidenceThresholds.unknown;
+        if (typeof override === "number" && Number.isFinite(override)) {
+            return Math.max(0, Math.min(1, override));
+        }
+    }
+    return getExecutionConfidenceThreshold(semanticType);
+}
+
+function resolvePromptGuardMode(orgPolicy?: OrganizationPolicyOverlay | null): PromptGuardMode {
+    if (orgPolicy?.promptGuardMode) {
+        return orgPolicy.promptGuardMode;
+    }
+    return getPromptGuardMode();
 }
 
 function resolveSemanticType(payload: RequestedPayload): MessageSemanticType | undefined {
@@ -77,17 +123,45 @@ function resolveSemanticType(payload: RequestedPayload): MessageSemanticType | u
 export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPolicyDecision {
     const confidence = typeof payload.confidence === "number" ? payload.confidence : 0.5;
     const semanticType = resolveSemanticType(payload);
-    const threshold = getExecutionConfidenceThreshold(semanticType);
+    const orgPolicy = payload.orgPolicy ?? null;
+    const threshold = resolveConfidenceThreshold(semanticType, orgPolicy);
     const intentLabel = semanticType ?? "unknown";
     const reasons: string[] = [];
+    const orgPolicyVersion = orgPolicy ? orgPolicy.version : null;
+
+    const actionKey = String(payload.actionType).toLowerCase();
+
+    if (orgPolicy?.toolDenyList?.includes(actionKey)) {
+        return {
+            outcome: "blocked",
+            riskLevel: "high",
+            reasons: [
+                `Tool "${payload.actionType}" is denied by organization policy v${orgPolicy.version}.`,
+            ],
+            semanticType,
+            confidence,
+            threshold,
+            orgPolicyVersion,
+        };
+    }
 
     if (payload.needsApproval) {
         reasons.push("Upstream classifier marked action as requiring approval.");
     }
 
-    if (confidence < threshold) {
+    if (orgPolicy?.requireApprovalFor?.includes(actionKey)) {
         reasons.push(
-            `Low confidence for intent "${intentLabel}" (${confidence.toFixed(2)} < ${threshold.toFixed(2)}).`
+            `Organization policy v${orgPolicy.version} requires approval for "${payload.actionType}".`
+        );
+    }
+
+    if (confidence < threshold) {
+        const source = orgPolicy?.confidenceThresholds?.[intentLabel] != null
+            || (orgPolicy?.confidenceThresholds && !semanticType)
+            ? `org policy v${orgPolicy?.version}`
+            : "env/default";
+        reasons.push(
+            `Low confidence for intent "${intentLabel}" (${confidence.toFixed(2)} < ${threshold.toFixed(2)}; ${source}).`
         );
     }
 
@@ -103,10 +177,11 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
                 semanticType,
                 confidence,
                 threshold,
+                orgPolicyVersion,
             };
         }
 
-        const allowedDomains = getAllowedEmailDomains();
+        const allowedDomains = resolveAllowedEmailDomains(orgPolicy);
         if (allowedDomains.length > 0) {
             const externalRecipients = recipients.filter((recipient) => {
                 if (!recipient.includes("@")) {
@@ -115,7 +190,11 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
                 return !allowedDomains.includes(emailDomain(recipient));
             });
             if (externalRecipients.length > 0) {
-                reasons.push("One or more recipients are outside allowed domains.");
+                reasons.push(
+                    orgPolicy?.allowedEmailDomains?.length
+                        ? `One or more recipients are outside allowed domains (org policy v${orgPolicy.version}).`
+                        : "One or more recipients are outside allowed domains."
+                );
             }
         }
 
@@ -138,7 +217,7 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
         }
     }
 
-    const promptGuardMode = getPromptGuardMode();
+    const promptGuardMode = resolvePromptGuardMode(orgPolicy);
     if (
         promptGuardMode !== "off"
         && (payload.actionType === "send_email" || payload.actionType === "schedule_meeting")
@@ -163,6 +242,7 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
                 semanticType,
                 confidence,
                 threshold,
+                orgPolicyVersion,
             };
         }
 
@@ -183,6 +263,7 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
             semanticType,
             confidence,
             threshold,
+            orgPolicyVersion,
         };
     }
 
@@ -199,6 +280,7 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
         semanticType,
         confidence,
         threshold,
+        orgPolicyVersion,
     };
 }
 

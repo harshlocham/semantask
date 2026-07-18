@@ -344,7 +344,12 @@ export class ToolExecutor {
         }
 
         try {
-            await assertToolGrant(options?.userId ?? "", payload.toolName, payload.conversationId);
+            await assertToolGrant(
+                options?.userId ?? "",
+                payload.toolName,
+                payload.conversationId,
+                options?.organizationId ?? null
+            );
         } catch (error) {
             if (!(error instanceof AuthorizationError)) {
                 logExecution("error", {
@@ -358,7 +363,7 @@ export class ToolExecutor {
                 throw error;
             }
 
-            const message = error.message;
+            const message = error instanceof Error ? error.message : "Tool grant denied";
             logExecution("warn", {
                 event: "tool_grant.deny",
                 runId,

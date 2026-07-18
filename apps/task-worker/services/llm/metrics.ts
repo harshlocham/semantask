@@ -1,5 +1,7 @@
 import type { LLMProviderMetricSnapshot } from "./types.js";
 import { llmEventCounter, llmRequestDurationSeconds } from "@semantask/observability/metrics";
+import { getLLMUsageContext } from "./usage-context.js";
+import { recordUsageEvent } from "@semantask/services/usage-event.service";
 
 type MetricEvent =
     | { provider: string; event: "request" }
@@ -59,6 +61,30 @@ export function recordLLMProviderMetric(event: MetricEvent) {
     if (event.event === "fallback") snapshot.fallbackCount += 1;
     if (event.event === "malformed_response") snapshot.malformedResponseCount += 1;
     if (event.event === "repair") snapshot.repairCount += 1;
+}
+
+/** Persist token usage when an LLM call succeeds (best-effort). */
+export function persistLLMUsage(usage: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    model?: string | null;
+} | null | undefined): void {
+    if (!usage) return;
+
+    const context = getLLMUsageContext();
+    const inputTokens = usage.inputTokens ?? 0;
+    const outputTokens = usage.outputTokens
+        ?? Math.max(0, (usage.totalTokens ?? 0) - inputTokens);
+
+    void recordUsageEvent({
+        organizationId: context?.organizationId ?? null,
+        userId: context?.userId ?? null,
+        taskId: context?.taskId ?? null,
+        inputTokens,
+        outputTokens,
+        model: usage.model ?? null,
+    });
 }
 
 export function getLLMProviderMetricsSnapshot(provider: string): LLMProviderMetricSnapshot {

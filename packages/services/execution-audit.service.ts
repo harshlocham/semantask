@@ -11,6 +11,7 @@ export type { ExecutionAuditAction };
 export type AppendExecutionAuditInput = {
     taskId: string;
     conversationId: string;
+    organizationId?: string | null;
     actorId?: string | null;
     runId?: string | null;
     toolName: string;
@@ -51,6 +52,9 @@ export async function appendExecutionAudit(
         return await ExecutionAuditLogModel.create({
             taskId: new Types.ObjectId(input.taskId),
             conversationId: new Types.ObjectId(input.conversationId),
+            organizationId: isValidObjectId(input.organizationId)
+                ? new Types.ObjectId(input.organizationId)
+                : null,
             actorId: isValidObjectId(input.actorId) ? new Types.ObjectId(input.actorId) : null,
             runId: input.runId ?? null,
             toolName: input.toolName,

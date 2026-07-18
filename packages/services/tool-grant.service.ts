@@ -7,7 +7,8 @@ import ToolGrantModel, {
     type IToolGrant,
 } from "@semantask/db/models/ToolGrant";
 import TaskModel from "@semantask/db/models/Task";
-import { AuthorizationError } from "./authorization.service";
+import { AuthorizationError } from "./authorization-errors";
+import { resolveOrganizationPolicy } from "./organization-policy.service";
 
 export type ToolRbacMode = "off" | "enforce";
 
@@ -24,7 +25,8 @@ function isValidObjectId(value: string | null | undefined): value is string {
 export async function hasToolGrant(
     userId: string,
     toolName: string,
-    conversationId?: string | null
+    conversationId?: string | null,
+    organizationId?: string | null
 ): Promise<boolean> {
     if (!isHighRiskToolName(toolName)) {
         return true;
@@ -34,14 +36,34 @@ export async function hasToolGrant(
         return false;
     }
 
+    const orgPolicy = await resolveOrganizationPolicy(organizationId);
+    if (orgPolicy?.toolDenyList.includes(toolName.toLowerCase())) {
+        return false;
+    }
+    if (orgPolicy?.defaultToolGrants.includes(toolName.toLowerCase())) {
+        return true;
+    }
+
     await connectToDatabase();
 
     const orClauses: Record<string, unknown>[] = [
-        { conversationId: null },
+        { conversationId: null, organizationId: null },
     ];
 
     if (isValidObjectId(conversationId)) {
-        orClauses.push({ conversationId: new Types.ObjectId(conversationId) });
+        orClauses.push({
+            conversationId: new Types.ObjectId(conversationId),
+            organizationId: isValidObjectId(organizationId)
+                ? new Types.ObjectId(organizationId)
+                : null,
+        });
+    }
+
+    if (isValidObjectId(organizationId)) {
+        orClauses.push({
+            conversationId: null,
+            organizationId: new Types.ObjectId(organizationId),
+        });
     }
 
     const grant = await ToolGrantModel.findOne({
@@ -59,7 +81,8 @@ export async function hasToolGrant(
 export async function assertToolGrant(
     userId: string,
     toolName: string,
-    conversationId?: string | null
+    conversationId?: string | null,
+    organizationId?: string | null
 ): Promise<void> {
     if (getToolRbacMode() === "off") {
         return;
@@ -69,7 +92,7 @@ export async function assertToolGrant(
         return;
     }
 
-    const allowed = await hasToolGrant(userId, toolName, conversationId);
+    const allowed = await hasToolGrant(userId, toolName, conversationId, organizationId);
     if (allowed) {
         return;
     }
@@ -79,6 +102,7 @@ export async function assertToolGrant(
         userId,
         toolName,
         conversationId: conversationId ?? null,
+        organizationId: organizationId ?? null,
     });
 
     throw new AuthorizationError(
@@ -89,7 +113,8 @@ export async function assertToolGrant(
 
 export async function listGrantedToolNames(
     userId: string,
-    conversationId?: string | null
+    conversationId?: string | null,
+    organizationId?: string | null
 ): Promise<string[]> {
     if (getToolRbacMode() === "off") {
         return [...HIGH_RISK_TOOLS];
@@ -99,11 +124,26 @@ export async function listGrantedToolNames(
         return [];
     }
 
+    const orgPolicy = await resolveOrganizationPolicy(organizationId);
+    const denied = new Set(orgPolicy?.toolDenyList ?? []);
+    const defaults = new Set(orgPolicy?.defaultToolGrants ?? []);
+
     await connectToDatabase();
 
-    const orClauses: Record<string, unknown>[] = [{ conversationId: null }];
+    const orClauses: Record<string, unknown>[] = [{ conversationId: null, organizationId: null }];
     if (isValidObjectId(conversationId)) {
-        orClauses.push({ conversationId: new Types.ObjectId(conversationId) });
+        orClauses.push({
+            conversationId: new Types.ObjectId(conversationId),
+            organizationId: isValidObjectId(organizationId)
+                ? new Types.ObjectId(organizationId)
+                : null,
+        });
+    }
+    if (isValidObjectId(organizationId)) {
+        orClauses.push({
+            conversationId: null,
+            organizationId: new Types.ObjectId(organizationId),
+        });
     }
 
     const grants = await ToolGrantModel.find({
@@ -114,7 +154,12 @@ export async function listGrantedToolNames(
         .select("toolName")
         .lean<{ toolName: HighRiskToolName }[]>();
 
-    return Array.from(new Set(grants.map((grant) => grant.toolName)));
+    const names = new Set<string>([
+        ...defaults,
+        ...grants.map((grant) => grant.toolName),
+    ]);
+
+    return Array.from(names).filter((name) => !denied.has(name.toLowerCase()));
 }
 
 export type GrantToolInput = {
@@ -122,6 +167,7 @@ export type GrantToolInput = {
     toolName: HighRiskToolName;
     grantedBy: string;
     conversationId?: string | null;
+    organizationId?: string | null;
 };
 
 export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
@@ -133,16 +179,24 @@ export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
         throw new AuthorizationError("FORBIDDEN", "Invalid conversation id");
     }
 
+    if (input.organizationId && !isValidObjectId(input.organizationId)) {
+        throw new AuthorizationError("FORBIDDEN", "Invalid organization id");
+    }
+
     await connectToDatabase();
 
     const conversationId = input.conversationId
         ? new Types.ObjectId(input.conversationId)
+        : null;
+    const organizationId = input.organizationId
+        ? new Types.ObjectId(input.organizationId)
         : null;
 
     const existing = await ToolGrantModel.findOne({
         userId: new Types.ObjectId(input.userId),
         toolName: input.toolName,
         conversationId,
+        organizationId,
         revokedAt: null,
     });
 
@@ -150,11 +204,11 @@ export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
         return existing;
     }
 
-    // Re-activate a previously revoked grant with the same scope if present.
     const revoked = await ToolGrantModel.findOne({
         userId: new Types.ObjectId(input.userId),
         toolName: input.toolName,
         conversationId,
+        organizationId,
         revokedAt: { $ne: null },
     });
 
@@ -171,6 +225,7 @@ export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
                     userId: new Types.ObjectId(input.userId),
                     toolName: input.toolName,
                     conversationId,
+                    organizationId,
                     revokedAt: null,
                 });
                 if (raced) {
@@ -186,6 +241,7 @@ export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
             userId: new Types.ObjectId(input.userId),
             toolName: input.toolName,
             conversationId,
+            organizationId,
             grantedBy: new Types.ObjectId(input.grantedBy),
             revokedAt: null,
         });
@@ -196,6 +252,7 @@ export async function grantTool(input: GrantToolInput): Promise<IToolGrant> {
                 userId: new Types.ObjectId(input.userId),
                 toolName: input.toolName,
                 conversationId,
+                organizationId,
                 revokedAt: null,
             });
             if (raced) {
@@ -238,6 +295,7 @@ export type ToolGrantListItem = {
     id: string;
     userId: string;
     conversationId: string | null;
+    organizationId: string | null;
     toolName: string;
     grantedBy: string;
     revokedAt: string | null;
@@ -278,6 +336,7 @@ export async function listToolGrants(input: ListToolGrantsInput = {}): Promise<{
             id: row._id.toString(),
             userId: row.userId.toString(),
             conversationId: row.conversationId ? row.conversationId.toString() : null,
+            organizationId: row.organizationId ? row.organizationId.toString() : null,
             toolName: row.toolName,
             grantedBy: row.grantedBy.toString(),
             revokedAt: row.revokedAt ? new Date(row.revokedAt).toISOString() : null,
@@ -315,9 +374,9 @@ export async function seedExistingUsersToolGrants(grantedBy: string): Promise<{
 
     for (const userId of userIds) {
         for (const toolName of HIGH_RISK_TOOLS) {
-            const before = await hasToolGrant(userId, toolName, null);
+            const before = await hasToolGrant(userId, toolName, null, null);
             if (before) continue;
-            await grantTool({ userId, toolName, grantedBy, conversationId: null });
+            await grantTool({ userId, toolName, grantedBy, conversationId: null, organizationId: null });
             grantsCreated += 1;
         }
     }

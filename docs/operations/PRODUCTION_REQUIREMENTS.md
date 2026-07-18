@@ -149,6 +149,12 @@ Legacy `INTERNAL_SECRET` remains accepted on both audiences for a two-release de
 
 See also: [`INTERNAL_SECRET_ROTATION.md`](./INTERNAL_SECRET_ROTATION.md).
 
+### Organization context (Phase 7.1)
+
+| Header | Purpose |
+|--------|---------|
+| `X-Organization-Id` | Optional. When set after auth, scopes conversation list/create and related APIs to that org. Omit for personal workspace. User must be an active member. See [ADR-004](../decisions/ADR-004-personal-and-optional-organizations.md). |
+
 ### Other required secrets (web)
 
 | Variable | Purpose |

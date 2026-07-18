@@ -22,6 +22,8 @@ export interface IConversation extends Document {
     name?: string;
     image?: string;
     groupName?: string;
+    /** Null / missing = personal workspace. */
+    organizationId?: Types.ObjectId | null;
     lastMessage?: ILastMessage;
     createdAt: Date;
     updatedAt: Date;
@@ -36,6 +38,7 @@ const conversationSchema = new Schema<IConversation>({
     name: { type: String },
     image: { type: String },
     groupName: { type: String },
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', default: null, index: true },
     isOnline: { type: Boolean, default: false },
     lastMessage: {
         _id: { type: Schema.Types.ObjectId, ref: 'Message' },
@@ -52,6 +55,11 @@ const conversationSchema = new Schema<IConversation>({
 });
 
 conversationSchema.index({ participants: 1 });
+conversationSchema.index({ organizationId: 1, updatedAt: -1 }, { name: 'idx_conversation_org_updated' });
+conversationSchema.index(
+    { organizationId: 1, participants: 1 },
+    { name: 'idx_conversation_org_participants' }
+);
 
 export interface IConversationPopulated extends IConversation {
     participants: IUser[];

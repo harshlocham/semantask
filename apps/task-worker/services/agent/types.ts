@@ -25,6 +25,7 @@ export type ExecutionActionRecord = {
 export type TaskDocumentLike = {
     _id: { toString(): string };
     conversationId: { toString(): string };
+    organizationId?: { toString(): string } | null;
     createdBy?: { toString(): string } | string | null;
     parentTaskId?: { toString(): string } | null;
     lifecycleState?: "planning" | "ready" | "executing" | "waiting_for_approval" | "blocked" | "retry_scheduled" | "paused" | "completed" | "failed";
@@ -65,6 +66,7 @@ export type ActionExecutionResult = {
 
 export type ExecutionOptions = {
     userId?: string | null;
+    organizationId?: string | null;
     clarificationReply?: string | null;
     pendingResolution?: import("../entity-resolution.service.js").PendingResolution | null;
     participantEmails?: string[];

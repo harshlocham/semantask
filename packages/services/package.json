@@ -45,6 +45,26 @@
             "types": "./dist/services/authorization.service.d.ts",
             "default": "./dist/services/authorization.service.js"
         },
+        "./organization.service": {
+            "import": "./dist/services/organization.service.js",
+            "types": "./dist/services/organization.service.d.ts",
+            "default": "./dist/services/organization.service.js"
+        },
+        "./organization-quota.service": {
+            "import": "./dist/services/organization-quota.service.js",
+            "types": "./dist/services/organization-quota.service.d.ts",
+            "default": "./dist/services/organization-quota.service.js"
+        },
+        "./organization-policy.service": {
+            "import": "./dist/services/organization-policy.service.js",
+            "types": "./dist/services/organization-policy.service.d.ts",
+            "default": "./dist/services/organization-policy.service.js"
+        },
+        "./usage-event.service": {
+            "import": "./dist/services/usage-event.service.js",
+            "types": "./dist/services/usage-event.service.d.ts",
+            "default": "./dist/services/usage-event.service.js"
+        },
         "./tool-grant.service": {
             "import": "./dist/services/tool-grant.service.js",
             "types": "./dist/services/tool-grant.service.d.ts",
