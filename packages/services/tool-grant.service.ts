@@ -84,6 +84,24 @@ export async function assertToolGrant(
     conversationId?: string | null,
     organizationId?: string | null
 ): Promise<void> {
+    // Org deny list always applies when organizationId is present (even if RBAC is off).
+    if (organizationId && isHighRiskToolName(toolName)) {
+        const orgPolicy = await resolveOrganizationPolicy(organizationId);
+        if (orgPolicy?.toolDenyList.includes(toolName.toLowerCase())) {
+            console.warn("tool_grant.deny", {
+                event: "tool_grant.deny",
+                reason: "org_deny_list",
+                userId,
+                toolName,
+                organizationId,
+            });
+            throw new AuthorizationError(
+                "FORBIDDEN",
+                `Tool "${toolName}" is denied by organization policy.`
+            );
+        }
+    }
+
     if (getToolRbacMode() === "off") {
         return;
     }
@@ -116,16 +134,17 @@ export async function listGrantedToolNames(
     conversationId?: string | null,
     organizationId?: string | null
 ): Promise<string[]> {
+    const orgPolicy = await resolveOrganizationPolicy(organizationId);
+    const denied = new Set(orgPolicy?.toolDenyList ?? []);
+
     if (getToolRbacMode() === "off") {
-        return [...HIGH_RISK_TOOLS];
+        return [...HIGH_RISK_TOOLS].filter((name) => !denied.has(name.toLowerCase()));
     }
 
     if (!isValidObjectId(userId)) {
         return [];
     }
 
-    const orgPolicy = await resolveOrganizationPolicy(organizationId);
-    const denied = new Set(orgPolicy?.toolDenyList ?? []);
     const defaults = new Set(orgPolicy?.defaultToolGrants ?? []);
 
     await connectToDatabase();

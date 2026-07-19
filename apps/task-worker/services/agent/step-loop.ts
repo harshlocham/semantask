@@ -224,7 +224,11 @@ export class StepLoop {
         }
 
         const granted = new Set(
-            await listGrantedToolNames(userId, task.conversationId?.toString?.() ?? String(task.conversationId))
+            await listGrantedToolNames(
+                userId,
+                task.conversationId?.toString?.() ?? String(task.conversationId),
+                task.organizationId?.toString?.() ?? null
+            )
         );
 
         return allTools.filter((tool) => {

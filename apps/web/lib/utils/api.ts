@@ -83,13 +83,22 @@ export async function authenticatedFetch(
             console.warn("authenticatedFetch: ensureAuthReady failed", err);
         }
     }
+
+    const headers = new Headers(init?.headers);
+    if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+    if (typeof window !== "undefined" && !headers.has("X-Organization-Id")) {
+        const activeOrgId = window.localStorage.getItem("semantask.activeOrganizationId");
+        if (activeOrgId) {
+            headers.set("X-Organization-Id", activeOrgId);
+        }
+    }
+
     const response = await fetch(url, {
         ...init,
         credentials: "include",
-        headers: {
-            "Content-Type": "application/json",
-            ...(init?.headers || {}),
-        },
+        headers,
     });
 
     const responseClone = response.clone();

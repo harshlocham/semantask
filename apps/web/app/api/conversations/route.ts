@@ -9,8 +9,10 @@ import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 import {
     assertUsersAreOrgMembers,
+    assertOrganizationActive,
 } from "@semantask/services/organization.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
+import { requireConversationAccess } from "@/lib/utils/auth/requireConversationAccess";
 
 
 export async function POST(req: Request) {
@@ -47,6 +49,7 @@ export async function POST(req: Request) {
 
         if (organizationId) {
             try {
+                await assertOrganizationActive(organizationId);
                 await assertUsersAreOrgMembers(organizationId, [
                     guard.user.id,
                     ...participants.map((p: string) => String(p)),
@@ -179,14 +182,22 @@ export async function DELETE(req: Request) {
     }
 
     const { conversationId } = await req.json();
+    if (!conversationId || typeof conversationId !== "string") {
+        return NextResponse.json({ error: "conversationId is required" }, { status: 400 });
+    }
+
+    const access = await requireConversationAccess(conversationId, guard.user);
+    if (access.response) {
+        return access.response;
+    }
 
     await connectToDatabase();
 
     const deletedConv = await Conversation.findByIdAndDelete(conversationId);
 
     if (!deletedConv) {
-        return new Response(JSON.stringify({ error: "Conversation not found" }), { status: 404 });
+        return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    return new Response(JSON.stringify({ message: "Conversation deleted successfully" }), { status: 200 });
+    return NextResponse.json({ message: "Conversation deleted successfully" });
 }
