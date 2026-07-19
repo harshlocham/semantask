@@ -1,7 +1,8 @@
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { connectToDatabase } from "@semantask/db";
 import UsageEventModel, { type IUsageEvent } from "@semantask/db/models/UsageEvent";
 import { enqueueOutboxEvent } from "./outbox.service";
+import { isMongoTransactionUnsupported } from "./mongo-transaction";
 
 export type RecordUsageEventInput = {
     organizationId?: string | null;
@@ -26,6 +27,8 @@ function nonNeg(value: number | undefined): number {
 
 /**
  * Persist LLM usage. Best-effort — never throws to callers (logs instead).
+ * When billing emit is enabled, usage + outbox are written in one transaction
+ * (with standalone-Mongo fallback).
  */
 export async function recordUsageEvent(
     input: RecordUsageEventInput
@@ -41,7 +44,7 @@ export async function recordUsageEvent(
 
         await connectToDatabase();
 
-        const event = await UsageEventModel.create({
+        const docFields = {
             organizationId: isValidObjectId(input.organizationId)
                 ? new Types.ObjectId(input.organizationId)
                 : null,
@@ -51,10 +54,18 @@ export async function recordUsageEvent(
             outputTokens,
             totalTokens,
             llmModel: input.model ?? null,
-        });
+        };
 
-        if (input.emitBillingEvent !== false && input.organizationId) {
-            try {
+        const shouldEmitBilling = input.emitBillingEvent !== false && Boolean(input.organizationId);
+
+        const persist = async (session?: mongoose.ClientSession): Promise<IUsageEvent> => {
+            const created = await UsageEventModel.create(
+                [docFields],
+                session ? { session } : undefined
+            );
+            const event = created[0];
+
+            if (shouldEmitBilling && input.organizationId) {
                 await enqueueOutboxEvent({
                     topic: "billing.usage.recorded",
                     dedupeKey: `billing.usage.${event._id.toString()}`,
@@ -66,20 +77,36 @@ export async function recordUsageEvent(
                         inputTokens,
                         outputTokens,
                         totalTokens,
-            model: input.model ?? null,
-            llmModel: input.model ?? null,
-            recordedAt: new Date().toISOString(),
+                        model: input.model ?? null,
+                        llmModel: input.model ?? null,
+                        recordedAt: new Date().toISOString(),
                     },
-                });
-            } catch (billingError) {
-                console.warn("usage_event.billing_enqueue_failed", {
-                    usageEventId: event._id.toString(),
-                    error: billingError instanceof Error ? billingError.message : String(billingError),
+                    session,
                 });
             }
+
+            return event;
+        };
+
+        if (!shouldEmitBilling) {
+            return await persist();
         }
 
-        return event;
+        const session = await mongoose.startSession();
+        try {
+            let event: IUsageEvent | null = null;
+            await session.withTransaction(async () => {
+                event = await persist(session);
+            });
+            return event;
+        } catch (error) {
+            if (!isMongoTransactionUnsupported(error)) {
+                throw error;
+            }
+            return await persist();
+        } finally {
+            await session.endSession();
+        }
     } catch (error) {
         console.error("usage_event.write_failed", {
             organizationId: input.organizationId ?? null,
@@ -99,6 +126,7 @@ export async function sumOrganizationTokensSince(
     }
 
     await connectToDatabase();
+    // Relies on compound index idx_usage_org_created (organizationId + createdAt).
     const rows = await UsageEventModel.aggregate<{ total: number }>([
         {
             $match: {

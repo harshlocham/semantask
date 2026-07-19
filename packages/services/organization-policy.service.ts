@@ -7,6 +7,7 @@ import OrganizationPolicyModel, {
 } from "@semantask/db/models/OrganizationPolicy";
 import { assertCanManageMembers, assertMembership } from "./organization.service";
 import { AuthorizationError } from "./authorization-errors";
+import { ValidationError } from "./organization-errors";
 
 export type ResolvedOrganizationPolicy = {
     organizationId: string;
@@ -30,6 +31,25 @@ function asStringArray(value: unknown): string[] | null {
         .filter((entry): entry is string => typeof entry === "string")
         .map((entry) => entry.trim().toLowerCase())
         .filter((entry) => entry.length > 0);
+}
+
+function normalizeConfidenceThresholds(
+    value: Record<string, number> | null | undefined
+): Record<string, number> | null {
+    if (value === null || value === undefined) {
+        return value ?? null;
+    }
+
+    const normalized: Record<string, number> = {};
+    for (const [key, threshold] of Object.entries(value)) {
+        if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+            throw new ValidationError(
+                `confidenceThresholds.${key} must be a finite number in [0, 1]`
+            );
+        }
+        normalized[key] = threshold;
+    }
+    return normalized;
 }
 
 export async function getOrganizationPolicy(
@@ -100,14 +120,14 @@ export async function upsertOrganizationPolicy(
         input.promptGuardMode != null
         && !PROMPT_GUARD_MODES.includes(input.promptGuardMode)
     ) {
-        throw new Error("Invalid promptGuardMode");
+        throw new ValidationError("Invalid promptGuardMode");
     }
 
     await connectToDatabase();
 
     const $set: Record<string, unknown> = {};
     if (input.confidenceThresholds !== undefined) {
-        $set.confidenceThresholds = input.confidenceThresholds;
+        $set.confidenceThresholds = normalizeConfidenceThresholds(input.confidenceThresholds);
     }
     if (input.allowedEmailDomains !== undefined) {
         $set.allowedEmailDomains = asStringArray(input.allowedEmailDomains);

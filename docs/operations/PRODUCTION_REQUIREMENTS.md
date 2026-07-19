@@ -149,6 +149,16 @@ Legacy `INTERNAL_SECRET` remains accepted on both audiences for a two-release de
 
 See also: [`INTERNAL_SECRET_ROTATION.md`](./INTERNAL_SECRET_ROTATION.md).
 
+### ToolGrant index migration (Phase 7)
+
+After deploying the org-scoped ToolGrant unique index, run once against production Mongo:
+
+```bash
+MONGODB_URI=... pnpm --filter @semantask/db exec node ./scripts/migrate-tool-grant-index.mjs
+```
+
+This drops the legacy `uniq_active_tool_grant` (without `organizationId`) if present, then `syncIndexes()`.
+
 ### Organization context (Phase 7.1)
 
 | Header | Purpose |

@@ -10,6 +10,10 @@ import {
     upsertOrganizationQuota,
 } from "@semantask/services/organization-quota.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
+import {
+    organizationApiErrorStatus,
+    ValidationError,
+} from "@semantask/services/organization-errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -61,7 +65,7 @@ export async function GET(_req: Request, context: RouteContext) {
         console.error("GET /api/organizations/[id]/quota error", error);
         return NextResponse.json(
             { success: false, error: "Failed to load quota" },
-            { status: 500 }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }
@@ -101,10 +105,13 @@ export async function PUT(req: Request, context: RouteContext) {
                 { status: error.code === "NOT_FOUND" ? 404 : 403 }
             );
         }
+        const message = error instanceof Error ? error.message : "Failed to update quota";
         console.error("PUT /api/organizations/[id]/quota error", error);
+        const isValidation = error instanceof ValidationError
+            || (error as { name?: string })?.name === "ValidationError";
         return NextResponse.json(
-            { success: false, error: "Failed to update quota" },
-            { status: 500 }
+            { success: false, error: message },
+            { status: isValidation ? 400 : organizationApiErrorStatus(error) }
         );
     }
 }

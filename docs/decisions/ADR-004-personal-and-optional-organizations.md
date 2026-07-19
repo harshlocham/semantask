@@ -35,8 +35,8 @@ complicate single-player / small-team usage.
 
 - Existing data needs no backfill.
 - List/create conversation APIs filter by active org header vs personal.
-- Org suspension (`Organization.status = suspended`) blocks org execution paths
-  in later milestones (7.3).
+- Org suspension (`Organization.status = suspended`) blocks organization
+  execution paths (task-worker refuses new autonomous runs for suspended orgs).
 - Policy (7.2) and quotas (7.3) attach to `organizationId` only; personal remains
   env-driven / unlimited.
 

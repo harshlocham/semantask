@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/Db/db";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import {
     addOrganizationMember,
+    assertCanManageMembers,
     listOrganizationMembers,
     removeOrganizationMember,
 } from "@semantask/services/organization.service";
@@ -12,6 +13,10 @@ import {
     assertMemberQuotaAvailable,
     OrgQuotaExceededError,
 } from "@semantask/services/organization-quota.service";
+import {
+    organizationApiErrorStatus,
+    ValidationError,
+} from "@semantask/services/organization-errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -37,7 +42,7 @@ export async function GET(_req: Request, context: RouteContext) {
         console.error("GET /api/organizations/[id]/members error", error);
         return NextResponse.json(
             { success: false, error: "Failed to list members" },
-            { status: 500 }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }
@@ -63,6 +68,8 @@ export async function POST(req: Request, context: RouteContext) {
                 { status: 400 }
             );
         }
+
+        await assertCanManageMembers(id, guard.user.id);
 
         try {
             await assertMemberQuotaAvailable(id);
@@ -108,9 +115,14 @@ export async function POST(req: Request, context: RouteContext) {
         }
         const message = error instanceof Error ? error.message : "Failed to add member";
         console.error("POST /api/organizations/[id]/members error", error);
+        const status = error instanceof ValidationError
+            || message.includes("Cannot")
+            || message.includes("Invalid")
+            ? 400
+            : organizationApiErrorStatus(error);
         return NextResponse.json(
             { success: false, error: message },
-            { status: message.includes("Cannot") || message.includes("Invalid") ? 400 : 500 }
+            { status }
         );
     }
 }
@@ -149,9 +161,12 @@ export async function DELETE(req: Request, context: RouteContext) {
         }
         const message = error instanceof Error ? error.message : "Failed to remove member";
         console.error("DELETE /api/organizations/[id]/members error", error);
+        const status = error instanceof ValidationError || message.includes("Cannot")
+            ? 400
+            : organizationApiErrorStatus(error);
         return NextResponse.json(
             { success: false, error: message },
-            { status: message.includes("Cannot") ? 400 : 500 }
+            { status }
         );
     }
 }

@@ -9,7 +9,7 @@ import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 import {
     assertUsersAreOrgMembers,
-    assertOrganizationActive,
+    resolveOrganizationIdForUser,
 } from "@semantask/services/organization.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
 import { requireConversationAccess } from "@/lib/utils/auth/requireConversationAccess";
@@ -44,12 +44,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Participants required" }, { status: 400 });
         }
 
-        const organizationId =
-            (typeof bodyOrgId === "string" && bodyOrgId.trim()) || orgContext.organizationId;
+        let organizationId = orgContext.organizationId;
+        if (typeof bodyOrgId === "string" && bodyOrgId.trim()) {
+            try {
+                organizationId = await resolveOrganizationIdForUser(guard.user.id, bodyOrgId.trim());
+            } catch (error) {
+                if (error instanceof AuthorizationError) {
+                    return NextResponse.json({ error: error.message }, { status: 403 });
+                }
+                throw error;
+            }
+        }
 
         if (organizationId) {
             try {
-                await assertOrganizationActive(organizationId);
                 await assertUsersAreOrgMembers(organizationId, [
                     guard.user.id,
                     ...participants.map((p: string) => String(p)),

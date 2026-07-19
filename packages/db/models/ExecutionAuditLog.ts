@@ -32,7 +32,7 @@ const ExecutionAuditLogSchema = new Schema<IExecutionAuditLog>(
     {
         taskId: { type: Schema.Types.ObjectId, ref: "Task", required: true, index: true },
         conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
-        organizationId: { type: Schema.Types.ObjectId, ref: "Organization", default: null, index: true },
+        organizationId: { type: Schema.Types.ObjectId, ref: "Organization", default: null },
         actorId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
         runId: { type: String, trim: true, maxlength: 200, default: null, index: true },
         toolName: { type: String, required: true, trim: true, maxlength: 120, index: true },

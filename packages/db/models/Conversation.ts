@@ -38,7 +38,7 @@ const conversationSchema = new Schema<IConversation>({
     name: { type: String },
     image: { type: String },
     groupName: { type: String },
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', default: null, index: true },
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', default: null },
     isOnline: { type: Boolean, default: false },
     lastMessage: {
         _id: { type: Schema.Types.ObjectId, ref: 'Message' },

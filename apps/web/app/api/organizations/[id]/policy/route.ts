@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { connectToDatabase } from "@/lib/Db/db";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import {
@@ -7,9 +8,22 @@ import {
     upsertOrganizationPolicy,
 } from "@semantask/services/organization-policy.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
-import type { PromptGuardMode } from "@semantask/db/models/OrganizationPolicy";
+import { PROMPT_GUARD_MODES } from "@semantask/db/models/OrganizationPolicy";
+import {
+    organizationApiErrorStatus,
+    ValidationError,
+} from "@semantask/services/organization-errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const organizationPolicyBodySchema = z.object({
+    confidenceThresholds: z.record(z.string(), z.number()).nullable().optional(),
+    allowedEmailDomains: z.array(z.string()).nullable().optional(),
+    requireApprovalFor: z.array(z.string()).nullable().optional(),
+    toolDenyList: z.array(z.string()).nullable().optional(),
+    defaultToolGrants: z.array(z.string()).nullable().optional(),
+    promptGuardMode: z.enum(PROMPT_GUARD_MODES).nullable().optional(),
+}).strict();
 
 export async function GET(_req: Request, context: RouteContext) {
     const guard = await requireAuthUser();
@@ -36,7 +50,7 @@ export async function GET(_req: Request, context: RouteContext) {
         console.error("GET /api/organizations/[id]/policy error", error);
         return NextResponse.json(
             { success: false, error: "Failed to load policy" },
-            { status: 500 }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }
@@ -51,19 +65,15 @@ export async function PUT(req: Request, context: RouteContext) {
 
     try {
         await connectToDatabase();
-        const body = (await req.json()) as {
-            confidenceThresholds?: Record<string, number> | null;
-            allowedEmailDomains?: string[] | null;
-            requireApprovalFor?: string[] | null;
-            toolDenyList?: string[] | null;
-            defaultToolGrants?: string[] | null;
-            promptGuardMode?: PromptGuardMode | null;
-        };
+        const parsed = organizationPolicyBodySchema.safeParse(await req.json());
+        if (!parsed.success) {
+            throw new ValidationError(parsed.error.issues[0]?.message ?? "Invalid policy body");
+        }
 
         const updated = await upsertOrganizationPolicy({
+            ...parsed.data,
             organizationId: id,
             actorUserId: guard.user.id,
-            ...body,
         });
 
         return NextResponse.json({
@@ -81,7 +91,7 @@ export async function PUT(req: Request, context: RouteContext) {
         console.error("PUT /api/organizations/[id]/policy error", error);
         return NextResponse.json(
             { success: false, error: message },
-            { status: message.includes("Invalid") ? 400 : 500 }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }

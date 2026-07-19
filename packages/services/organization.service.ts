@@ -1,4 +1,4 @@
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { connectToDatabase } from "@semantask/db";
 import OrganizationModel, {
     type IOrganization,
@@ -10,10 +10,13 @@ import OrganizationMembershipModel, {
     type OrganizationMemberRole,
 } from "@semantask/db/models/OrganizationMembership";
 import { AuthorizationError } from "./authorization-errors";
+import { isMongoTransactionUnsupported } from "./mongo-transaction";
+import { ValidationError } from "./organization-errors";
 
 export const ORGANIZATION_ID_HEADER = "x-organization-id";
 
 export type { OrganizationMemberRole, OrganizationStatus };
+export { ValidationError } from "./organization-errors";
 
 function isValidObjectId(value: string | null | undefined): value is string {
     return Boolean(value && Types.ObjectId.isValid(value));
@@ -109,12 +112,12 @@ export async function createOrganization(
 
     const name = input.name.trim();
     if (name.length < 1 || name.length > 120) {
-        throw new Error("Organization name must be 1–120 characters");
+        throw new ValidationError("Organization name must be 1–120 characters");
     }
 
     const slug = (input.slug?.trim().toLowerCase() || slugify(name));
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length < 2) {
-        throw new Error("Invalid organization slug");
+        throw new ValidationError("Invalid organization slug");
     }
 
     await connectToDatabase();
@@ -124,23 +127,58 @@ export async function createOrganization(
         throw new Error("Organization slug already taken");
     }
 
-    const organization = await OrganizationModel.create({
-        name,
-        slug,
-        status: "active",
-        createdBy: new Types.ObjectId(input.createdBy),
-    });
+    const createdBy = new Types.ObjectId(input.createdBy);
+    let organization: IOrganization | null = null;
+    let membership: IOrganizationMembership | null = null;
 
-    const membership = await OrganizationMembershipModel.create({
-        organizationId: organization._id,
-        userId: new Types.ObjectId(input.createdBy),
-        role: "owner",
-    });
+    const createPair = async (session?: mongoose.ClientSession) => {
+        const orgDocs = await OrganizationModel.create(
+            [
+                {
+                    name,
+                    slug,
+                    status: "active",
+                    createdBy,
+                },
+            ],
+            session ? { session } : undefined
+        );
+        const org = orgDocs[0];
 
-    return {
-        organization: organization.toObject() as IOrganization,
-        membership: membership.toObject() as IOrganizationMembership,
+        const memberDocs = await OrganizationMembershipModel.create(
+            [
+                {
+                    organizationId: org._id,
+                    userId: createdBy,
+                    role: "owner",
+                },
+            ],
+            session ? { session } : undefined
+        );
+
+        organization = org.toObject() as IOrganization;
+        membership = memberDocs[0].toObject() as IOrganizationMembership;
     };
+
+    const session = await mongoose.startSession();
+    try {
+        await session.withTransaction(async () => {
+            await createPair(session);
+        });
+    } catch (error) {
+        if (!isMongoTransactionUnsupported(error)) {
+            throw error;
+        }
+        await createPair();
+    } finally {
+        await session.endSession();
+    }
+
+    if (!organization || !membership) {
+        throw new Error("Failed to create organization");
+    }
+
+    return { organization, membership };
 }
 
 export async function listOrganizationsForUser(userId: string): Promise<Array<{

@@ -6,6 +6,7 @@ import OrganizationQuotaModel, {
 } from "@semantask/db/models/OrganizationQuota";
 import TaskModel from "@semantask/db/models/Task";
 import UsageEventModel from "@semantask/db/models/UsageEvent";
+import { enqueueOutboxEvent } from "./outbox.service";
 
 export class OrgQuotaExceededError extends Error {
     readonly code = "ORG_QUOTA_EXCEEDED" as const;
@@ -14,6 +15,11 @@ export class OrgQuotaExceededError extends Error {
         super(message);
         this.name = "OrgQuotaExceededError";
     }
+}
+
+/** Hourly bucket for billing.quota.exceeded outbox dedupe. */
+function quotaExceededDedupeBucket(now = new Date()): string {
+    return now.toISOString().slice(0, 13); // YYYY-MM-DDTHH
 }
 
 function isValidObjectId(value: string | null | undefined): value is string {
@@ -61,7 +67,7 @@ export async function upsertOrganizationQuota(input: {
                 organizationId: new Types.ObjectId(input.organizationId),
             },
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true, runValidators: true }
     ).lean<IOrganizationQuota>();
 
     if (!updated) {
@@ -140,8 +146,6 @@ export async function assertTokenQuotaAvailable(organizationId: string): Promise
     }
 }
 
-import { enqueueOutboxEvent } from "./outbox.service";
-
 export async function assertExecutionQuotas(
     organizationId: string | null | undefined
 ): Promise<void> {
@@ -157,7 +161,7 @@ export async function assertExecutionQuotas(
             try {
                 await enqueueOutboxEvent({
                     topic: "billing.quota.exceeded",
-                    dedupeKey: `billing.quota.${organizationId}.${Date.now()}`,
+                    dedupeKey: `billing.quota.${organizationId}.${quotaExceededDedupeBucket()}`,
                     payload: {
                         organizationId,
                         reason: error.message,

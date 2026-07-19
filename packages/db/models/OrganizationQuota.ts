@@ -17,8 +17,6 @@ const OrganizationQuotaSchema = new Schema<IOrganizationQuota>(
             type: Schema.Types.ObjectId,
             ref: "Organization",
             required: true,
-            unique: true,
-            index: true,
         },
         maxTasksPerDay: { type: Number, min: 0, default: null },
         maxTokensPerMonth: { type: Number, min: 0, default: null },

@@ -639,6 +639,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             await appendExecutionAudit({
                 taskId: payload.taskId,
                 conversationId: payload.conversationId,
+                organizationId,
                 actorId: ownerUserId,
                 runId: provisionalRun,
                 toolName: payload.actionType,
@@ -752,6 +753,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
         await appendExecutionAudit({
             taskId: payload.taskId,
             conversationId: payload.conversationId,
+            organizationId,
             actorId: ownerUserId,
             runId: provisionalRun,
             toolName: payload.actionType,
@@ -844,6 +846,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             await appendExecutionAudit({
                 taskId: payload.taskId,
                 conversationId: payload.conversationId,
+                organizationId,
                 actorId: payload.requestedById,
                 runId: provisionalRun,
                 toolName: payload.actionType,

@@ -38,7 +38,13 @@ export async function POST(req: Request) {
     await connectToDatabase();
 
     if (body.type === "subscription.updated" || body.type === "subscription.status") {
-        const status = body.status === "suspended" ? "suspended" : "active";
+        if (body.status !== "active" && body.status !== "suspended") {
+            return NextResponse.json(
+                { success: false, error: "status must be active or suspended" },
+                { status: 400 }
+            );
+        }
+        const status = body.status;
         const updated = await OrganizationModel.findByIdAndUpdate(
             body.organizationId,
             { $set: { status } },

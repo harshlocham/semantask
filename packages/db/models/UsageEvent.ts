@@ -20,7 +20,6 @@ const UsageEventSchema = new Schema<IUsageEvent>(
             type: Schema.Types.ObjectId,
             ref: "Organization",
             default: null,
-            index: true,
         },
         userId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
         taskId: { type: Schema.Types.ObjectId, ref: "Task", default: null, index: true },

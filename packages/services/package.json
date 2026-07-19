@@ -50,6 +50,11 @@
             "types": "./dist/services/organization.service.d.ts",
             "default": "./dist/services/organization.service.js"
         },
+        "./organization-errors": {
+            "import": "./dist/services/organization-errors.js",
+            "types": "./dist/services/organization-errors.d.ts",
+            "default": "./dist/services/organization-errors.js"
+        },
         "./organization-quota.service": {
             "import": "./dist/services/organization-quota.service.js",
             "types": "./dist/services/organization-quota.service.d.ts",

@@ -209,9 +209,30 @@ function OrgPolicyQuotaPanel({ organizationId }: { organizationId: string }) {
     async function saveQuota() {
         setMessage(null);
         try {
+            let maxTokensPerMonth: number | null = null;
+            let maxMembersValue: number | null = null;
+
+            if (maxTokens.trim()) {
+                const parsed = Number(maxTokens);
+                if (!Number.isFinite(parsed)) {
+                    setMessage("Max tokens must be a finite number.");
+                    return;
+                }
+                maxTokensPerMonth = parsed;
+            }
+
+            if (maxMembers.trim()) {
+                const parsed = Number(maxMembers);
+                if (!Number.isFinite(parsed)) {
+                    setMessage("Max members must be a finite number.");
+                    return;
+                }
+                maxMembersValue = parsed;
+            }
+
             await updateOrganizationQuota(organizationId, {
-                maxTokensPerMonth: maxTokens.trim() ? Number(maxTokens) : null,
-                maxMembers: maxMembers.trim() ? Number(maxMembers) : null,
+                maxTokensPerMonth,
+                maxMembers: maxMembersValue,
             });
             setMessage("Quota saved.");
         } catch (error) {

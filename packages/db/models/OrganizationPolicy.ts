@@ -28,8 +28,6 @@ const OrganizationPolicySchema = new Schema<IOrganizationPolicy>(
             type: Schema.Types.ObjectId,
             ref: "Organization",
             required: true,
-            unique: true,
-            index: true,
         },
         version: { type: Number, min: 1, default: 1 },
         confidenceThresholds: { type: Schema.Types.Mixed, default: null },

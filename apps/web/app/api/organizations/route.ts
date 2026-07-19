@@ -7,6 +7,10 @@ import {
     serializeOrganization,
 } from "@semantask/services/organization.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
+import {
+    organizationApiErrorStatus,
+    ValidationError,
+} from "@semantask/services/organization-errors";
 
 export async function GET() {
     const guard = await requireAuthUser();
@@ -28,7 +32,7 @@ export async function GET() {
         console.error("GET /api/organizations error", error);
         return NextResponse.json(
             { success: false, error: "Failed to list organizations" },
-            { status: 500 }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }
@@ -73,8 +77,13 @@ export async function POST(req: Request) {
             );
         }
         const message = error instanceof Error ? error.message : "Failed to create organization";
-        const status = message.includes("already taken") || message.includes("Invalid") ? 400 : 500;
         console.error("POST /api/organizations error", error);
+        const status = error instanceof ValidationError
+            || message.includes("already taken")
+            || message.includes("Invalid")
+            || message.includes("must be")
+            ? 400
+            : organizationApiErrorStatus(error);
         return NextResponse.json({ success: false, error: message }, { status });
     }
 }

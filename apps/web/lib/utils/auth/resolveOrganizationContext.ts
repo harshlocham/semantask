@@ -40,11 +40,21 @@ export async function resolveOrganizationContext(
             };
         }
 
+        console.error("resolveOrganizationContext unexpected error", {
+            userId: user.id,
+            header,
+            error: error instanceof Error ? error.message : String(error),
+        });
+
         return {
             organizationId: null,
             response: NextResponse.json(
-                { success: false, error: "Invalid organization context", code: "ORG_INVALID" },
-                { status: 400 }
+                {
+                    success: false,
+                    error: "Internal Server Error",
+                    code: "ORG_CONTEXT_ERROR",
+                },
+                { status: 500 }
             ),
         };
     }
