@@ -88,7 +88,11 @@ export async function authenticatedFetch(
     if (!headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
     }
-    if (typeof window !== "undefined" && !headers.has("X-Organization-Id")) {
+    if (
+        typeof window !== "undefined"
+        && window.localStorage
+        && !headers.has("X-Organization-Id")
+    ) {
         const activeOrgId = window.localStorage.getItem("semantask.activeOrganizationId");
         if (activeOrgId) {
             headers.set("X-Organization-Id", activeOrgId);
