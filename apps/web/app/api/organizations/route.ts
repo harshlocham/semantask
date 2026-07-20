@@ -7,10 +7,7 @@ import {
     serializeOrganization,
 } from "@semantask/services/organization.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
-import {
-    organizationApiErrorStatus,
-    ValidationError,
-} from "@semantask/services/organization-errors";
+import { organizationApiErrorStatus } from "@semantask/services/organization-errors";
 
 export async function GET() {
     const guard = await requireAuthUser();
@@ -78,12 +75,9 @@ export async function POST(req: Request) {
         }
         const message = error instanceof Error ? error.message : "Failed to create organization";
         console.error("POST /api/organizations error", error);
-        const status = error instanceof ValidationError
-            || message.includes("already taken")
-            || message.includes("Invalid")
-            || message.includes("must be")
-            ? 400
-            : organizationApiErrorStatus(error);
-        return NextResponse.json({ success: false, error: message }, { status });
+        return NextResponse.json(
+            { success: false, error: message },
+            { status: organizationApiErrorStatus(error) }
+        );
     }
 }

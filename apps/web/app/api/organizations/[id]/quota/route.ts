@@ -10,10 +10,7 @@ import {
     upsertOrganizationQuota,
 } from "@semantask/services/organization-quota.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
-import {
-    organizationApiErrorStatus,
-    ValidationError,
-} from "@semantask/services/organization-errors";
+import { organizationApiErrorStatus } from "@semantask/services/organization-errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -107,11 +104,9 @@ export async function PUT(req: Request, context: RouteContext) {
         }
         const message = error instanceof Error ? error.message : "Failed to update quota";
         console.error("PUT /api/organizations/[id]/quota error", error);
-        const isValidation = error instanceof ValidationError
-            || (error as { name?: string })?.name === "ValidationError";
         return NextResponse.json(
             { success: false, error: message },
-            { status: isValidation ? 400 : organizationApiErrorStatus(error) }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }

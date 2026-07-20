@@ -124,7 +124,7 @@ export async function createOrganization(
 
     const existing = await OrganizationModel.findOne({ slug }).select("_id").lean();
     if (existing) {
-        throw new Error("Organization slug already taken");
+        throw new ValidationError("Organization slug already taken");
     }
 
     const createdBy = new Types.ObjectId(input.createdBy);
@@ -238,7 +238,7 @@ export async function updateOrganization(
     if (typeof input.name === "string") {
         const name = input.name.trim();
         if (name.length < 1 || name.length > 120) {
-            throw new Error("Organization name must be 1–120 characters");
+            throw new ValidationError("Organization name must be 1–120 characters");
         }
         updates.name = name;
     }
@@ -278,10 +278,10 @@ export async function addOrganizationMember(
 
     const role = input.role ?? "member";
     if (!ORGANIZATION_MEMBER_ROLES.includes(role)) {
-        throw new Error("Invalid membership role");
+        throw new ValidationError("Invalid membership role");
     }
     if (role === "owner") {
-        throw new Error("Cannot add another owner; transfer ownership separately");
+        throw new ValidationError("Cannot add another owner; transfer ownership separately");
     }
 
     await connectToDatabase();
@@ -353,7 +353,7 @@ export async function removeOrganizationMember(input: {
     }
 
     if (target.role === "owner") {
-        throw new Error("Cannot remove the organization owner");
+        throw new ValidationError("Cannot remove the organization owner");
     }
 
     await OrganizationMembershipModel.deleteOne({ _id: target._id });

@@ -13,10 +13,7 @@ import {
     assertMemberQuotaAvailable,
     OrgQuotaExceededError,
 } from "@semantask/services/organization-quota.service";
-import {
-    organizationApiErrorStatus,
-    ValidationError,
-} from "@semantask/services/organization-errors";
+import { organizationApiErrorStatus } from "@semantask/services/organization-errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -115,14 +112,9 @@ export async function POST(req: Request, context: RouteContext) {
         }
         const message = error instanceof Error ? error.message : "Failed to add member";
         console.error("POST /api/organizations/[id]/members error", error);
-        const status = error instanceof ValidationError
-            || message.includes("Cannot")
-            || message.includes("Invalid")
-            ? 400
-            : organizationApiErrorStatus(error);
         return NextResponse.json(
             { success: false, error: message },
-            { status }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }
@@ -161,12 +153,9 @@ export async function DELETE(req: Request, context: RouteContext) {
         }
         const message = error instanceof Error ? error.message : "Failed to remove member";
         console.error("DELETE /api/organizations/[id]/members error", error);
-        const status = error instanceof ValidationError || message.includes("Cannot")
-            ? 400
-            : organizationApiErrorStatus(error);
         return NextResponse.json(
             { success: false, error: message },
-            { status }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }

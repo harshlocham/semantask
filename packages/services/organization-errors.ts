@@ -12,5 +12,9 @@ export function organizationApiErrorStatus(error: unknown): number {
     if (error instanceof ValidationError) {
         return 400;
     }
+    // Mongoose schema validation (e.g. runValidators: true on quota upsert).
+    if (error instanceof Error && error.name === "ValidationError") {
+        return 400;
+    }
     return 500;
 }

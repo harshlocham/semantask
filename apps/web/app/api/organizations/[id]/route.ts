@@ -9,10 +9,7 @@ import {
 } from "@semantask/services/organization.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
 import type { OrganizationStatus } from "@semantask/db/models/Organization";
-import {
-    organizationApiErrorStatus,
-    ValidationError,
-} from "@semantask/services/organization-errors";
+import { organizationApiErrorStatus } from "@semantask/services/organization-errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -89,12 +86,9 @@ export async function PATCH(req: Request, context: RouteContext) {
         }
         const message = error instanceof Error ? error.message : "Failed to update organization";
         console.error("PATCH /api/organizations/[id] error", error);
-        const status = error instanceof ValidationError || message.includes("must be")
-            ? 400
-            : organizationApiErrorStatus(error);
         return NextResponse.json(
             { success: false, error: message },
-            { status }
+            { status: organizationApiErrorStatus(error) }
         );
     }
 }

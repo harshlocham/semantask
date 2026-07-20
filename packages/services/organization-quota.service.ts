@@ -7,6 +7,7 @@ import OrganizationQuotaModel, {
 import TaskModel from "@semantask/db/models/Task";
 import UsageEventModel from "@semantask/db/models/UsageEvent";
 import { enqueueOutboxEvent } from "./outbox.service";
+import { ValidationError } from "./organization-errors";
 
 export class OrgQuotaExceededError extends Error {
     readonly code = "ORG_QUOTA_EXCEEDED" as const;
@@ -46,7 +47,7 @@ export async function upsertOrganizationQuota(input: {
     maxMembers?: number | null;
 }): Promise<IOrganizationQuota> {
     if (!isValidObjectId(input.organizationId)) {
-        throw new Error("Invalid organizationId");
+        throw new ValidationError("Invalid organizationId");
     }
 
     await connectToDatabase();
