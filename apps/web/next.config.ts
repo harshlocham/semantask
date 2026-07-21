@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { config as loadDotEnv } from "dotenv";
@@ -9,11 +10,19 @@ if (existsSync(rootEnvPath)) {
   loadDotEnv({ path: rootEnvPath, override: false });
 }
 
+const requireFromDb = createRequire(resolve(process.cwd(), "../../packages/db/package.json"));
+const mongoosePath = requireFromDb.resolve("mongoose");
+
 const nextConfig: NextConfig = {
   // Use prebuilt dist for observability (avoids webpack resolving .js ESM paths in TS sources
   // and keeps @opentelemetry/sdk-node out of the Next compile graph).
   transpilePackages: ["@semantask/auth", "@semantask/services", "@semantask/db", "@semantask/types"],
   serverExternalPackages: [
+    // Keep mongoose outside the webpack graph so connectToDatabase and models
+    // share one module instance (avoids "buffering timed out" on queries).
+    // Do NOT externalize top-level "mongodb" — packages/db also depends on
+    // mongodb@4 for mongo.ts; that would steal resolution from mongoose's driver.
+    "mongoose",
     "@semantask/observability",
     "prom-client",
     "@opentelemetry/sdk-trace-node",
@@ -36,6 +45,8 @@ const nextConfig: NextConfig = {
     config.resolve = config.resolve || {};
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
+      // Force every import onto one mongoose copy (pnpm + transpilePackages).
+      mongoose: mongoosePath,
       "@semantask/services": resolve(process.cwd(), "../../packages/services"),
       "@semantask/db": resolve(process.cwd(), "../../packages/db"),
     };
