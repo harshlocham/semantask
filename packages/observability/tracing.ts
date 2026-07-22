@@ -1,9 +1,11 @@
 /**
  * OpenTelemetry SDK bootstrap (OTLP/HTTP only — no gRPC / sdk-node kitchen sink).
+ * Uses BasicTracerProvider + ALS context manager to avoid sdk-trace-node's
+ * transitive Jaeger propagator (GHSA-45rx-2jwx-cxfr).
  * Safe for Next.js Node instrumentation when loaded with webpackIgnore.
  */
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import { BasicTracerProvider, BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { Resource } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
@@ -19,7 +21,7 @@ export {
     SpanStatusCode,
 } from "./spans.js";
 
-let provider: NodeTracerProvider | null = null;
+let provider: BasicTracerProvider | null = null;
 
 export function startTracing(serviceName: string): void {
     if (provider || !isTracingEnabled()) {
@@ -31,7 +33,7 @@ export function startTracing(serviceName: string): void {
         ? endpoint
         : `${endpoint}/v1/traces`;
 
-    const tracerProvider = new NodeTracerProvider({
+    const tracerProvider = new BasicTracerProvider({
         resource: new Resource({
             [ATTR_SERVICE_NAME]: serviceName,
         }),
@@ -40,7 +42,9 @@ export function startTracing(serviceName: string): void {
     tracerProvider.addSpanProcessor(
         new BatchSpanProcessor(new OTLPTraceExporter({ url }))
     );
-    tracerProvider.register();
+    const contextManager = new AsyncLocalStorageContextManager();
+    contextManager.enable();
+    tracerProvider.register({ contextManager });
     provider = tracerProvider;
 }
 

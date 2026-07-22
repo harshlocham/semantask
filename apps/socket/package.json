@@ -11,7 +11,6 @@
         "test": "tsx --test tests/**/*.test.ts"
     },
     "dependencies": {
-        "@imagekit/nodejs": "^7.3.0",
         "@semantask/observability": "workspace:*",
         "@semantask/types": "workspace:*",
         "@socket.io/redis-adapter": "^8.3.0",
@@ -22,10 +21,11 @@
         "jsonwebtoken": "^9.0.2",
         "redis": "^5.9.0",
         "socket.io": "^4.8.1",
-        "uuid": "^14.0.0",
         "zod": "^4.0.5"
     },
     "devDependencies": {
-        "@types/cors": "^2.8.19"
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.3",
+        "@types/jsonwebtoken": "^9.0.10"
     }
 }
