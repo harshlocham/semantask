@@ -7,7 +7,7 @@ settings:
 overrides:
   react: 19.1.0
   react-dom: 19.1.0
-  next: 15.5.18
+  next: 15.5.21
   prettier: ^3.6.2
   shell-quote: ^1.9.0
   postcss: ^8.5.10
@@ -1800,7 +1800,7 @@ packages:
   '@imagekit/next@2.1.5':
     resolution: {integrity: sha512-fvUEqAcq+krrMvn9Yb9fiq6q6ezbVuHvcvJJ606PzmaeBPFcsTU0FZAWW9TRr0cyj4i+4RfzurSy4GfK9RwjOg==}
     peerDependencies:
-      next: 15.5.18
+      next: 15.5.21
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -4207,9 +4207,6 @@ packages:
   camelcase@6.3.0:
     resolution: {integrity: sha512-Gmy6FhYlCY7uOElZUSbxo2UCDH8owEk996gkbrpsgGtrJLM3J7jGxl9Ic7Qwwj4ivOE5AWZWRMecDdF7hqGjFA==}
     engines: {node: '>=10'}
-
-  caniuse-lite@1.0.30001793:
-    resolution: {integrity: sha512-iwSsYWaCOoh26cV8NwNRViHlrfUvYsHDfRVcbtmw0Kg6PJIZZXwMkj1442FYLBGkeUf1juAsU3DTfxW579mrPA==}
 
   caniuse-lite@1.0.30001806:
     resolution: {integrity: sha512-72Cuvd95zbSYPKq6Fhg8eDJRlzgWDf7/mtoZv6Qe/DYNCEBdNxoA3+rZAU2ZhGCpZlns3EssFavaZomckT5Uuw==}
@@ -12675,7 +12672,7 @@ snapshots:
   browserslist@4.28.2:
     dependencies:
       baseline-browser-mapping: 2.10.30
-      caniuse-lite: 1.0.30001793
+      caniuse-lite: 1.0.30001806
       electron-to-chromium: 1.5.357
       node-releases: 2.0.44
       update-browserslist-db: 1.2.3(browserslist@4.28.2)
@@ -12733,8 +12730,6 @@ snapshots:
   camelcase@5.3.1: {}
 
   camelcase@6.3.0: {}
-
-  caniuse-lite@1.0.30001793: {}
 
   caniuse-lite@1.0.30001806: {}
 
