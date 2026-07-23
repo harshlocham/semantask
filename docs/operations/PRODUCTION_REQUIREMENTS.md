@@ -151,13 +151,71 @@ See also: [`INTERNAL_SECRET_ROTATION.md`](./INTERNAL_SECRET_ROTATION.md).
 
 ### ToolGrant index migration (Phase 7)
 
-After deploying the org-scoped ToolGrant unique index, run once against production Mongo:
+After deploying the org-scoped ToolGrant unique index, run once against production Mongo.
+
+**1. Preflight — scan for duplicate active grants** before dropping `uniq_active_tool_grant`. Resolve any groups with `count > 1` (same `userId` + `toolName` + `conversationId` + `organizationId`, `revokedAt: null`); an org/tool collision will also show up in this grouping:
+
+```js
+db.toolgrants.aggregate([
+  { $match: { revokedAt: null } },
+  {
+    $group: {
+      _id: {
+        userId: "$userId",
+        toolName: "$toolName",
+        conversationId: "$conversationId",
+        organizationId: "$organizationId",
+      },
+      count: { $sum: 1 },
+      ids: { $push: "$_id" },
+    },
+  },
+  { $match: { count: { $gt: 1 } } },
+])
+```
+
+**2. Migrate** (drops legacy `uniq_active_tool_grant` without `organizationId` if present, then `syncIndexes()`):
 
 ```bash
 MONGODB_URI=... pnpm --filter @semantask/db exec node ./scripts/migrate-tool-grant-index.mjs
 ```
 
-This drops the legacy `uniq_active_tool_grant` (without `organizationId`) if present, then `syncIndexes()`.
+**3. Rollback** if `syncIndexes()` fails after the legacy index was dropped — recreate the pre-org unique index, then re-run preflight and migrate after fixing data:
+
+```js
+db.toolgrants.createIndex(
+  { userId: 1, toolName: 1, conversationId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { revokedAt: null },
+    name: "uniq_active_tool_grant",
+  }
+)
+```
+
+**4. Post-sync verification** — confirm the org-scoped unique index exists and duplicates are absent:
+
+```js
+// Expect key: userId, toolName, conversationId, organizationId
+db.toolgrants.getIndexes().find((idx) => idx.name === "uniq_active_tool_grant")
+
+// Must return no documents
+db.toolgrants.aggregate([
+  { $match: { revokedAt: null } },
+  {
+    $group: {
+      _id: {
+        userId: "$userId",
+        toolName: "$toolName",
+        conversationId: "$conversationId",
+        organizationId: "$organizationId",
+      },
+      count: { $sum: 1 },
+    },
+  },
+  { $match: { count: { $gt: 1 } } },
+])
+```
 
 ### Organization context (Phase 7.1)
 
