@@ -73,14 +73,22 @@ export function persistLLMUsage(usage: {
     if (!usage) return;
 
     const context = getLLMUsageContext();
+    // Only persist when the worker wrapped the call in runWithLLMUsageContext
+    // with attribution. Unit tests call providers without that store; writing
+    // anyway would open mongoose (when MONGODB_URI is set, e.g. CI) and leave
+    // the connection open so the Node test runner never exits.
+    if (!context?.organizationId && !context?.userId && !context?.taskId) {
+        return;
+    }
+
     const inputTokens = usage.inputTokens ?? 0;
     const outputTokens = usage.outputTokens
         ?? Math.max(0, (usage.totalTokens ?? 0) - inputTokens);
 
     void recordUsageEvent({
-        organizationId: context?.organizationId ?? null,
-        userId: context?.userId ?? null,
-        taskId: context?.taskId ?? null,
+        organizationId: context.organizationId ?? null,
+        userId: context.userId ?? null,
+        taskId: context.taskId ?? null,
         inputTokens,
         outputTokens,
         model: usage.model ?? null,
