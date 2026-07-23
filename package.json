@@ -1,6 +1,6 @@
 {
   "name": "semantask",
-  "version": "2.0.11",
+  "version": "2.0.12",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.13.1",

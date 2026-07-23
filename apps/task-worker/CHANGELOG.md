@@ -1,5 +1,48 @@
 # @semantask/task-worker
 
+## 3.2.0
+
+### Minor Changes
+
+- 68df795: Split the AgentRunner monolith into focused collaborators under
+  `services/agent/` (`ToolExecutor`, `StepLoop`, `ShadowFsmWriter`,
+  `ClarificationHandler`, and a shared `AgentContext`), leaving `AgentRunner` as a
+  thin facade with an unchanged public API. Add a minimal workflow layer
+  (`WorkflowTemplate`, `DefaultAgentLoopTemplate`, `WorkflowRegistry`) and route
+  auto-executed tasks through `WorkflowRegistry.resolve(semanticType)` so future
+  intents can select specialized execution strategies (default = the existing
+  agent loop). Implements roadmap milestones 5.3 and 5.4 (TD-06).
+- c280792: ## Runtime
+
+  Phase 6 Scalability — conversation-scoped presence, retry batching, outbox partitions + Redis prod gate, Mongo index + outbox archival (Production Roadmap 6.1–6.4).
+
+  ### Added
+  - `POST /api/internal/socket/presence-peers` and socket peer-scoped `USER_ONLINE` / `USER_OFFLINE` (TD-07)
+  - `TASK_RETRY_BATCH_SIZE` for multi-promote retry scanner ticks (TD-08)
+  - Production Redis requirement for task-worker (`TASK_WORKER_ALLOW_NO_REDIS=1` override)
+  - Optional `OUTBOX_PARTITION_COUNT` / `OUTBOX_PARTITION_ID` claim filter
+  - Message `{ conversationId, createdAt }` index
+  - Outbox terminal-row archival (`OUTBOX_RETENTION_DAYS`, `OUTBOX_ARCHIVE_INTERVAL_MS`)
+
+  ### Fixed
+  - Socket stays transport-only: removed dead `message.controller.ts` (it imported `@semantask/services` validators) and dropped unused `mongoose` / `mongodb` / `bcryptjs` deps from `@semantask/socket`
+
+- 44aa330: Enterprise — personal workspace + optional organizations, org policy overlays, usage metering and quotas
+
+  ### Added
+  - `Organization` / `OrganizationMembership` with owner|admin|member roles
+  - Optional `organizationId` on Conversation, Task, ToolGrant, ExecutionAuditLog
+  - `OrganizationPolicy`, `OrganizationQuota`, `UsageEvent`
+  - Org CRUD/members/policy/quota APIs; `X-Organization-Id` context; ADR-004
+  - Execution policy + ToolGrant org overlays; billing outbox topics + `/api/internal/billing/events`
+
+### Patch Changes
+
+- Updated dependencies [c280792]
+- Updated dependencies [44aa330]
+  - @semantask/services@3.2.0
+  - @semantask/db@3.2.0
+
 ## 3.1.0
 
 ### Minor Changes
