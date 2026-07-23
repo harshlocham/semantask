@@ -1,17 +1,12 @@
 import mongoose, { Mongoose } from "mongoose";
+import { User } from "@semantask/db/models/User";
 
-// Extend NodeJS global type
-declare global {
-    var mongooseCache: {
-        conn: Mongoose | null;
-        promise: Promise<Mongoose> | null;
-    };
-}
+const CONNECT_PROMISE_KEY = "__semantaskConnectPromise";
 
-// Initialize global cache if not present
-global.mongooseCache = global.mongooseCache || { conn: null, promise: null };
+type MongooseWithConnectPromise = typeof mongoose & {
+    [CONNECT_PROMISE_KEY]?: Promise<Mongoose>;
+};
 
-const cached = global.mongooseCache;
 
 export async function connectToDatabase(): Promise<Mongoose> {
     const mongoUri = process.env.MONGODB_URI as string | undefined;
@@ -19,28 +14,31 @@ export async function connectToDatabase(): Promise<Mongoose> {
     if (!mongoUri) {
         throw new Error("Please define the MONGODB_URI environment variable in your .env file");
     }
-    if (cached.conn) return cached.conn;
 
-    if (!cached.promise) {
-        const options = {
-            bufferCommands: false,
-            maxPoolSize: 10,
-            serverSelectionTimeoutMS: 5000,
-        };
+    mongoose.set("bufferCommands", false);
 
-        cached.promise = mongoose.connect(mongoUri, options);
+    if (mongoose.connection.readyState === 1) {
+        return mongoose;
     }
 
-    try {
-        cached.conn = await cached.promise;
-    } catch (err) {
-        cached.promise = null;
-        throw err;
+    const mongooseRef = mongoose as MongooseWithConnectPromise;
+
+    if (!mongooseRef[CONNECT_PROMISE_KEY]) {
+        mongooseRef[CONNECT_PROMISE_KEY] = mongoose
+            .connect(mongoUri, {
+                bufferCommands: false,
+                maxPoolSize: 10,
+                serverSelectionTimeoutMS: 5000,
+            })
+            .catch((err) => {
+                delete mongooseRef[CONNECT_PROMISE_KEY];
+                throw err;
+            });
     }
 
-    return cached.conn;
+    await mongooseRef[CONNECT_PROMISE_KEY];
+    return mongoose;
 }
-import { User } from "@semantask/db/models/User";
 
 export interface UserFromDatabase {
     id: string;

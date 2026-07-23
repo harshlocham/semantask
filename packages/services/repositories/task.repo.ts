@@ -4,6 +4,7 @@ import { connectToDatabase } from "@semantask/db";
 import TaskModel, { ITask } from "@semantask/db/models/Task";
 import TaskActionModel, { ITaskAction } from "@semantask/db/models/TaskAction";
 import MessageModel, { IMessage } from "@semantask/db/models/Message";
+import { Conversation } from "@semantask/db/models/Conversation";
 import type { CreateTaskActionInput, CreateTaskInput, LinkMessageToTaskInput, UpdateTaskInput } from "../validators/task.schema";
 
 const toObjectId = (value: string) => new Types.ObjectId(value);
@@ -119,8 +120,22 @@ export function deriveTaskDedupeKey(input: {
 export async function createTask(input: CreateTaskInput): Promise<ITask> {
     await connectToDatabase();
 
+    let organizationId: Types.ObjectId | null = input.organizationId
+        ? toObjectId(input.organizationId)
+        : null;
+
+    if (!organizationId) {
+        const conversation = await Conversation.findById(input.conversationId)
+            .select("organizationId")
+            .lean<{ organizationId?: Types.ObjectId | null }>();
+        if (conversation?.organizationId) {
+            organizationId = conversation.organizationId;
+        }
+    }
+
     const task = new TaskModel({
         conversationId: toObjectId(input.conversationId),
+        organizationId,
         parentTaskId: input.parentTaskId ? toObjectId(input.parentTaskId) : null,
         title: input.title,
         description: input.description ?? "",

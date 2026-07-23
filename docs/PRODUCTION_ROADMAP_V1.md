@@ -326,11 +326,29 @@ Extract `ToolExecutor`, `StepLoop`, `ShadowFsmWriter`, `ClarificationHandler`. T
 
 ## Phase 7 — Enterprise
 
-### 7.1 Organizations & Tenants (XL)  
-### 7.2 Policy Engine (L)  
-### 7.3 Quotas & Billing Hooks (XL)  
+### 7.1 Organizations & Tenants (XL) ✓
 
-Defer until Phases 1–4 complete.
+Personal workspace + optional orgs ([ADR-004](./decisions/ADR-004-personal-and-optional-organizations.md)).
+
+| Field | Detail |
+|-------|--------|
+| **Goal** | Additive `Organization` / membership; optional `organizationId` on conversations/tasks |
+| **Why it matters** | Tenant isolation without breaking personal usage |
+| **Acceptance criteria** | (1) No header → personal chats/tasks unchanged. (2) Org conversation inaccessible to non-members. (3) Platform admin bypass still works. (4) Membership CRUD + create/list org conversations tested. |
+
+### 7.2 Policy Engine (L) ✓
+
+| Field | Detail |
+|-------|--------|
+| **Goal** | `OrganizationPolicy` overlays env defaults for confidence, email domains, tool deny/require-approval, prompt guard |
+| **Acceptance criteria** | Org can require approval for `send_email` while personal/env remains auto; reasons cite org policy version; personal tasks unchanged |
+
+### 7.3 Quotas & Billing Hooks (XL) ✓
+
+| Field | Detail |
+|-------|--------|
+| **Goal** | `UsageEvent` metering, `OrganizationQuota`, billing outbox + internal webhook stub, org suspend blocks execution |
+| **Acceptance criteria** | Org over token quota cannot start new autonomous runs; usage events queryable by org; outbox billing events emitted; personal path unaffected |
 
 ---
 

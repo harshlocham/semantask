@@ -3,9 +3,16 @@ import { Conversation } from "@/models/Conversation";
 import { User } from "@/models/User";
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
+import { resolveOrganizationContext } from "@/lib/utils/auth/resolveOrganizationContext";
 import mongoose from "mongoose";
 import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
+import {
+    assertUsersAreOrgMembers,
+    resolveOrganizationIdForUser,
+} from "@semantask/services/organization.service";
+import { AuthorizationError } from "@semantask/services/authorization.service";
+import { requireConversationAccess } from "@/lib/utils/auth/requireConversationAccess";
 
 
 export async function POST(req: Request) {
@@ -13,6 +20,11 @@ export async function POST(req: Request) {
         const guard = await requireAuthUser();
         if (guard.response) {
             return guard.response;
+        }
+
+        const orgContext = await resolveOrganizationContext(req, guard.user);
+        if (orgContext.response) {
+            return orgContext.response;
         }
 
         await connectToDatabase();
@@ -26,10 +38,36 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        const { participants, isGroup, groupName, image, admin } = body;
+        const { participants, isGroup, groupName, image, admin, organizationId: bodyOrgId } = body;
 
         if (!participants || participants.length === 0) {
             return NextResponse.json({ error: "Participants required" }, { status: 400 });
+        }
+
+        let organizationId = orgContext.organizationId;
+        if (typeof bodyOrgId === "string" && bodyOrgId.trim()) {
+            try {
+                organizationId = await resolveOrganizationIdForUser(guard.user.id, bodyOrgId.trim());
+            } catch (error) {
+                if (error instanceof AuthorizationError) {
+                    return NextResponse.json({ error: error.message }, { status: 403 });
+                }
+                throw error;
+            }
+        }
+
+        if (organizationId) {
+            try {
+                await assertUsersAreOrgMembers(organizationId, [
+                    guard.user.id,
+                    ...participants.map((p: string) => String(p)),
+                ]);
+            } catch (error) {
+                if (error instanceof AuthorizationError) {
+                    return NextResponse.json({ error: error.message }, { status: 403 });
+                }
+                throw error;
+            }
         }
 
         // Check for existing conversation (only if not a group chat)
@@ -37,6 +75,14 @@ export async function POST(req: Request) {
             const existing = await Conversation.findOne({
                 isGroup: false,
                 participants: { $all: participants },
+                ...(organizationId
+                    ? { organizationId }
+                    : {
+                        $or: [
+                            { organizationId: null },
+                            { organizationId: { $exists: false } },
+                        ],
+                    }),
             });
 
             if (existing) {
@@ -49,6 +95,7 @@ export async function POST(req: Request) {
         const newConversation = await Conversation.create({
             isGroup,
             participants,
+            organizationId: organizationId || null,
             ...(isGroup && {
                 groupName,
                 image,
@@ -81,12 +128,16 @@ export async function POST(req: Request) {
 }
 
 
-export async function GET() {
+export async function GET(req: Request) {
     const guard = await requireAuthUser();
     if (guard.response) {
         return guard.response;
     }
 
+    const orgContext = await resolveOrganizationContext(req, guard.user);
+    if (orgContext.response) {
+        return orgContext.response;
+    }
 
     try {
         await connectToDatabase();
@@ -98,10 +149,18 @@ export async function GET() {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-
+        const orgFilter = orgContext.organizationId
+            ? { organizationId: orgContext.organizationId }
+            : {
+                $or: [
+                    { organizationId: null },
+                    { organizationId: { $exists: false } },
+                ],
+            };
 
         const conversations = await Conversation.find({
             participants: user._id,
+            ...orgFilter,
         })
             .populate("participants", "username email profilePicture")
             .populate({
@@ -131,15 +190,22 @@ export async function DELETE(req: Request) {
     }
 
     const { conversationId } = await req.json();
+    if (!conversationId || typeof conversationId !== "string") {
+        return NextResponse.json({ error: "conversationId is required" }, { status: 400 });
+    }
+
+    const access = await requireConversationAccess(conversationId, guard.user);
+    if (access.response) {
+        return access.response;
+    }
 
     await connectToDatabase();
 
     const deletedConv = await Conversation.findByIdAndDelete(conversationId);
 
     if (!deletedConv) {
-        return new Response(JSON.stringify({ error: "Conversation not found" }), { status: 404 });
+        return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    return new Response(JSON.stringify({ message: "Conversation deleted successfully" }), { status: 200 });
+    return NextResponse.json({ message: "Conversation deleted successfully" });
 }
-

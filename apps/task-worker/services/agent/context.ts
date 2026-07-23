@@ -120,6 +120,11 @@ export class AgentContext {
 
     currentRunId: string | null = null;
     currentExecutionSignal: AbortSignal | null = null;
+    currentUsageContext: {
+        organizationId?: string | null;
+        userId?: string | null;
+        taskId?: string | null;
+    } | null = null;
 
     constructor(options?: AgentContextOptions) {
         this.retryManager = options?.retryManager ?? new RetryManager([1000, 2000, 5000]);

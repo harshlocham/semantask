@@ -1,5 +1,5 @@
 import type { LLMGenerateOptions, LLMHealthCheckResult, LLMProviderConfig, LLMProviderMetricSnapshot, LLMRequest, LLMResponse } from "./types.js";
-import { getLLMProviderMetricsSnapshot, recordLLMProviderMetric } from "./metrics.js";
+import { getLLMProviderMetricsSnapshot, persistLLMUsage, recordLLMProviderMetric } from "./metrics.js";
 
 export abstract class BaseLLMProvider {
     protected readonly config: LLMProviderConfig;
@@ -30,6 +30,15 @@ export abstract class BaseLLMProvider {
 
     protected recordMetric(event: Parameters<typeof recordLLMProviderMetric>[0]) {
         recordLLMProviderMetric(event);
+    }
+
+    protected recordUsage(response: LLMResponse) {
+        persistLLMUsage({
+            inputTokens: response.usage?.inputTokens,
+            outputTokens: response.usage?.outputTokens,
+            totalTokens: response.usage?.totalTokens,
+            model: response.model,
+        });
     }
 
     getMetricSnapshot(): LLMProviderMetricSnapshot {

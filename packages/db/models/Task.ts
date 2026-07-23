@@ -20,6 +20,8 @@ export type TaskSource = "ai" | "manual" | "imported";
 export interface ITask {
     _id: mongoose.Types.ObjectId;
     conversationId: mongoose.Types.ObjectId;
+    /** Null / missing = personal workspace. Inherited from conversation when set. */
+    organizationId?: mongoose.Types.ObjectId | null;
     parentTaskId?: mongoose.Types.ObjectId | null;
     title: string;
     description: string;
@@ -109,6 +111,7 @@ export interface ITask {
 const TaskSchema = new Schema<ITask>(
     {
         conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
+        organizationId: { type: Schema.Types.ObjectId, ref: "Organization", default: null, index: true },
         title: { type: String, required: true, trim: true, minlength: 3, maxlength: 200 },
         description: { type: String, trim: true, maxlength: 8000, default: "" },
         status: {
@@ -253,6 +256,7 @@ TaskSchema.pre("save", function (next) {
 });
 
 TaskSchema.index({ conversationId: 1, status: 1, updatedAt: -1 });
+TaskSchema.index({ organizationId: 1, lifecycleState: 1, updatedAt: -1 });
 TaskSchema.index({ conversationId: 1, dueAt: 1, status: 1 });
 TaskSchema.index({ assignees: 1, status: 1, dueAt: 1 });
 TaskSchema.index({ parentTaskId: 1, status: 1, updatedAt: -1 });

@@ -1,5 +1,14 @@
 # @semantask/db
 
+## Unreleased
+
+### Minor Changes
+
+- Phase 7 Enterprise — Organizations & Tenants, Policy, Quotas (Production Roadmap 7.1–7.3).
+  - Added `Organization`, `OrganizationMembership`, `OrganizationPolicy`, `OrganizationQuota`, `UsageEvent`
+  - Optional `organizationId` on Conversation, Task, ToolGrant, ExecutionAuditLog
+  - Billing outbox topics: `billing.usage.recorded`, `billing.quota.exceeded`
+
 ## 3.1.0
 
 ### Minor Changes

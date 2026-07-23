@@ -12,6 +12,8 @@ export interface IToolGrant extends Document {
     userId: mongoose.Types.ObjectId;
     /** Null / missing = global grant for this user+tool. */
     conversationId?: mongoose.Types.ObjectId | null;
+    /** Null / missing = personal/global grant; set = org-scoped. */
+    organizationId?: mongoose.Types.ObjectId | null;
     toolName: HighRiskToolName;
     grantedBy: mongoose.Types.ObjectId;
     revokedAt?: Date | null;
@@ -23,6 +25,7 @@ const ToolGrantSchema = new Schema<IToolGrant>(
     {
         userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
         conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", default: null, index: true },
+        organizationId: { type: Schema.Types.ObjectId, ref: "Organization", default: null, index: true },
         toolName: {
             type: String,
             enum: HIGH_RISK_TOOLS,
@@ -38,9 +41,9 @@ const ToolGrantSchema = new Schema<IToolGrant>(
     }
 );
 
-// One active grant per (user, tool, conversation scope). conversationId null = global.
+// One active grant per (user, tool, conversation, org scope).
 ToolGrantSchema.index(
-    { userId: 1, toolName: 1, conversationId: 1 },
+    { userId: 1, toolName: 1, conversationId: 1, organizationId: 1 },
     {
         unique: true,
         partialFilterExpression: { revokedAt: null },
@@ -49,6 +52,10 @@ ToolGrantSchema.index(
 );
 
 ToolGrantSchema.index({ userId: 1, revokedAt: 1 }, { name: "idx_tool_grant_user_active" });
+ToolGrantSchema.index(
+    { organizationId: 1, userId: 1, revokedAt: 1 },
+    { name: "idx_tool_grant_org_user_active" }
+);
 
 const ToolGrantModel: Model<IToolGrant> =
     (mongoose.models.ToolGrant as Model<IToolGrant>) || mongoose.model<IToolGrant>("ToolGrant", ToolGrantSchema);

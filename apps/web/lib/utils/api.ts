@@ -83,13 +83,26 @@ export async function authenticatedFetch(
             console.warn("authenticatedFetch: ensureAuthReady failed", err);
         }
     }
+
+    const headers = new Headers(init?.headers);
+    if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+    if (
+        typeof window !== "undefined"
+        && window.localStorage
+        && !headers.has("X-Organization-Id")
+    ) {
+        const activeOrgId = window.localStorage.getItem("semantask.activeOrganizationId");
+        if (activeOrgId) {
+            headers.set("X-Organization-Id", activeOrgId);
+        }
+    }
+
     const response = await fetch(url, {
         ...init,
         credentials: "include",
-        headers: {
-            "Content-Type": "application/json",
-            ...(init?.headers || {}),
-        },
+        headers,
     });
 
     const responseClone = response.clone();
@@ -340,3 +353,93 @@ export async function decideTaskApproval(input: {
         body: JSON.stringify(input),
     });
 }
+
+export type ClientOrganization = {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    role: string;
+};
+
+export async function listOrganizations(): Promise<ClientOrganization[]> {
+    const data = await request<{ success: boolean; data: ClientOrganization[] }>("/api/organizations");
+    return data.data;
+}
+
+export async function createOrganization(input: {
+    name: string;
+    slug?: string;
+}): Promise<ClientOrganization> {
+    const data = await request<{ success: boolean; data: ClientOrganization }>("/api/organizations", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+    return data.data;
+}
+
+export async function getOrganizationMembers(
+    organizationId: string
+): Promise<Array<{ id: string; userId: string; role: string; createdAt: string }>> {
+    const data = await request<{
+        success: boolean;
+        data: Array<{ id: string; userId: string; role: string; createdAt: string }>;
+    }>(`/api/organizations/${organizationId}/members`);
+    return data.data;
+}
+
+export async function addOrganizationMember(
+    organizationId: string,
+    input: { userId: string; role?: string }
+): Promise<void> {
+    await request<{ success: boolean }>(`/api/organizations/${organizationId}/members`, {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+}
+
+export async function getOrganizationPolicy(organizationId: string): Promise<Record<string, unknown>> {
+    const data = await request<{ success: boolean; data: Record<string, unknown> }>(
+        `/api/organizations/${organizationId}/policy`
+    );
+    return data.data;
+}
+
+export async function updateOrganizationPolicy(
+    organizationId: string,
+    patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+    const data = await request<{ success: boolean; data: Record<string, unknown> }>(
+        `/api/organizations/${organizationId}/policy`,
+        {
+            method: "PUT",
+            body: JSON.stringify(patch),
+        }
+    );
+    return data.data;
+}
+
+export async function getOrganizationQuota(organizationId: string): Promise<Record<string, unknown> | null> {
+    const data = await request<{ success: boolean; data: Record<string, unknown> | null }>(
+        `/api/organizations/${organizationId}/quota`
+    );
+    return data.data;
+}
+
+export async function updateOrganizationQuota(
+    organizationId: string,
+    patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+    const data = await request<{ success: boolean; data: Record<string, unknown> }>(
+        `/api/organizations/${organizationId}/quota`,
+        {
+            method: "PUT",
+            body: JSON.stringify(patch),
+        }
+    );
+    return data.data;
+}
+
