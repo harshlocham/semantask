@@ -7,6 +7,7 @@ import {
     mapSemanticTypeToIntentType,
     type ExtractedMessageEntities,
     type MessageIntentType,
+    type ParticipantHint,
 } from "./message-intent.helpers";
 
 export {
@@ -14,6 +15,7 @@ export {
     mapSemanticTypeToIntentType,
     type ExtractedMessageEntities,
     type MessageIntentType,
+    type ParticipantHint,
 };
 
 export type UpsertMessageIntentInput = {
@@ -24,6 +26,8 @@ export type UpsertMessageIntentInput = {
     confidence: number;
     rawSummary: string;
     extractorVersion: string;
+    participants?: ParticipantHint[];
+    now?: Date;
 };
 
 export function normalizeMessageIntent(doc: IMessageIntent): MessageIntentRecord {
@@ -52,7 +56,10 @@ export async function upsertMessageIntent(input: UpsertMessageIntentInput): Prom
     await connectToDatabase();
 
     const intentType = mapSemanticTypeToIntentType(input.semanticType, input.content);
-    const entities = extractEntitiesFromContent(input.content);
+    const entities = extractEntitiesFromContent(input.content, {
+        participants: input.participants,
+        now: input.now,
+    });
     const messageObjectId = new mongoose.Types.ObjectId(input.messageId);
     const conversationObjectId = new mongoose.Types.ObjectId(input.conversationId);
 

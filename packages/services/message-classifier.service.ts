@@ -1,4 +1,7 @@
 import type { MessageSemanticType } from "@semantask/types";
+import {
+    classifierClassificationsCounter,
+} from "@semantask/observability/metrics";
 
 const ACTIONABLE_SEMANTIC_TYPES = new Set<MessageSemanticType>([
     "task",
@@ -80,6 +83,14 @@ function buildClassification(
         reasoning,
         source,
     };
+}
+
+function recordClassification(mode: ClassifierMode, source: MessageClassification["source"]): void {
+    try {
+        classifierClassificationsCounter.inc({ mode, source });
+    } catch {
+        // Metrics must never break classification.
+    }
 }
 
 /** Regex/heuristic ingress classifier. */
@@ -181,11 +192,19 @@ function logShadowDisagreement(content: string, regex: MessageClassification, ll
         return;
     }
 
-    disagreementLogger?.({
-        regex,
-        llm,
-        contentPreview: normalizeMessageContent(content).slice(0, 200),
-    });
+    if (!disagreementLogger) {
+        return;
+    }
+
+    try {
+        disagreementLogger({
+            regex,
+            llm,
+            contentPreview: normalizeMessageContent(content).slice(0, 200),
+        });
+    } catch {
+        // Disagreement hooks must never fail message processing.
+    }
 }
 
 async function classifyWithLlmOrFallback(content: string): Promise<MessageClassification> {
@@ -230,15 +249,20 @@ export async function classifyMessage(content: string): Promise<MessageClassific
     const regex = classifyMessageWithRegex(content);
 
     if (mode === "regex") {
+        recordClassification(mode, "regex");
         return regex;
     }
 
     if (mode === "llm") {
-        return classifyWithLlmOrFallback(content);
+        const result = await classifyWithLlmOrFallback(content);
+        recordClassification(mode, result.source);
+        return result;
     }
 
+    // shadow: LLM may fail/fallback; product path always returns regex
     const llm = await classifyWithLlmOrFallback(content);
     logShadowDisagreement(content, regex, llm);
+    recordClassification(mode, "regex");
     return regex;
 }
 

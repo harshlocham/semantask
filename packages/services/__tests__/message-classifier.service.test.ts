@@ -1,3 +1,8 @@
+jest.mock("@semantask/observability/metrics", () => ({
+    classifierClassificationsCounter: { inc: jest.fn() },
+    classifierDisagreementCounter: { inc: jest.fn() },
+}));
+
 import {
     classifyMessage,
     classifyMessageWithRegex,
@@ -122,5 +127,84 @@ describe("message-classifier.service", () => {
         delete process.env.TASK_CLASSIFIER_MODE;
         expect(getClassifierMode()).toBe("regex");
         restoreEnvVar("TASK_CLASSIFIER_MODE", previous);
+    });
+
+    test("shadow mode survives LLM throw and keeps regex authority", async () => {
+        const previousMode = process.env.TASK_CLASSIFIER_MODE;
+        process.env.TASK_CLASSIFIER_MODE = "shadow";
+
+        configureMessageClassifier({
+            llmClassify: async () => {
+                throw new Error("llm boom");
+            },
+        });
+
+        const result = await classifyMessage("send a welcome email to user@example.com");
+        expect(result.source).toBe("regex");
+        expect(result.semanticType).toBe("task");
+
+        restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
+    });
+
+    test("shadow disagreement logger throw does not fail classification", async () => {
+        const previousMode = process.env.TASK_CLASSIFIER_MODE;
+        process.env.TASK_CLASSIFIER_MODE = "shadow";
+
+        configureMessageClassifier({
+            llmClassify: async () => ({
+                semanticType: "chat",
+                confidence: 0.9,
+                reasoning: "Mock LLM says chat",
+                source: "llm",
+            }),
+            onDisagreement: () => {
+                throw new Error("hook boom");
+            },
+        });
+
+        const result = await classifyMessage("send a welcome email to user@example.com");
+        expect(result.source).toBe("regex");
+        expect(result.semanticType).toBe("task");
+
+        restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
+    });
+
+    test("shadow agreement does not invoke disagreement logger", async () => {
+        const previousMode = process.env.TASK_CLASSIFIER_MODE;
+        process.env.TASK_CLASSIFIER_MODE = "shadow";
+        let calls = 0;
+
+        configureMessageClassifier({
+            llmClassify: async () => ({
+                semanticType: "task",
+                confidence: 0.9,
+                reasoning: "agrees",
+                source: "llm",
+            }),
+            onDisagreement: () => {
+                calls += 1;
+            },
+        });
+
+        await classifyMessage("send a welcome email to user@example.com");
+        expect(calls).toBe(0);
+
+        restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
+    });
+
+    test("llm mode falls back when LLM throws", async () => {
+        const previousMode = process.env.TASK_CLASSIFIER_MODE;
+        process.env.TASK_CLASSIFIER_MODE = "llm";
+        configureMessageClassifier({
+            llmClassify: async () => {
+                throw new Error("provider down");
+            },
+        });
+
+        const result = await classifyMessage("send an email to the team");
+        expect(result.source).toBe("llm_fallback");
+        expect(result.semanticType).toBe("task");
+
+        restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
     });
 });

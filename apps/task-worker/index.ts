@@ -87,7 +87,10 @@ for (let depth = 0; depth < 8; depth += 1) {
 configureMessageClassifier({
     llmClassify: classifyMessageWithLlm,
     onDisagreement: (payload) => {
-        classifierDisagreementCounter.inc();
+        classifierDisagreementCounter.inc({
+            regex_type: payload.regex.semanticType,
+            llm_type: payload.llm.semanticType,
+        });
         logExecution("warn", {
             event: "classifier.shadow.disagreement",
             regexSemanticType: payload.regex.semanticType,

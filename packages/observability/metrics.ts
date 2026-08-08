@@ -69,9 +69,17 @@ export const suggestionLatencyMs = new Histogram({
     registers: [metricsRegistry],
 });
 
+export const classifierClassificationsCounter = new Counter({
+    name: "classifier_classifications_total",
+    help: "Total message classifications by mode and authoritative source",
+    labelNames: ["mode", "source"] as const,
+    registers: [metricsRegistry],
+});
+
 export const classifierDisagreementCounter = new Counter({
     name: "classifier_disagreement_total",
     help: "Shadow classifier disagreements between regex and LLM",
+    labelNames: ["regex_type", "llm_type"] as const,
     registers: [metricsRegistry],
 });
 

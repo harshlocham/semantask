@@ -129,7 +129,8 @@
     "scripts": {
         "build": "tsc -p tsconfig.build.json && node ./scripts/postbuild-fix.cjs && node ./scripts/postbuild-resolve-imports.cjs",
         "typecheck": "tsc --noEmit",
-        "test": "NODE_OPTIONS='--experimental-vm-modules' jest --config ./jest.config.cjs"
+        "test": "NODE_OPTIONS='--experimental-vm-modules' jest --config ./jest.config.cjs",
+        "eval:classifier": "npx tsx eval/run-classifier-eval.ts"
     },
     "devDependencies": {
         "@jest/globals": "30.4.1",

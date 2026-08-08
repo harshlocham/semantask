@@ -28,6 +28,13 @@ jest.mock("@semantask/db/models/Conversation", () => ({
     },
 }));
 
+const userFind = jest.fn();
+jest.mock("@semantask/db/models/User", () => ({
+    User: {
+        find: (...args: unknown[]) => userFind(...args),
+    },
+}));
+
 const updateMessageSemanticState = jest.fn();
 const upsertTaskByDedupeKey = jest.fn();
 const linkMessageToTask = jest.fn();
@@ -125,7 +132,13 @@ function mockConversation(orgId: string | null = organizationId) {
         select: jest.fn().mockReturnValue({
             lean: jest.fn().mockResolvedValue({
                 organizationId: orgId ? new Types.ObjectId(orgId) : null,
+                participants: [],
             }),
+        }),
+    });
+    userFind.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue([]),
         }),
     });
 }
@@ -154,7 +167,7 @@ function mockIntent() {
             priorityCandidate: "",
         },
         confidence: 0.9,
-        extractorVersion: "intelligent-v6-message-intent",
+        extractorVersion: "intelligent-v7-entity-heuristics",
         rawSummary: "actionable task",
         createdAt: new Date().toISOString(),
     });
@@ -210,6 +223,7 @@ beforeEach(() => {
     messageFindById.mockReset();
     taskFindOne.mockReset();
     conversationFindById.mockReset();
+    userFind.mockReset();
     updateMessageSemanticState.mockReset();
     upsertTaskByDedupeKey.mockReset();
     linkMessageToTask.mockReset();
@@ -258,6 +272,7 @@ describe("processMessageTaskIntelligence suggest-only ingress", () => {
                 messageId,
                 conversationId,
                 semanticType: "task",
+                extractorVersion: "intelligent-v7-entity-heuristics",
             })
         );
         expect(createWorkSuggestion).toHaveBeenCalledWith(
@@ -267,6 +282,7 @@ describe("processMessageTaskIntelligence suggest-only ingress", () => {
                 organizationId,
                 intentId,
                 confidence: 0.9,
+                extractorVersion: "intelligent-v7-entity-heuristics",
             })
         );
         expect(suggestionsCreatedCounter.inc).toHaveBeenCalledTimes(1);

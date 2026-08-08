@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "description": "Seed gold set for Phase 1 classifier eval (regex + entity heuristics). Expand toward ~200 labels in staging bake-in.",
+  "cases": [
+    { "id": "t1", "content": "send a welcome email to user@example.com", "semanticType": "task", "actionable": true },
+    { "id": "t2", "content": "create a github issue for the login bug", "semanticType": "task", "actionable": true },
+    { "id": "t3", "content": "can you fix the broken deploy script?", "semanticType": "task", "actionable": true },
+    { "id": "t4", "content": "please update the docs for onboarding", "semanticType": "task", "actionable": true },
+    { "id": "t5", "content": "need to implement the new feature flag", "semanticType": "task", "actionable": true },
+    { "id": "t6", "content": "add a checklist for the release", "semanticType": "task", "actionable": true },
+    { "id": "t7", "content": "remove the deprecated endpoint ASAP", "semanticType": "task", "actionable": true, "priority": "urgent" },
+    { "id": "t8", "content": "build a dashboard for weekly metrics", "semanticType": "task", "actionable": true },
+    { "id": "s1", "content": "schedule a meeting with the team tomorrow at 10am", "semanticType": "scheduling", "actionable": true, "duePhrase": "tomorrow" },
+    { "id": "s2", "content": "please remind me to call John on Friday", "semanticType": "scheduling", "actionable": true, "duePhrase": "friday" },
+    { "id": "s3", "content": "book a calendar hold next week", "semanticType": "scheduling", "actionable": true, "duePhrase": "next week" },
+    { "id": "s4", "content": "set a reminder for the kickoff appointment", "semanticType": "scheduling", "actionable": true },
+    { "id": "i1", "content": "production is down and users cannot log in", "semanticType": "incident", "actionable": true },
+    { "id": "i2", "content": "we have a critical bug in checkout", "semanticType": "incident", "actionable": true },
+    { "id": "i3", "content": "sev1 outage on the payments service", "semanticType": "incident", "actionable": true },
+    { "id": "i4", "content": "site is down after the deploy", "semanticType": "incident", "actionable": true },
+    { "id": "a1", "content": "automate the nightly backup workflow", "semanticType": "automation", "actionable": true },
+    { "id": "a2", "content": "trigger the deployment pipeline script", "semanticType": "automation", "actionable": true },
+    { "id": "a3", "content": "run the cron job for data sync", "semanticType": "automation", "actionable": true },
+    { "id": "p1", "content": "please approve the release plan", "semanticType": "approval", "actionable": false },
+    { "id": "p2", "content": "this needs your sign-off before launch", "semanticType": "approval", "actionable": false },
+    { "id": "p3", "content": "pending approval for the budget change", "semanticType": "approval", "actionable": false },
+    { "id": "e1", "content": "escalate this to leadership immediately", "semanticType": "escalation", "actionable": false },
+    { "id": "e2", "content": "page the on-call team for urgent help", "semanticType": "escalation", "actionable": false },
+    { "id": "c1", "content": "hi there", "semanticType": "chat", "actionable": false },
+    { "id": "c2", "content": "thanks!", "semanticType": "chat", "actionable": false },
+    { "id": "c3", "content": "ok sounds good", "semanticType": "chat", "actionable": false },
+    { "id": "c4", "content": "lol", "semanticType": "chat", "actionable": false },
+    { "id": "c5", "content": "good morning everyone", "semanticType": "chat", "actionable": false },
+    { "id": "c6", "content": "see you later", "semanticType": "chat", "actionable": false },
+    {
+      "id": "h1",
+      "content": "please send the deck to @alice tomorrow",
+      "semanticType": "task",
+      "actionable": true,
+      "assigneeUsernames": ["alice"],
+      "duePhrase": "tomorrow",
+      "participants": [
+        { "userId": "u-alice", "username": "alice", "email": "alice@example.com" },
+        { "userId": "u-bob", "username": "bob", "email": "bob@example.com" }
+      ],
+      "titleMinLength": 3
+    },
+    {
+      "id": "h2",
+      "content": "remind bob@example.com to review the PR on Friday",
+      "semanticType": "scheduling",
+      "actionable": true,
+      "assigneeUsernames": ["bob"],
+      "duePhrase": "friday",
+      "participants": [
+        { "userId": "u-alice", "username": "alice", "email": "alice@example.com" },
+        { "userId": "u-bob", "username": "bob", "email": "bob@example.com" }
+      ]
+    },
+    {
+      "id": "h3",
+      "content": "create a task for alice due 2026-09-15",
+      "semanticType": "task",
+      "actionable": true,
+      "assigneeUsernames": ["alice"],
+      "dueAtIso": "2026-09-15T00:00:00.000Z",
+      "participants": [
+        { "userId": "u-alice", "username": "alice", "email": "alice@example.com" }
+      ]
+    },
+    {
+      "id": "h4",
+      "content": "follow up with @bob in 2 days",
+      "semanticType": "task",
+      "actionable": true,
+      "assigneeUsernames": ["bob"],
+      "duePhrase": "in 2 days",
+      "participants": [
+        { "userId": "u-bob", "username": "bob", "email": "bob@example.com" }
+      ]
+    },
+    { "id": "t9", "content": "design the onboarding flow this week", "semanticType": "task", "actionable": true },
+    { "id": "t10", "content": "plan the migration steps for auth", "semanticType": "task", "actionable": true },
+    { "id": "i5", "content": "pagerduty alert for API error spike", "semanticType": "incident", "actionable": true },
+    { "id": "a4", "content": "automate onboarding workflow emails", "semanticType": "automation", "actionable": true },
+    { "id": "c7", "content": "nice work on the demo", "semanticType": "chat", "actionable": false },
+    { "id": "c8", "content": "bye for now", "semanticType": "chat", "actionable": false },
+    { "id": "s5", "content": "schedule an appointment with legal tomorrow", "semanticType": "scheduling", "actionable": true, "duePhrase": "tomorrow" },
+    { "id": "t11", "content": "delete the stale feature branch please", "semanticType": "task", "actionable": true },
+    { "id": "p4", "content": "needs approval from security", "semanticType": "approval", "actionable": false },
+    { "id": "e3", "content": "raise this with management today", "semanticType": "escalation", "actionable": false },
+    { "id": "t12", "content": "make sure we ship the hotfix before EOD", "semanticType": "task", "actionable": true }
+  ]
+}

@@ -7,6 +7,7 @@ import {
 import MessageModel from "@semantask/db/models/Message";
 import TaskModel from "@semantask/db/models/Task";
 import { Conversation } from "@semantask/db/models/Conversation";
+import { User } from "@semantask/db/models/User";
 import {
     buildTaskActionIdempotencyKey,
     createTaskAction,
@@ -21,7 +22,7 @@ import {
     classifyMessage,
     isActionableClassification,
 } from "./message-classifier.service.js";
-import { upsertMessageIntent } from "./message-intent.service.js";
+import { upsertMessageIntent, type ParticipantHint } from "./message-intent.service.js";
 import { createWorkSuggestion } from "./work-suggestion.service.js";
 import {
     getEffectiveExecutionMode,
@@ -35,7 +36,7 @@ import {
     suggestionsCreatedCounter,
 } from "@semantask/observability/metrics";
 
-const AI_VERSION = "intelligent-v6-message-intent";
+export const AI_VERSION = "intelligent-v7-entity-heuristics";
 
 export interface ProcessMessageTaskIntelligenceInput {
     messageId: string;
@@ -83,12 +84,41 @@ function preprocessMessage(content: string) {
     };
 }
 
-async function resolveConversationOrganizationId(conversationId: string): Promise<string | null> {
+async function loadConversationContext(conversationId: string): Promise<{
+    organizationId: string | null;
+    participants: ParticipantHint[];
+}> {
     const conversation = await Conversation.findById(conversationId)
-        .select("organizationId")
+        .select("organizationId participants")
         .lean();
-    const organizationId = conversation?.organizationId;
-    return organizationId ? organizationId.toString() : null;
+
+    if (!conversation) {
+        return { organizationId: null, participants: [] };
+    }
+
+    const organizationId = conversation.organizationId
+        ? conversation.organizationId.toString()
+        : null;
+
+    const participantIds = (conversation.participants ?? [])
+        .map((id) => id?.toString?.() ?? String(id))
+        .filter(Boolean);
+
+    if (participantIds.length === 0) {
+        return { organizationId, participants: [] };
+    }
+
+    const users = await User.find({ _id: { $in: participantIds } })
+        .select("_id username email")
+        .lean();
+
+    const participants: ParticipantHint[] = users.map((user) => ({
+        userId: user._id.toString(),
+        username: typeof user.username === "string" ? user.username : null,
+        email: typeof user.email === "string" ? user.email : null,
+    }));
+
+    return { organizationId, participants };
 }
 
 async function resolveEffectiveModeForConversation(organizationId: string | null) {
@@ -125,6 +155,7 @@ export async function processMessageTaskIntelligence(
 
     const processedAt = new Date();
     const preprocessed = preprocessMessage(input.content);
+    const conversationContext = await loadConversationContext(input.conversationId);
 
     if (!preprocessed.normalized) {
         await updateMessageSemanticState(input.messageId, {
@@ -144,6 +175,7 @@ export async function processMessageTaskIntelligence(
             confidence: 0,
             rawSummary: "Empty message content",
             extractorVersion: AI_VERSION,
+            participants: conversationContext.participants,
         });
 
         return {
@@ -181,6 +213,7 @@ export async function processMessageTaskIntelligence(
             confidence: classification.confidence,
             rawSummary: classification.reasoning,
             extractorVersion: AI_VERSION,
+            participants: conversationContext.participants,
         });
 
         return {
@@ -197,7 +230,7 @@ export async function processMessageTaskIntelligence(
         };
     }
 
-    const organizationId = await resolveConversationOrganizationId(input.conversationId);
+    const organizationId = conversationContext.organizationId;
     const executionMode = await resolveEffectiveModeForConversation(organizationId);
     const suggestionIngress = isSuggestionIngressEnabled();
     const blockExecution = suggestionIngress && shouldBlockExecutionEnqueue(executionMode);
@@ -210,6 +243,7 @@ export async function processMessageTaskIntelligence(
         confidence: classification.confidence,
         rawSummary: classification.reasoning,
         extractorVersion: AI_VERSION,
+        participants: conversationContext.participants,
     });
 
     if (suggestionIngress) {
