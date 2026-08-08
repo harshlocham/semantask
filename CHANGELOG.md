@@ -1,5 +1,11 @@
 # semantask
 
+## 2.0.13
+
+### Patch Changes
+
+- Workspace release: @semantask/db, @semantask/observability, @semantask/services, @semantask/socket, @semantask/task-worker, @semantask/types, @semantask/web (see package changelogs for details)
+
 ## 2.0.12
 
 ### Patch Changes

@@ -1,5 +1,34 @@
 # @semantask/web
 
+## 5.2.1
+
+### Patch Changes
+
+- 293f039: ADR-005 S0.2 — default workspace `executionMode` (`suggest_only` | `require_approval` | `auto_execute`) with shadow→enforce flags.
+
+  ### Added
+  - `ExecutionMode` type and `OrganizationPolicy.executionMode` (+ updatedAt/By)
+  - `getEffectiveExecutionMode` / `EXECUTION_MODE_ENFORCE` / `DEFAULT_EXECUTION_MODE` / `GRANDFATHER_AUTO_TENANTS`
+  - Policy GET/PUT surfaces `executionMode`; logs `policy.execution_mode.changed`
+  - Worker policy gate: enforce + `suggest_only` blocks tools (`EXECUTION_MODE_DENIED`); `require_approval` caps auto-execute; shadow logs; tool-executor fail-closed
+
+- 293f039: ADR-005 S0.3 — language pass: Suggested work / Approval queue labels in task panel and admin (copy only).
+- 2b614f9: Intent badge “Review suggestion” CTA deep-links to a read-only WorkSuggestion detail stub when a suggestion exists for the message.
+
+  ### Added
+  - Client helpers `listWorkSuggestions` / `getWorkSuggestion`
+  - Conversation suggestion index (refresh on `message:semantic_updated`)
+  - Intent badge CTA → `/work-suggestions/[id]` (no accept/dismiss)
+
+- 78a9a0a: Expose WorkSuggestion create/get/list service and read-only APIs so proposed work can be fetched under conversation or org authz, without implying Task creation or tool execution.
+- Updated dependencies [293f039]
+- Updated dependencies [5049ff5]
+- Updated dependencies [78a9a0a]
+- Updated dependencies [4de730c]
+  - @semantask/types@2.2.0
+  - @semantask/services@3.3.0
+  - @semantask/observability@1.2.0
+
 ## 5.2.0
 
 ### Minor Changes
