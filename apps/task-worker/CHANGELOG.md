@@ -1,5 +1,40 @@
 # @semantask/task-worker
 
+## 3.3.0
+
+### Minor Changes
+
+- 293f039: ADR-005 S0.2 — default workspace `executionMode` (`suggest_only` | `require_approval` | `auto_execute`) with shadow→enforce flags.
+
+  ### Added
+  - `ExecutionMode` type and `OrganizationPolicy.executionMode` (+ updatedAt/By)
+  - `getEffectiveExecutionMode` / `EXECUTION_MODE_ENFORCE` / `DEFAULT_EXECUTION_MODE` / `GRANDFATHER_AUTO_TENANTS`
+  - Policy GET/PUT surfaces `executionMode`; logs `policy.execution_mode.changed`
+  - Worker policy gate: enforce + `suggest_only` blocks tools (`EXECUTION_MODE_DENIED`); `require_approval` caps auto-execute; shadow logs; tool-executor fail-closed
+
+### Patch Changes
+
+- 5049ff5: Classifier ingress creates reviewable WorkSuggestions under `suggest_only` without enqueueing execution.
+
+  ### Added
+  - `SUGGESTION_INGRESS` / `SUGGESTION_BLOCK_EXEC` flags and `shouldBlockExecutionEnqueue`
+  - Dual-write: actionable classify → MessageIntent + idempotent WorkSuggestion (`SUGGESTION_INGRESS=1`)
+  - Shared enqueue guard: refuse `task.execution.requested` at the worker/enqueue boundary under suggest_only
+  - Worker defense-in-depth for leaked execution events; `classifier_disagreement_total` hook
+  - Metrics: `suggestions_created_total`, `suggestion_latency_ms`, `execution_enqueue_attempted_while_suggest_only_total` + P0 alert
+
+  ### Compatibility
+  - `SUGGESTION_INGRESS=0` (default) preserves legacy classify → Task → enqueue behavior
+
+- Updated dependencies [293f039]
+- Updated dependencies [5049ff5]
+- Updated dependencies [78a9a0a]
+- Updated dependencies [4de730c]
+  - @semantask/types@2.2.0
+  - @semantask/db@3.3.0
+  - @semantask/services@3.3.0
+  - @semantask/observability@1.2.0
+
 ## 3.2.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @semantask/socket
 
+## 4.2.1
+
+### Patch Changes
+
+- Updated dependencies [293f039]
+- Updated dependencies [5049ff5]
+- Updated dependencies [4de730c]
+  - @semantask/types@2.2.0
+  - @semantask/observability@1.2.0
+
 ## 4.2.0
 
 ### Minor Changes

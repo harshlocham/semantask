@@ -1,5 +1,23 @@
 # @semantask/db
 
+## 3.3.0
+
+### Minor Changes
+
+- 293f039: ADR-005 S0.2 — default workspace `executionMode` (`suggest_only` | `require_approval` | `auto_execute`) with shadow→enforce flags.
+
+  ### Added
+  - `ExecutionMode` type and `OrganizationPolicy.executionMode` (+ updatedAt/By)
+  - `getEffectiveExecutionMode` / `EXECUTION_MODE_ENFORCE` / `DEFAULT_EXECUTION_MODE` / `GRANDFATHER_AUTO_TENANTS`
+  - Policy GET/PUT surfaces `executionMode`; logs `policy.execution_mode.changed`
+  - Worker policy gate: enforce + `suggest_only` blocks tools (`EXECUTION_MODE_DENIED`); `require_approval` caps auto-execute; shadow logs; tool-executor fail-closed
+
+- 4de730c: Phase 1 PR1 — WorkSuggestion domain types and Mongoose model (reviewable proposed work, distinct from MessageIntent facts and Task committed work).
+
+  ### Added
+  - `WORK_SUGGESTION_STATUSES` / `WorkSuggestionRecord` under `packages/types/work/`
+  - `WorkSuggestion` model with org/conversation indexes and partial-unique `messageId` while `status=proposed`
+
 ## 3.2.0
 
 ### Minor Changes
