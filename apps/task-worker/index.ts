@@ -152,6 +152,7 @@ type TaskModelLike = {
         _id: { toString(): string };
         version: number;
         status: string;
+        title?: string;
         retryCount?: number;
         maxRetries?: number;
         result?: TaskResult;
@@ -927,7 +928,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
 
     if (requiresApproval) {
         try {
-            await taskRepo.createTaskAction({
+            const pendingAction = await taskRepo.createTaskAction({
                 taskId: payload.taskId,
                 conversationId: payload.conversationId,
                 actorType: payload.requestedByType,
@@ -953,6 +954,33 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
                 reason: `Action requires human approval before execution. ${policyDecision.reasons.join(" ")}`,
                 idempotencyKey: `${payload.taskId}:${payload.actionType}:${payload.triggerMessageId}:approval_pending`,
             });
+
+            if (organizationId && pendingAction?._id) {
+                const title =
+                    typeof existingTask?.title === "string" && existingTask.title.trim()
+                        ? existingTask.title
+                        : `Task ${payload.taskId}`;
+                void import("@semantask/services/notify-approval.service")
+                    .then(({ notifyApprovalRequired }) =>
+                        notifyApprovalRequired({
+                            organizationId,
+                            taskId: payload.taskId,
+                            actionId: pendingAction._id.toString(),
+                            title,
+                            conversationId: payload.conversationId,
+                            actorUserId: payload.requestedById,
+                            reasonText: `Action “${payload.actionType.replace(/_/g, " ")}” for "${title}" needs approval.`,
+                        })
+                    )
+                    .catch((error) => {
+                        logExecution("warn", {
+                            event: "approval.notify.failed",
+                            workerId: WORKER_ID,
+                            taskId: payload.taskId,
+                            error: error instanceof Error ? error.message : String(error),
+                        });
+                    });
+            }
 
             await appendExecutionAudit({
                 taskId: payload.taskId,

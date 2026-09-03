@@ -8,6 +8,8 @@ jest.mock("@semantask/db", () => ({
 const userFindById = jest.fn<any>();
 const notifyDedupeCreate = jest.fn<any>();
 const notifyDedupeDeleteOne = jest.fn<any>();
+const sendMail = jest.fn<any>();
+const createTransport = jest.fn<any>(() => ({ sendMail }));
 
 jest.mock("@semantask/db/models/User", () => ({
     User: {
@@ -23,6 +25,14 @@ jest.mock("@semantask/db/models/NotifyDedupe", () => ({
     },
 }));
 
+jest.mock("nodemailer", () => ({
+    __esModule: true,
+    default: {
+        createTransport: (...args: unknown[]) => createTransport(...args),
+    },
+    createTransport: (...args: unknown[]) => createTransport(...args),
+}));
+
 const fetchMock = jest.fn<any>();
 (globalThis as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
 
@@ -36,10 +46,15 @@ describe("notify.service", () => {
         notifyDedupeDeleteOne.mockReset();
         notifyDedupeDeleteOne.mockResolvedValue({});
         fetchMock.mockReset();
+        sendMail.mockReset();
+        sendMail.mockResolvedValue({});
+        createTransport.mockClear();
         delete process.env.RESEND_API_KEY;
         delete process.env.RESEND_FROM_EMAIL;
         delete process.env.SMTP_USER;
         delete process.env.SMTP_PASS;
+        delete process.env.SMTP_HOST;
+        delete process.env.EMAIL_FROM;
         delete process.env.SOCKET_INTERNAL_URL;
     });
 
@@ -96,6 +111,7 @@ describe("notify.service", () => {
                 method: "POST",
             })
         );
+        expect(createTransport).not.toHaveBeenCalled();
         expect(notifyDedupeDeleteOne).not.toHaveBeenCalled();
     });
 
@@ -114,5 +130,38 @@ describe("notify.service", () => {
 
         expect(userFindById).not.toHaveBeenCalled();
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("sends via SMTP when Resend is unset and SMTP is configured", async () => {
+        process.env.SMTP_HOST = "smtp.example.com";
+        process.env.SMTP_USER = "mailer@example.com";
+        process.env.SMTP_PASS = "secret";
+        process.env.EMAIL_FROM = "noreply@example.com";
+        userFindById.mockReturnValue({
+            select: () => ({
+                lean: async () => ({
+                    email: "alex@example.com",
+                    username: "Alex",
+                }),
+            }),
+        });
+
+        await notifyUser({
+            userId: new Types.ObjectId().toString(),
+            kind: "task_assigned",
+            subject: "Assigned",
+            text: "You were assigned a task",
+            dedupeKey: "test-smtp",
+        });
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(createTransport).toHaveBeenCalled();
+        expect(sendMail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                to: "alex@example.com",
+                subject: "Assigned",
+            })
+        );
+        expect(notifyDedupeDeleteOne).not.toHaveBeenCalled();
     });
 });

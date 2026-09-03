@@ -168,32 +168,15 @@ export async function requestTaskExecution(
     if (organizationId) {
         void (async () => {
             try {
-                const OrganizationMembershipModel = (
-                    await import("@semantask/db/models/OrganizationMembership")
-                ).default;
-                const managers = await OrganizationMembershipModel.find({
-                    organizationId: toObjectId(organizationId),
-                    role: { $in: ["owner", "admin"] },
-                })
-                    .select({ userId: 1 })
-                    .limit(200)
-                    .lean<Array<{ userId: { toString(): string } }>>();
-                const { notifyUsers } = await import("./notify.service");
-                const { escapeHtml } = await import("./html-escape");
-                await notifyUsers(
-                    managers
-                        .map((row) => row.userId.toString())
-                        .filter((id) => id !== input.actorUserId),
-                    {
-                        kind: "approval_required",
-                        subject: `Approval needed: ${task.title}`,
-                        text: `AI tool execution was requested for "${task.title}" and needs approval.`,
-                        html: `<p>AI tool execution was requested for <b>${escapeHtml(task.title)}</b> and needs approval.</p>`,
-                        dedupeKey: `approval:${input.taskId}:${taskAction._id.toString()}`,
-                        conversationId,
-                        entityId: input.taskId,
-                    }
-                );
+                const { notifyApprovalRequired } = await import("./notify-approval.service");
+                await notifyApprovalRequired({
+                    organizationId,
+                    taskId: input.taskId,
+                    actionId: taskAction._id.toString(),
+                    title: task.title,
+                    conversationId,
+                    actorUserId: input.actorUserId,
+                });
             } catch (error) {
                 console.error("approval notify lookup failed", error);
             }

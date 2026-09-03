@@ -55,6 +55,21 @@
             "types": "./dist/services/work-summary.service.d.ts",
             "default": "./dist/services/work-summary.service.js"
         },
+        "./notify.service": {
+            "import": "./dist/services/notify.service.js",
+            "types": "./dist/services/notify.service.d.ts",
+            "default": "./dist/services/notify.service.js"
+        },
+        "./notify-approval.service": {
+            "import": "./dist/services/notify-approval.service.js",
+            "types": "./dist/services/notify-approval.service.d.ts",
+            "default": "./dist/services/notify-approval.service.js"
+        },
+        "./notify-links": {
+            "import": "./dist/services/notify-links.js",
+            "types": "./dist/services/notify-links.d.ts",
+            "default": "./dist/services/notify-links.js"
+        },
         "./task-execution-enqueue.service": {
             "import": "./dist/services/task-execution-enqueue.service.js",
             "types": "./dist/services/task-execution-enqueue.service.d.ts",
@@ -160,6 +175,7 @@
     "devDependencies": {
         "@jest/globals": "30.4.1",
         "@types/jest": "^30.0.0",
+        "@types/nodemailer": "^7.0.2",
         "jest": "^30.4.1",
         "ts-jest": "^29.4.4"
     },
@@ -168,6 +184,7 @@
         "@semantask/observability": "workspace:*",
         "@semantask/types": "workspace:*",
         "mongoose": "^8.24.0",
+        "nodemailer": "^9.0.1",
         "zod": "^4.0.5"
     }
 }
