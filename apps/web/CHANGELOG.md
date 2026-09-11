@@ -1,5 +1,72 @@
 # @semantask/web
 
+## 5.2.1
+
+### Patch Changes
+
+- 6f8a55d: Worker Redis is `REDIS_URL` only (`UPSTASH_REDIS_REST_URL` is web REST, not ioredis). Boot warns once when only a dual-read alias is set; alias reads are unchanged.
+- fc4cade: Bake remaining config cutovers: accept never enqueues execution, inbox always on, FSM authoritative, `TASK_TOOL_RBAC` default enforce, `TASK_PROMPT_GUARD` default monitor, drop `NEXT_PUBLIC_APP_URL` Docker ARG, and hard-cut dual-read aliases except `INTERNAL_SECRET`.
+- 4a52da6: Drop unread leftovers from `env.sample` and Turbo `globalEnv`: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `APP_NAME`, `EMAIL_SENDER_NAME`, `NEXT_PUBLIC_API_URL`.
+
+  Keep SMTP / `EMAIL_USER` aliases and the Docker `NEXT_PUBLIC_APP_URL` ARG until a dedicated follow-up.
+
+- 42dbcb4: Parse web and socket deploy knobs through typed config helpers without renaming env vars.
+
+  SMTP still dual-reads `EMAIL_USER` / `EMAIL_PASS`. Client files keep `NEXT_PUBLIC_*` via a client-safe helper.
+
+- 45d3e43: Remove automatic step-up OTP challenges from normal session refresh and bootstrap. Access-token refresh rotates tokens without creating challenges; challenge UI/API and StepUpChallenge model are removed as dead code. Docs updated to the MVP session contract (silent refresh; login/register OTP remains account verification only).
+- 43a0c6f: Patch Next.js 15.5.24, nodemailer 9.1.x, and transitive sharp / js-yaml / xmldom overrides so production audit is clear of known high and critical advisories.
+- 293f039: ADR-005 S0.2 — default workspace `executionMode` (`suggest_only` | `require_approval` | `auto_execute`) with shadow→enforce flags.
+
+  ### Added
+  - `ExecutionMode` type and `OrganizationPolicy.executionMode` (+ updatedAt/By)
+  - `getEffectiveExecutionMode` / `EXECUTION_MODE_ENFORCE` / `DEFAULT_EXECUTION_MODE` / `GRANDFATHER_AUTO_TENANTS`
+  - Policy GET/PUT surfaces `executionMode`; logs `policy.execution_mode.changed`
+  - Worker policy gate: enforce + `suggest_only` blocks tools (`EXECUTION_MODE_DENIED`); `require_approval` caps auto-execute; shadow logs; tool-executor fail-closed
+
+- 293f039: ADR-005 S0.3 — language pass: Suggested work / Approval queue labels in task panel and admin (copy only).
+- 2b614f9: Intent badge “Review suggestion” CTA deep-links to a read-only WorkSuggestion detail stub when a suggestion exists for the message.
+
+  ### Added
+  - Client helpers `listWorkSuggestions` / `getWorkSuggestion`
+  - Conversation suggestion index (refresh on `message:semantic_updated`)
+  - Intent badge CTA → `/work-suggestions/[id]` (no accept/dismiss)
+
+- 78a9a0a: Expose WorkSuggestion create/get/list service and read-only APIs so proposed work can be fetched under conversation or org authz, without implying Task creation or tool execution.
+- 7c10441: Feature-flagged `/inbox/approvals` product surface reusing the existing task-approvals API inside Work Inbox IA.
+- 24955f9: Phase 2 PR5 — Explicit manager “Allow AI tools” / request-execution path, distinct from WorkSuggestion accept, reusing TaskAction approvals.
+- 0e84316: Feature-flagged read-only `/inbox` Work Inbox (`WORK_INBOX_UI`) listing authorized WorkSuggestions with server-side pagination.
+- 5bcff34: Phase 2 PR1 — Accept/dismiss/assign WorkSuggestion mutations create coordination Tasks without enqueueing execution (`ACCEPT_CREATES_EXECUTION=0` rail, `Task.suggestionId` linkage).
+- 46ed62c: Phase 2 PR4 — Make Work Inbox suggestions actionable with Accept / Assign / Dismiss triage using existing mutation APIs.
+- 3861d6e: Phase 3 PR1 — Additive Task `boardStatus` (`todo | doing | done`) with PATCH, work-board list API, and a feature-flagged `/inbox/board` (COORDINATION_BOARD default off). Accept creates coordination tasks in `todo` without enqueueing execution.
+- b51ea39: Phase 3 PR2 — Bidirectional conversation ↔ suggestion ↔ task deep links via thin `/c/[id]` and `/tasks/[id]` pages over existing chat, inbox, and board surfaces.
+- 428d748: Phase 3 PR3 — Feature-flagged org coordination dashboard (`ORG_DASHBOARD` default off) with `GET /api/organizations/:id/work-summary` and `/inbox/dashboard` widgets for open work, aging approvals, and pending high-risk tools.
+- 5b18ffa: Adopt TanStack Query on web for work inbox, execution approvals, and organizations server state.
+- Updated dependencies [acb22ec]
+- Updated dependencies [78ee072]
+- Updated dependencies [073bdfd]
+- Updated dependencies [f688f0c]
+- Updated dependencies [a0d4e81]
+- Updated dependencies [fc4cade]
+- Updated dependencies [fc4cade]
+- Updated dependencies [bc0f525]
+- Updated dependencies [45d3e43]
+- Updated dependencies [293f039]
+- Updated dependencies [d63de76]
+- Updated dependencies [5049ff5]
+- Updated dependencies [78a9a0a]
+- Updated dependencies [4de730c]
+- Updated dependencies [24955f9]
+- Updated dependencies [eb2ed2b]
+- Updated dependencies [0e84316]
+- Updated dependencies [5bcff34]
+- Updated dependencies [3861d6e]
+- Updated dependencies [428d748]
+  - @semantask/services@3.3.0
+  - @semantask/auth@3.0.2
+  - @semantask/types@2.2.0
+  - @semantask/observability@1.2.0
+
 ## 5.2.0
 
 ### Minor Changes

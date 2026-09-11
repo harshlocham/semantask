@@ -1,5 +1,27 @@
 # @semantask/types
 
+## 2.2.0
+
+### Minor Changes
+
+- 293f039: ADR-005 S0.2 — default workspace `executionMode` (`suggest_only` | `require_approval` | `auto_execute`) with shadow→enforce flags.
+
+  ### Added
+  - `ExecutionMode` type and `OrganizationPolicy.executionMode` (+ updatedAt/By)
+  - `getEffectiveExecutionMode` / `EXECUTION_MODE_ENFORCE` / `DEFAULT_EXECUTION_MODE` / `GRANDFATHER_AUTO_TENANTS`
+  - Policy GET/PUT surfaces `executionMode`; logs `policy.execution_mode.changed`
+  - Worker policy gate: enforce + `suggest_only` blocks tools (`EXECUTION_MODE_DENIED`); `require_approval` caps auto-execute; shadow logs; tool-executor fail-closed
+
+- 4de730c: Phase 1 PR1 — WorkSuggestion domain types and Mongoose model (reviewable proposed work, distinct from MessageIntent facts and Task committed work).
+
+  ### Added
+  - `WORK_SUGGESTION_STATUSES` / `WorkSuggestionRecord` under `packages/types/work/`
+  - `WorkSuggestion` model with org/conversation indexes and partial-unique `messageId` while `status=proposed`
+
+- 5bcff34: Phase 2 PR1 — Accept/dismiss/assign WorkSuggestion mutations create coordination Tasks without enqueueing execution (`ACCEPT_CREATES_EXECUTION=0` rail, `Task.suggestionId` linkage).
+- 3861d6e: Phase 3 PR1 — Additive Task `boardStatus` (`todo | doing | done`) with PATCH, work-board list API, and a feature-flagged `/inbox/board` (COORDINATION_BOARD default off). Accept creates coordination tasks in `todo` without enqueueing execution.
+- 428d748: Phase 3 PR3 — Feature-flagged org coordination dashboard (`ORG_DASHBOARD` default off) with `GET /api/organizations/:id/work-summary` and `/inbox/dashboard` widgets for open work, aging approvals, and pending high-risk tools.
+
 ## 2.1.0
 
 ### Minor Changes
