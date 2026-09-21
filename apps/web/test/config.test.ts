@@ -2,7 +2,7 @@ import { getGoogleClientId } from "@/lib/config/app";
 import { warnDeprecatedWebAliases } from "@/lib/config/aliases";
 import { resetAliasWarnings } from "@/lib/config/parse";
 import { getInternalSocketServerUrl } from "@/lib/config/socket";
-import { getSmtpConfig } from "@/lib/config/smtp";
+import { getResendConfig, isResendConfigured } from "@/lib/config/resend";
 
 function withEnv(values: Record<string, string | undefined>, fn: () => void) {
     const previous: Record<string, string | undefined> = {};
@@ -28,34 +28,36 @@ function withEnv(values: Record<string, string | undefined>, fn: () => void) {
 }
 
 describe("web lib/config", () => {
-    it("SMTP_USER / SMTP_PASS are canonical; EMAIL_USER / EMAIL_PASS are ignored", () => {
+    it("Resend from prefers RESEND_FROM_EMAIL over EMAIL_FROM", () => {
         withEnv({
-            SMTP_HOST: undefined,
-            SMTP_PORT: undefined,
-            SMTP_USER: undefined,
-            SMTP_PASS: undefined,
-            EMAIL_USER: "alias-user",
-            EMAIL_PASS: "alias-pass",
-            EMAIL_FROM: undefined,
+            RESEND_API_KEY: "re_test",
+            RESEND_FROM_EMAIL: "Semantask <noreply@semantask.test>",
+            EMAIL_FROM: "fallback@example.com",
         }, () => {
-            const smtp = getSmtpConfig();
-            expect(smtp.host).toBe("smtp.gmail.com");
-            expect(smtp.port).toBe(587);
-            expect(smtp.user).toBeUndefined();
-            expect(smtp.pass).toBeUndefined();
-            expect(smtp.from).toBeUndefined();
+            expect(getResendConfig()).toEqual({
+                apiKey: "re_test",
+                from: "Semantask <noreply@semantask.test>",
+            });
         });
 
         withEnv({
-            SMTP_USER: "smtp-user",
-            SMTP_PASS: "smtp-pass",
-            EMAIL_FROM: "from@example.com",
-            EMAIL_USER: "alias-user",
+            RESEND_API_KEY: "re_test",
+            RESEND_FROM_EMAIL: undefined,
+            EMAIL_FROM: "fallback@example.com",
         }, () => {
-            const smtp = getSmtpConfig();
-            expect(smtp.user).toBe("smtp-user");
-            expect(smtp.pass).toBe("smtp-pass");
-            expect(smtp.from).toBe("from@example.com");
+            expect(getResendConfig()).toEqual({
+                apiKey: "re_test",
+                from: "fallback@example.com",
+            });
+            expect(isResendConfigured()).toBe(true);
+        });
+
+        withEnv({
+            RESEND_API_KEY: undefined,
+            RESEND_FROM_EMAIL: undefined,
+            EMAIL_FROM: undefined,
+        }, () => {
+            expect(isResendConfigured()).toBe(false);
         });
     });
 
@@ -89,9 +91,7 @@ describe("web lib/config", () => {
         resetAliasWarnings();
         try {
             withEnv({
-                SMTP_USER: undefined,
                 EMAIL_USER: "alias-user",
-                SMTP_PASS: undefined,
                 EMAIL_PASS: "alias-pass",
                 GOOGLE_CLIENT_ID: undefined,
                 NEXT_PUBLIC_GOOGLE_CLIENT_ID: "public-id",

@@ -93,8 +93,7 @@ flowchart LR
         IMAGEKIT["ImageKit<br/>image/file storage"]
         OPENAI["OpenAI / HuggingFace<br/>agent-runner LLM only"]
         GH["GitHub REST API<br/>issues"]
-        RESEND["Resend<br/>task emails"]
-        SMTP["SMTP via Nodemailer<br/>OTP email"]
+        RESEND["Resend<br/>OTP, invites, notifications"]
         GOOGLE["Google OAuth"]
         MEET["Schedule-meeting webhook"]
     end
@@ -111,7 +110,7 @@ flowchart LR
     NEXTAPI -->|"read/write"| MONGO
     NEXTAPI -->|"user-state cache + rate limit"| REDIS
     NEXTAPI -->|"upload auth"| IMAGEKIT
-    NEXTAPI -->|"OTP mail"| SMTP
+    NEXTAPI -->|"OTP and invite mail"| RESEND
     NEXTAPI -->|"OAuth"| GOOGLE
 
     IO -->|"verify JWT + authorize<br/>HTTP callback"| INTAUTH
@@ -378,7 +377,7 @@ erDiagram
   reflection (`apps/task-worker/services/llm/*`). **Not** used for `message.created` ingress
   classification (regex heuristics in `task-intelligence.service.ts`).
 - **GitHub REST API** — auto-created issues from tasks (`apps/task-worker/index.ts`).
-- **Resend** — outbound task emails; **SMTP/Nodemailer** — OTP delivery from the web app.
+- **Resend** — OTP, organization invites, notifications, and outbound task emails.
 - **Google OAuth** — federated login.
 - **Schedule-meeting webhook** — pluggable meeting scheduling adapter (+ fallback webhooks).
 

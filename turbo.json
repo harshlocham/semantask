@@ -18,7 +18,6 @@
         "UPSTASH_REDIS_REST_URL",
         "UPSTASH_REDIS_REST_TOKEN",
         "SOCKET_SERVER_URL",
-        "SMTP_*",
         "EMAIL_*",
         "NEXT_PUBLIC_*"
     ],

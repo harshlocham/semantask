@@ -12,10 +12,18 @@ import {
     isAuthenticated,
 } from "@/lib/auth/authBootstrap";
 
-async function fetchCurrentUser(signal?: AbortSignal): Promise<ClientUser | null> {
+async function fetchCurrentUser(options?: {
+    signal?: AbortSignal;
+    force?: boolean;
+}): Promise<ClientUser | null> {
     const startedAt = performance.now();
+    const signal = options?.signal;
 
-    if (typeof window !== "undefined" && isPublicAuthRoute(window.location.pathname)) {
+    if (
+        !options?.force
+        && typeof window !== "undefined"
+        && isPublicAuthRoute(window.location.pathname)
+    ) {
         return null;
     }
 
@@ -104,7 +112,7 @@ export function UserProvider({ children, initialUser }: UserProviderProps) {
                 setIsLoading(true);
                 setError(null);
 
-                const nextUser = await fetchCurrentUser(controller.signal);
+                const nextUser = await fetchCurrentUser({ signal: controller.signal });
 
                 if (controller.signal.aborted || requestSeq.current !== requestId) {
                     return;
@@ -153,7 +161,7 @@ export function UserProvider({ children, initialUser }: UserProviderProps) {
                 error,
                 isInitialized,
                 refreshUser: async () => {
-                    const refreshed = await fetchCurrentUser();
+                    const refreshed = await fetchCurrentUser({ force: true });
                     setUser(refreshed);
                     setIsInitialized(true);
                     return refreshed;

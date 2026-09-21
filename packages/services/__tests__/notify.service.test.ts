@@ -38,8 +38,7 @@ describe("notify.service", () => {
         fetchMock.mockReset();
         delete process.env.RESEND_API_KEY;
         delete process.env.RESEND_FROM_EMAIL;
-        delete process.env.SMTP_USER;
-        delete process.env.SMTP_PASS;
+        delete process.env.EMAIL_FROM;
         delete process.env.SOCKET_INTERNAL_URL;
     });
 

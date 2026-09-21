@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/Db/db";
 import { requireAuthUser } from "@/lib/utils/auth/requireAuthUser";
 import { getAppUrl } from "@/lib/config/app";
-import { isSmtpConfigured, sendTransactionalEmail } from "@/lib/utils/send-email";
+import { isResendConfigured, sendTransactionalEmail } from "@/lib/utils/send-email";
 import {
     createOrganizationInvitation,
     listOrganizationInvitations,
@@ -80,7 +80,7 @@ export async function POST(req: Request, context: RouteContext) {
 
         const link = inviteUrl(invitation.token);
         let emailSent = false;
-        if (isSmtpConfigured()) {
+        if (isResendConfigured()) {
             try {
                 await sendTransactionalEmail({
                     to: invitation.email,
@@ -201,7 +201,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
         const link = inviteUrl(invitation.token);
         let emailSent = false;
-        if (isSmtpConfigured()) {
+        if (isResendConfigured()) {
             try {
                 await sendTransactionalEmail({
                     to: invitation.email,

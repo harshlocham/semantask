@@ -78,8 +78,7 @@ async function sendEmail(input: {
     const resendKey = process.env.RESEND_API_KEY?.trim();
     const from =
         process.env.RESEND_FROM_EMAIL?.trim()
-        || process.env.EMAIL_FROM?.trim()
-        || process.env.SMTP_USER?.trim();
+        || process.env.EMAIL_FROM?.trim();
 
     if (resendKey && from) {
         try {
