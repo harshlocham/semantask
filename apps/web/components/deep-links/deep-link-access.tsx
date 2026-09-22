@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { APP_HOME } from "@/lib/routes";
 
 export type DeepLinkResource = "conversation" | "task";
 
@@ -58,7 +59,7 @@ export function DeepLinkAccessView({
                 <h1 className="text-2xl font-bold">{copy.forbiddenTitle}</h1>
                 <p className="text-sm text-muted-foreground">{errorMessage || copy.forbiddenFallback}</p>
                 <Button asChild variant="outline">
-                    <Link href="/">Back to chat</Link>
+                    <Link href={APP_HOME}>Back to chat</Link>
                 </Button>
             </div>
         );
@@ -70,7 +71,7 @@ export function DeepLinkAccessView({
                 <h1 className="text-2xl font-bold">{copy.notFoundTitle}</h1>
                 <p className="text-sm text-muted-foreground">{errorMessage || copy.notFoundFallback}</p>
                 <Button asChild variant="outline">
-                    <Link href="/">Back to chat</Link>
+                    <Link href={APP_HOME}>Back to chat</Link>
                 </Button>
             </div>
         );
@@ -81,7 +82,7 @@ export function DeepLinkAccessView({
             <h1 className="text-2xl font-bold">{copy.errorTitle}</h1>
             <p className="text-sm text-muted-foreground">{errorMessage || copy.errorFallback}</p>
             <Button asChild variant="outline">
-                <Link href="/">Back to chat</Link>
+                <Link href={APP_HOME}>Back to chat</Link>
             </Button>
         </div>
     );

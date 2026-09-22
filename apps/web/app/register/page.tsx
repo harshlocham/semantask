@@ -19,6 +19,7 @@ import ThemeSwitch from "@/components/home/theme-switch";
 import { toast } from "sonner";
 import { resetAuthBootstrap } from "@/lib/auth/authBootstrap";
 import { useUser } from "@/context/UserContext";
+import { APP_HOME } from "@/lib/routes";
 
 export default function RegisterPage() {
     const [step, setStep] = useState<"register" | "verify">("register");
@@ -133,7 +134,7 @@ export default function RegisterPage() {
             }
 
             toast.success("Account created successfully");
-            router.push("/");
+            router.push(APP_HOME);
         } catch (error) {
             if (error instanceof Error) {
                 toast.error(error.message);
@@ -175,7 +176,7 @@ export default function RegisterPage() {
                             </CardTitle>
                             <CardDescription className="max-w-md text-sm leading-6 sm:text-base">
                                 {step === "register"
-                                    ? "Set up your account to start chatting instantly."
+                                    ? "Create a workspace. Conversation becomes reviewable work."
                                     : "Enter the one-time code we sent to your email."}
                             </CardDescription>
                         </div>

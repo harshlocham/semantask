@@ -7,6 +7,7 @@ import { io } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { getClientSocketUrl } from "@/lib/socket/socketConfig";
 import { useUser } from "@/context/UserContext";
+import { APP_HOME } from "@/lib/routes";
 import Link from "next/link";
 
 
@@ -17,7 +18,7 @@ export default function AdminDashboard() {
     useEffect(() => {
         if (isLoading) return;
         if (!user || user.role !== "admin") {
-            router.replace("/"); // redirect non-admins
+            router.replace(APP_HOME);
         }
     }, [user, isLoading, router])
     useEffect(() => {
