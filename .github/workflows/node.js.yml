@@ -74,6 +74,9 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Prepare pnpm
+        run: bash .github/scripts/prepare-pnpm.sh
+
       - name: Configure mongodb-memory-server cache
         run: |
           echo "MONGOMS_DOWNLOAD_DIR=$RUNNER_TEMP/mongodb-binaries" >> "$GITHUB_ENV"
@@ -101,7 +104,7 @@ jobs:
           key: ${{ runner.os }}-turbo-${{ matrix.node-version }}-${{ github.ref_name }}-${{ hashFiles('pnpm-lock.yaml', 'turbo.json') }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bash .github/scripts/pnpm-install.sh
 
       - name: Pre-download MongoDB memory server binary
         run: pnpm --filter @semantask/auth run test:download-mongo
@@ -147,12 +150,16 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Prepare pnpm
+        run: bash .github/scripts/prepare-pnpm.sh
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: bash .github/scripts/pnpm-install.sh
       - name: Build shared types package
         run: pnpm --filter @semantask/types build
       - run: pnpm run build
@@ -204,12 +211,16 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Prepare pnpm
+        run: bash .github/scripts/prepare-pnpm.sh
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: bash .github/scripts/pnpm-install.sh
 
       - name: Restore Playwright browsers
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -257,12 +268,16 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Prepare pnpm
+        run: bash .github/scripts/prepare-pnpm.sh
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: bash .github/scripts/pnpm-install.sh
       - name: Build shared types package
         run: pnpm --filter @semantask/types build
 

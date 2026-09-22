@@ -36,6 +36,9 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Prepare pnpm
+        run: bash .github/scripts/prepare-pnpm.sh
+
       - name: Use Node.js 22.x
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -43,7 +46,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bash .github/scripts/pnpm-install.sh
 
       - name: Run production dependency audit
         run: pnpm run security:audit
