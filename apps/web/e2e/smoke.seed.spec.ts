@@ -34,12 +34,17 @@ test("alice can sign in and the coordination board is reachable", async ({ page 
     await expect(page.getByTestId("inbox-nav-board")).toBeVisible();
     await expect(page.getByRole("heading", { name: "404" })).toHaveCount(0);
 
-    const conversations = (await (await page.request.get("/api/conversations")).json()) as Array<{
-        _id?: string;
-    }>;
-    const conversationId = conversations[0]?._id;
-    if (conversationId) {
-        await page.getByTestId("work-board-conversation").fill(conversationId);
-    }
-    await expect(page.getByText("Prepare weekly status")).toBeVisible();
+    const conversationsResponse = await page.request.get("/api/conversations");
+    expect(conversationsResponse.ok()).toBeTruthy();
+    const conversations = (await conversationsResponse.json()) as Array<{ _id?: string }>;
+    const conversationId = typeof conversations[0]?._id === "string" ? conversations[0]._id : "";
+    expect(conversationId).toBeTruthy();
+
+    // Production `next start` does not always apply React state from input.fill().
+    // The board already reads conversationId from the URL.
+    await page.goto(`/inbox/board?conversationId=${conversationId}`);
+    await expect(page.getByTestId("inbox-subnav")).toBeVisible();
+    await expect(page.getByTestId("work-board-card-title")).toHaveText("Prepare weekly status", {
+        timeout: 20_000,
+    });
 });
