@@ -30,6 +30,12 @@ export async function seedE2eWorld(): Promise<void> {
     await connectToDatabase();
 
     try {
+        const dbName = User.db.name;
+        if (!dbName?.endsWith("_e2e")) {
+            throw new Error(
+                `Refusing to drop database "${dbName ?? "<unknown>"}"; expected a name ending with "_e2e"`
+            );
+        }
         await User.db.dropDatabase();
 
         const alice = await createUser(ALICE);

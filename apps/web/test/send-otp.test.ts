@@ -91,6 +91,10 @@ describe("sendOtpEmail (Resend)", () => {
             expect(payload.to).toBe("alice@e2e.semantask.test");
             expect(payload.subject).toBe("Your verification code");
             expect(payload.text).toContain("654321");
+
+            await sendOtpEmail("alice@e2e.semantask.test", "654322");
+            const filesAfterSecond = await readdir(dir);
+            expect(filesAfterSecond).toHaveLength(2);
         });
     });
 

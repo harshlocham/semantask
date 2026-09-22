@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getResendConfig, isResendConfigured } from "@/lib/config/resend";
@@ -23,7 +24,7 @@ async function writeE2eMail(input: {
     await mkdir(dir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const safeTo = input.to.replace(/[^a-zA-Z0-9._-]+/g, "_");
-    const filePath = join(dir, `${stamp}-${safeTo}.json`);
+    const filePath = join(dir, `${stamp}-${safeTo}-${randomUUID()}.json`);
     await writeFile(
         filePath,
         JSON.stringify({

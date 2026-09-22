@@ -33,4 +33,13 @@ test("alice can sign in and the coordination board is reachable", async ({ page 
     await expect(page.getByTestId("inbox-subnav")).toBeVisible();
     await expect(page.getByTestId("inbox-nav-board")).toBeVisible();
     await expect(page.getByRole("heading", { name: "404" })).toHaveCount(0);
+
+    const conversations = (await (await page.request.get("/api/conversations")).json()) as Array<{
+        _id?: string;
+    }>;
+    const conversationId = conversations[0]?._id;
+    if (conversationId) {
+        await page.getByTestId("work-board-conversation").fill(conversationId);
+    }
+    await expect(page.getByText("Prepare weekly status")).toBeVisible();
 });
