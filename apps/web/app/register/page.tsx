@@ -146,17 +146,17 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[hsl(var(--background))] px-4 py-8 sm:px-6">
+        <div className="relative min-h-screen overflow-hidden bg-background px-4 py-8 sm:px-6">
             <div className="pointer-events-none absolute inset-0">
                 <div className="absolute right-0 top-12 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
                 <div className="absolute -bottom-20 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
             </div>
 
             <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center">
-                <Card className="w-full border-[hsl(var(--border))]/70 bg-[hsl(var(--card))/0.94] shadow-2xl shadow-black/25 backdrop-blur-sm">
+                <Card className="w-full border-border/70 bg-card/94 shadow-2xl shadow-black/25 backdrop-blur-sm">
                     <CardHeader className="gap-5">
                         <div className="flex items-center justify-between gap-3">
-                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))/0.45] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))]">
+                            <div className="rounded-md border border-border bg-background/45 px-3 py-1.5 text-sm text-muted-foreground">
                                 Already have an account?
                                 <Button
                                     variant="link"
@@ -256,8 +256,8 @@ export default function RegisterPage() {
                                     className="space-y-4"
                                     onSubmit={handleVerify}
                                 >
-                                    <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))/0.45] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
-                                        Code sent to <span className="font-medium text-[hsl(var(--foreground))]">{email}</span>
+                                    <div className="rounded-lg border border-border bg-background/45 px-3 py-2 text-sm text-muted-foreground">
+                                        Code sent to <span className="font-medium text-foreground">{email}</span>
                                     </div>
 
                                     <div className="grid gap-2">
@@ -299,7 +299,7 @@ export default function RegisterPage() {
                                         </Button>
 
                                         {timer > 0 ? (
-                                            <span className="text-[hsl(var(--muted-foreground))]">
+                                            <span className="text-muted-foreground">
                                                 Resend OTP in {timer}s
                                             </span>
                                         ) : (
@@ -320,7 +320,7 @@ export default function RegisterPage() {
                         </AnimatePresence>
                     </CardContent>
 
-                    <CardFooter className="text-xs leading-6 text-[hsl(var(--muted-foreground))]">
+                    <CardFooter className="text-xs leading-6 text-muted-foreground">
                         We protect your account with email verification before first login.
                     </CardFooter>
                 </Card>

@@ -88,17 +88,17 @@ function Loginpage() {
             <Suspense fallback={null}>
                 <AuthErrorWarning />
             </Suspense>
-            <div className="relative min-h-screen overflow-hidden bg-[hsl(var(--background))] px-4 py-8 sm:px-6">
+            <div className="relative min-h-screen overflow-hidden bg-background px-4 py-8 sm:px-6">
                 <div className="pointer-events-none absolute inset-0">
                     <div className="absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-cyan-400/10 blur-3xl" />
                     <div className="absolute -bottom-16 -left-10 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
                 </div>
 
                 <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center">
-                    <Card className="w-full border-[hsl(var(--border))]/70 bg-[hsl(var(--card))/0.94] shadow-2xl shadow-black/25 backdrop-blur-sm">
+                    <Card className="w-full border-border/70 bg-card/94 shadow-2xl shadow-black/25 backdrop-blur-sm">
                         <CardHeader className="gap-5">
                             <div className="flex items-center justify-between gap-3">
-                                <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))/0.45] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))]">
+                                <div className="rounded-md border border-border bg-background/45 px-3 py-1.5 text-sm text-muted-foreground">
                                     New here?
                                     <Button
                                         variant="link"
@@ -141,7 +141,7 @@ function Loginpage() {
                                 <div className="grid gap-2">
                                     <div className="flex items-center justify-between">
                                         <Label htmlFor="password">Password</Label>
-                                        <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                        <span className="text-xs text-muted-foreground">
                                             Keep it secure
                                         </span>
                                     </div>
@@ -171,10 +171,10 @@ function Loginpage() {
                         </CardContent>
 
                         <CardFooter className="flex-col gap-3">
-                            <div className="flex w-full items-center gap-3 text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">
-                                <span className="h-px flex-1 bg-[hsl(var(--border))]" />
+                            <div className="flex w-full items-center gap-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                                <span className="h-px flex-1 bg-border" />
                                 <span>or</span>
-                                <span className="h-px flex-1 bg-[hsl(var(--border))]" />
+                                <span className="h-px flex-1 bg-border" />
                             </div>
 
                             <Button
