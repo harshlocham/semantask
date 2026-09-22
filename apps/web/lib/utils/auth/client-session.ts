@@ -71,7 +71,12 @@ export function isAuthSessionPendingError(error: unknown): error is AuthSessionP
 }
 
 export function isPublicAuthRoute(pathname: string): boolean {
-    return pathname === "/" || pathname === "/login" || pathname === "/register";
+    return (
+        pathname === "/" ||
+        pathname === "/login" ||
+        pathname === "/register" ||
+        pathname === "/forgot-password"
+    );
 }
 
 function canUseBroadcastChannel(): boolean {

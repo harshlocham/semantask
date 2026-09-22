@@ -142,9 +142,14 @@ function Loginpage() {
                                 <div className="grid gap-2">
                                     <div className="flex items-center justify-between">
                                         <Label htmlFor="password">Password</Label>
-                                        <span className="text-xs text-muted-foreground">
-                                            Keep it secure
-                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="link"
+                                            className="h-auto px-0 text-xs"
+                                            onClick={() => router.push("/forgot-password")}
+                                        >
+                                            Forgot password?
+                                        </Button>
                                     </div>
                                     <Input
                                         id="password"

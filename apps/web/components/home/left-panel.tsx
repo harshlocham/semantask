@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, ListFilter, LogOut, Search, X } from "lucide-react";
+import { Inbox, ListFilter, LogOut, MessageSquareDiff, Search, X } from "lucide-react";
 import Link from "next/link";
 import { Input } from "../ui/input";
 import ThemeSwitch from "./theme-switch";
-import UserListDialog from "./dialogs/user-list-dialog";
 import UserProfile from "./userProfile";
 import useChatStore from "@/store/chat-store";
 import { ClientUser, ClientConversation } from "@semantask/types";
@@ -23,11 +22,13 @@ interface SidebarProps {
     isMobileOpen?: boolean;
     onMobileClose?: () => void;
     initialConversations?: ClientConversation[];
+    onStartConversation?: () => void;
 }
 
 const Sidebar = ({
     isMobileOpen = false,
     onMobileClose,
+    onStartConversation,
 }: SidebarProps) => {
     const conversations = useChatStore((s) => s.conversations);
     const setConversations = useChatStore((s) => s.setConversations);
@@ -208,7 +209,16 @@ const Sidebar = ({
                             <Inbox size={20} />
                         </Link>
                     ) : null}
-                    <UserListDialog />
+                    <button
+                        type="button"
+                        onClick={onStartConversation}
+                        data-testid="start-conversation-icon"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))]"
+                        aria-label="Start a conversation"
+                        title="Start a conversation"
+                    >
+                        <MessageSquareDiff size={20} />
+                    </button>
                     <ThemeSwitch />
 
                     <LogOut
@@ -277,7 +287,24 @@ const Sidebar = ({
                     </p>
                 )}
 
-                {!loading && !fetchError && filteredConversations.length === 0 && (
+                {!loading && !fetchError && conversations.length === 0 && (
+                    <div
+                        className="mt-6 flex flex-col items-center gap-3 px-4 text-center text-sm text-[hsl(var(--muted-foreground))]"
+                        data-testid="conversations-empty"
+                    >
+                        <p>Start a conversation to extract reviewable work.</p>
+                        <button
+                            type="button"
+                            onClick={onStartConversation}
+                            data-testid="start-conversation"
+                            className="text-sm font-medium text-[hsl(var(--foreground))] underline underline-offset-2"
+                        >
+                            Start a conversation
+                        </button>
+                    </div>
+                )}
+
+                {!loading && !fetchError && conversations.length > 0 && filteredConversations.length === 0 && (
                     <div className="mt-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
                         No conversations found
                     </div>

@@ -23,8 +23,20 @@ import { ClientConversation } from "@semantask/types";
 import { getImageKitUploadAuth } from "@/lib/utils/imagekit";
 import { useUser } from "@/context/UserContext";
 
-const UserListDialog = () => {
-    const [open, setOpen] = useState(false);
+type UserListDialogProps = {
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    hideTrigger?: boolean;
+};
+
+const UserListDialog = ({
+    open: openProp,
+    onOpenChange,
+    hideTrigger = false,
+}: UserListDialogProps) => {
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+    const open = openProp ?? uncontrolledOpen;
+    const setOpen = onOpenChange ?? setUncontrolledOpen;
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [groupName, setGroupName] = useState("");
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -154,9 +166,11 @@ const UserListDialog = () => {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger>
-                <MessageSquareDiff size={20} />
-            </DialogTrigger>
+            {hideTrigger ? null : (
+                <DialogTrigger>
+                    <MessageSquareDiff size={20} />
+                </DialogTrigger>
+            )}
             <DialogContent className="sm:max-w-106.25 bg-[hsl(var(--card))] shadow-xl rounded-xl">
                 <DialogHeader>
                     <DialogClose ref={dialogCloseRef} />
