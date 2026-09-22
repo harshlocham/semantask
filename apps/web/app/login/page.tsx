@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { APP_HOME } from "@/lib/routes";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -71,7 +72,7 @@ function Loginpage() {
             }
 
             toast.success("Welcome back");
-            router.push("/");
+            router.push(APP_HOME);
         } catch (error: unknown) {
             if (error instanceof Error) {
                 toast.error(error.message);
@@ -116,7 +117,7 @@ function Loginpage() {
                                     Welcome back
                                 </CardTitle>
                                 <CardDescription className="max-w-md text-sm leading-6 sm:text-base">
-                                    Sign in to continue your chats and realtime updates.
+                                    Sign in to open your workspace and review extracted work.
                                 </CardDescription>
                             </div>
                         </CardHeader>
@@ -183,7 +184,7 @@ function Loginpage() {
                                 onClick={async () => {
                                     try {
                                         setPendingAction("google");
-                                        window.location.href = "/api/auth/google/start?callbackUrl=/";
+                                        window.location.href = `/api/auth/google/start?callbackUrl=${APP_HOME}`;
                                     } catch (error) {
                                         if (error instanceof Error) {
                                             toast.error(error.message);

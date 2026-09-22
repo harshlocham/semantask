@@ -1,6 +1,7 @@
 import { jwtVerify, type JWTPayload } from "jose";
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessTokenSecret, getInternalWorkerSecret } from "@/lib/config/secrets";
+import { APP_HOME } from "@/lib/routes";
 import { buildAppRedirectUrl } from "@/lib/utils/auth/googleOAuthBaseUrl";
 
 type AccessPayload = JWTPayload & {
@@ -95,13 +96,18 @@ export default async function middleware(req: NextRequest) {
     const hasRefreshToken = Boolean(req.cookies.get("refreshToken")?.value);
 
     const isPublic =
+        pathname === "/" ||
         pathname === "/login" ||
         pathname === "/register" ||
         pathname === "/error";
 
     if (isPublic) {
+        if ((token || hasRefreshToken) && pathname === "/") {
+            return NextResponse.redirect(buildAppRedirectUrl(req, APP_HOME));
+        }
+
         if (token && (pathname === "/login" || pathname === "/register")) {
-            return NextResponse.redirect(buildAppRedirectUrl(req, "/"));
+            return NextResponse.redirect(buildAppRedirectUrl(req, APP_HOME));
         }
 
         return NextResponse.next();
@@ -127,12 +133,12 @@ export default async function middleware(req: NextRequest) {
 
     if (pathname.startsWith("/admin")) {
         if (!token.sub) {
-            return NextResponse.redirect(buildAppRedirectUrl(req, "/"));
+            return NextResponse.redirect(buildAppRedirectUrl(req, APP_HOME));
         }
 
         const isAdmin = await hasActiveAdminRole(req, token.sub, token.tokenVersion);
         if (!isAdmin) {
-            return NextResponse.redirect(buildAppRedirectUrl(req, "/"));
+            return NextResponse.redirect(buildAppRedirectUrl(req, APP_HOME));
         }
     }
 
@@ -147,6 +153,8 @@ export const config = {
         "/login",
         "/register",
         "/",
+        "/app",
+        "/app/:path*",
         "/dashboard/:path*",
         "/profile/:path*",
         "/settings/:path*",

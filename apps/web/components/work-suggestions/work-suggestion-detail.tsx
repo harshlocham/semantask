@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { conversationMessageHref, taskHref } from "@/lib/work-links";
+import { APP_HOME } from "@/lib/routes";
 import { SuggestionTrustPanel } from "@/components/work-suggestions/suggestion-trust";
 import { suggestionOutcome } from "@/lib/work-suggestions/trust";
 import {
@@ -86,7 +87,7 @@ export function WorkSuggestionDetailView({
                     {errorMessage || "You do not have access to this work suggestion."}
                 </p>
                 <Button asChild variant="outline">
-                    <Link href="/">Back to chat</Link>
+                    <Link href={APP_HOME}>Back to chat</Link>
                 </Button>
             </div>
         );
@@ -100,7 +101,7 @@ export function WorkSuggestionDetailView({
                     {errorMessage || "This work suggestion does not exist or is no longer available."}
                 </p>
                 <Button asChild variant="outline">
-                    <Link href="/">Back to chat</Link>
+                    <Link href={APP_HOME}>Back to chat</Link>
                 </Button>
             </div>
         );
@@ -114,7 +115,7 @@ export function WorkSuggestionDetailView({
                     {errorMessage || "Something went wrong while loading this work suggestion."}
                 </p>
                 <Button asChild variant="outline">
-                    <Link href="/">Back to chat</Link>
+                    <Link href={APP_HOME}>Back to chat</Link>
                 </Button>
             </div>
         );
@@ -125,7 +126,7 @@ export function WorkSuggestionDetailView({
             <div className="mx-auto max-w-2xl space-y-4 p-6" data-testid="work-suggestion-empty">
                 <p className="text-sm text-muted-foreground">No suggestion to display.</p>
                 <Button asChild variant="outline">
-                    <Link href="/">Back to chat</Link>
+                    <Link href={APP_HOME}>Back to chat</Link>
                 </Button>
             </div>
         );

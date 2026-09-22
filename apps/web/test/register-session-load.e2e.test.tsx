@@ -55,7 +55,7 @@ describe("email register session load (e2e)", () => {
     it("treats /register as a public auth route", () => {
         expect(isPublicAuthRoute("/register")).toBe(true);
         expect(isPublicAuthRoute("/login")).toBe(true);
-        expect(isPublicAuthRoute("/")).toBe(false);
+        expect(isPublicAuthRoute("/")).toBe(true);
     });
 
     it("refreshUser loads /api/me on /register after a successful login", async () => {

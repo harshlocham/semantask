@@ -11,6 +11,7 @@ import {
     buildAppRedirectUrl,
     getGoogleOAuthBaseUrl,
 } from "@/lib/utils/auth/googleOAuthBaseUrl";
+import { APP_HOME } from "@/lib/routes";
 
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 const GOOGLE_CALLBACK_COOKIE = "google_oauth_callback";
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
 
     const storedState = req.cookies.get(GOOGLE_STATE_COOKIE)?.value;
     const callbackCookie = req.cookies.get(GOOGLE_CALLBACK_COOKIE)?.value;
-    const callbackUrl = callbackCookie ? decodeURIComponent(callbackCookie) : "/";
+    const callbackUrl = callbackCookie ? decodeURIComponent(callbackCookie) : APP_HOME;
 
     const loginRedirect = buildAppRedirectUrl(req, "/login");
 
@@ -149,7 +150,9 @@ export async function GET(req: NextRequest) {
             userAgent,
         });
 
-        const safeRedirect = callbackUrl.startsWith("/") ? callbackUrl : "/";
+        const safeRedirect = callbackUrl.startsWith("/") && callbackUrl !== "/"
+            ? callbackUrl
+            : APP_HOME;
         const response = NextResponse.redirect(buildAppRedirectUrl(req, safeRedirect));
         cleanupOAuthCookies(response);
         response.headers.append("Set-Cookie", buildAccessTokenCookie(accessToken));

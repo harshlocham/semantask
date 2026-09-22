@@ -14,6 +14,7 @@ import {
     useTaskApprovalsList,
 } from "@/lib/queries/use-task-approvals";
 import { conversationMessageHref, taskHref } from "@/lib/work-links";
+import { APP_HOME } from "@/lib/routes";
 import { UserChip } from "@/components/people/user-chip";
 
 function formatTimestamp(iso: string) {
@@ -212,7 +213,7 @@ export function InboxApprovalsView() {
                     ) : null}
                 </div>
                 <Button asChild variant="outline">
-                    <Link href="/">Back to chat</Link>
+                    <Link href={APP_HOME}>Back to chat</Link>
                 </Button>
             </div>
 
