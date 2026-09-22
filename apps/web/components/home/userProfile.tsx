@@ -20,11 +20,18 @@ const UserProfile = () => {
     return (
         <Dialog >
             <DialogTrigger asChild>
-                <Button><UserAvatar
-                    username={user?.username}
-                    profilePicture={user?.profilePicture}
-                    size={48}
-                /></Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    className="size-12 shrink-0 rounded-full p-0 hover:bg-accent/50"
+                    aria-label="Open profile settings"
+                >
+                    <UserAvatar
+                        username={user?.username}
+                        profilePicture={user?.profilePicture}
+                        size={48}
+                    />
+                </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] bg-[hsl(var(--card))] shadow-xl rounded-xl">
                 <DialogHeader>
