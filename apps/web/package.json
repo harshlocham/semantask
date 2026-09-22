@@ -9,10 +9,13 @@
         "lint": "next lint",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "test": "jest --config ./jest.config.cjs",
-        "test:watch": "jest --config ./jest.config.cjs --watch"
+        "test:watch": "jest --config ./jest.config.cjs --watch",
+        "test:e2e": "playwright test",
+        "test:e2e:deps": "docker compose -f ../../docker-compose.e2e.yml up -d --wait"
     },
     "devDependencies": {
         "@jest/globals": "^30.4.1",
+        "@playwright/test": "^1.63.0",
         "@testing-library/dom": "^10.4.1",
         "@testing-library/jest-dom": "^7.0.0",
         "@testing-library/react": "^16.3.2",
