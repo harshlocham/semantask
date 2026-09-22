@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { mkdtemp, readdir, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { sendOtpEmail } from "@/lib/utils/sendOtp";
 
 function withEnv(values: Record<string, string | undefined>, fn: () => Promise<void>) {
@@ -68,11 +71,39 @@ describe("sendOtpEmail (Resend)", () => {
         });
     });
 
+    it("writes JSON to E2E_MAIL_DIR instead of calling Resend", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "semantask-e2e-mail-"));
+        await withEnv({
+            E2E_MAIL_DIR: dir,
+            RESEND_API_KEY: undefined,
+            RESEND_FROM_EMAIL: undefined,
+        }, async () => {
+            await sendOtpEmail("alice@e2e.semantask.test", "654321");
+
+            expect(globalThis.fetch).not.toHaveBeenCalled();
+            const files = await readdir(dir);
+            expect(files).toHaveLength(1);
+            const payload = JSON.parse(await readFile(join(dir, files[0]), "utf8")) as {
+                to: string;
+                subject: string;
+                text: string;
+            };
+            expect(payload.to).toBe("alice@e2e.semantask.test");
+            expect(payload.subject).toBe("Your verification code");
+            expect(payload.text).toContain("654321");
+
+            await sendOtpEmail("alice@e2e.semantask.test", "654322");
+            const filesAfterSecond = await readdir(dir);
+            expect(filesAfterSecond).toHaveLength(2);
+        });
+    });
+
     it("throws when Resend is not configured", async () => {
         await withEnv({
             RESEND_API_KEY: undefined,
             RESEND_FROM_EMAIL: undefined,
             EMAIL_FROM: undefined,
+            E2E_MAIL_DIR: undefined,
         }, async () => {
             await expect(sendOtpEmail("user@example.com", "123456")).rejects.toThrow(
                 "Resend is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL."

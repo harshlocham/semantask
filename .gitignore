@@ -13,6 +13,11 @@ node_modules/
 
 # Test and coverage
 coverage/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/e2e/.mail/
+apps/web/e2e/.seed.json
+blob-report/
 
 # Next.js
 .next/

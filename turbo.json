@@ -19,7 +19,11 @@
         "UPSTASH_REDIS_REST_TOKEN",
         "SOCKET_SERVER_URL",
         "EMAIL_*",
-        "NEXT_PUBLIC_*"
+        "NEXT_PUBLIC_*",
+        "COORDINATION_BOARD",
+        "ORG_DASHBOARD",
+        "TASK_CLASSIFIER_MODE",
+        "E2E_MAIL_DIR"
     ],
     "tasks": {
         "build": {
