@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { hashPassword } from "../../../packages/auth/password/hash";
 import { Conversation } from "../../../packages/db/models/Conversation";
 import MessageModel from "../../../packages/db/models/Message";
@@ -9,6 +11,7 @@ import WorkSuggestionModel from "../../../packages/db/models/WorkSuggestion";
 import { connectToDatabase } from "../../../packages/db/db";
 import { ALICE, BOB, E2E_ORG } from "./credentials";
 import { E2E_MONGODB_URI } from "./env";
+import { E2E_SEED_PATH, type E2eSeed } from "./seed-io";
 
 async function createUser(input: { username: string; email: string; password: string }) {
     const password = await hashPassword(input.password);
@@ -120,6 +123,16 @@ export async function seedE2eWorld(): Promise<void> {
             tags: ["e2e"],
             dedupeKey: `e2e-seed-task-${conversation._id.toString()}`,
         });
+
+        await mkdir(path.dirname(E2E_SEED_PATH), { recursive: true });
+        await writeFile(
+            E2E_SEED_PATH,
+            JSON.stringify({
+                conversationId: conversation._id.toString(),
+                taskTitle: "Prepare weekly status",
+            } satisfies E2eSeed),
+            "utf8"
+        );
     } finally {
         await User.base.disconnect();
     }
