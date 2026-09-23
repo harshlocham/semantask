@@ -104,7 +104,7 @@ export function InboxSubnav({
                         aria-current={active ? "page" : undefined}
                         onClick={() => onNavigate?.()}
                         className={cn(
-                            "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                            "flex h-8 items-center gap-2 rounded-md px-2 text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:bg-background/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
                             active && "bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary"
                         )}
                     >

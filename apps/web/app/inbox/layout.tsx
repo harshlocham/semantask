@@ -4,8 +4,10 @@ import { WorkSearchBox } from "@/components/work/work-search-box";
 export default function InboxLayout({ children }: { children: React.ReactNode }) {
     return (
         <WorkspaceLayout>
-            <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-                <WorkSearchBox />
+            <div className="w-full max-w-6xl space-y-3 px-4 py-4 lg:px-5">
+                <div className="flex md:hidden">
+                    <WorkSearchBox />
+                </div>
                 {children}
             </div>
         </WorkspaceLayout>

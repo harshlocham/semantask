@@ -1,17 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, ListFilter, LogOut, MessageSquareDiff, Search, X } from "lucide-react";
-import Link from "next/link";
+import { ListFilter, MessageSquareDiff, Search, X } from "lucide-react";
 import { Input } from "../ui/input";
 import ThemeSwitch from "./theme-switch";
-import UserProfile from "./userProfile";
 import useChatStore from "@/store/chat-store";
 import { ClientUser, ClientConversation } from "@semantask/types";
 import VirtualConversationList from "../sidebar/VirtualConversationList";
-import { socket } from "@/lib/socket/socketClient";
-import { useRouter } from "next/navigation";
-import { authenticatedFetch, getWorkInboxEnabled } from "@/lib/utils/api";
+import { authenticatedFetch } from "@/lib/utils/api";
 import { recordApiTiming } from "@/lib/utils/performance";
 
 function isUser(p: unknown): p is ClientUser {
@@ -33,26 +29,10 @@ const Sidebar = ({
     const conversations = useChatStore((s) => s.conversations);
     const setConversations = useChatStore((s) => s.setConversations);
     const setSelectedConversation = useChatStore((s) => s.setSelectedConversation);
-    const router = useRouter();
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
-    const [workInboxEnabled, setWorkInboxEnabled] = useState(false);
-
-    useEffect(() => {
-        let cancelled = false;
-        void getWorkInboxEnabled()
-            .then((enabled) => {
-                if (!cancelled) setWorkInboxEnabled(enabled);
-            })
-            .catch(() => {
-                if (!cancelled) setWorkInboxEnabled(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
 
     // Fetch conversations with explicit cancellation and retry handling.
     useEffect(() => {
@@ -121,7 +101,7 @@ const Sidebar = ({
                 setFetchError("Unable to load conversations. Tap to retry.");
             } finally {
                 if (timeoutId) clearTimeout(timeoutId);
-                if (!controller.signal.aborted && active) {
+                if (active) {
                     setLoading(false);
                 }
             }
@@ -194,88 +174,58 @@ const Sidebar = ({
 
     const panelContent = (isMobile = false) => (
         <>
-            <div className="flex items-center gap-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--gray-primary))] p-3 sm:p-4">
-                <UserProfile />
-
-                <div className="ml-auto flex items-center gap-2 sm:gap-3">
-                    {workInboxEnabled ? (
-                        <Link
-                            href="/inbox"
-                            data-testid="work-inbox-nav-link"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))]"
-                            aria-label="Work inbox"
-                            title="Work inbox"
-                        >
-                            <Inbox size={20} />
-                        </Link>
-                    ) : null}
+            <div className="flex h-12 items-center gap-2 border-b border-border px-3">
+                <p className="text-[13px] font-semibold text-foreground">Conversations</p>
+                <div className="ml-auto flex items-center gap-1">
                     <button
                         type="button"
                         onClick={onStartConversation}
                         data-testid="start-conversation-icon"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))]"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
                         aria-label="Start a conversation"
                         title="Start a conversation"
                     >
-                        <MessageSquareDiff size={20} />
+                        <MessageSquareDiff size={16} />
                     </button>
                     <ThemeSwitch />
-
-                    <LogOut
-                        size={20}
-                        className="cursor-pointer text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--foreground))]"
-                        onClick={() => {
-                            if (socket.connected) {
-                                socket.disconnect();
-                            }
-                            authenticatedFetch("/api/auth/logout", {
-                                method: "POST",
-                            }).then(() => {
-                                router.push("/login");
-                            });
-                        }}
-                    />
-
-                    {isMobile && onMobileClose && (
+                    {isMobile && onMobileClose ? (
                         <button
                             type="button"
                             onClick={onMobileClose}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground"
                             aria-label="Close conversations"
                         >
-                            <X size={18} />
+                            <X size={16} />
                         </button>
-                    )}
+                    ) : null}
                 </div>
             </div>
 
-            <div className="flex items-center border-b border-[hsl(var(--border))] bg-[hsl(var(--gray-primary))] p-2 sm:p-3">
-                <div className="relative mx-2 h-10 flex-1 sm:mx-3">
+            <div className="border-b border-border px-3 py-2">
+                <div className="relative">
                     <Search
-                        className="absolute top-1/2 left-3 -translate-y-1/2 text-[hsl(var(--muted-foreground))]"
-                        size={18}
+                        className="absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+                        size={14}
                     />
-
                     <Input
                         type="text"
-                        placeholder="Search or start a new chat"
+                        placeholder="Search conversations"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        className="h-10 w-full rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--input))] py-2 pr-3 pl-10 text-sm text-[hsl(var(--foreground))] shadow-none transition focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]"
+                        className="h-8 rounded-md border-border bg-muted/40 py-1 pr-8 pl-8 text-[13px] shadow-none"
                     />
+                    <ListFilter className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground" size={14} />
                 </div>
-
-                <ListFilter className="cursor-pointer text-[hsl(var(--muted-foreground))]" />
             </div>
 
-            <div className="custom-scrollbar flex-1 overflow-y-auto bg-[hsl(var(--left-panel))] px-1 pb-4">
-                {loading && (
-                    <div className="space-y-3 p-3">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--left-panel))] px-1 pb-2">
+                {loading && conversations.length === 0 && (
+                    <div className="space-y-2 p-2">
                         {[...Array(6)].map((_, i) => (
                             <div
                                 key={i}
-                                className="h-12 animate-pulse rounded-lg bg-[hsl(var(--gray-secondary))]"
+                                className="h-10 animate-pulse rounded-md bg-muted"
                             />
                         ))}
                     </div>
@@ -310,8 +260,8 @@ const Sidebar = ({
                     </div>
                 )}
 
-                <div className="flex-1 overflow-hidden">
-                    {!loading && !fetchError && filteredConversations.length > 0 && <VirtualConversationList />}
+                <div className="min-h-0 flex-1">
+                    {!fetchError && filteredConversations.length > 0 && <VirtualConversationList />}
                 </div>
             </div>
         </>
@@ -336,7 +286,7 @@ const Sidebar = ({
                 {panelContent(true)}
             </aside>
 
-            <aside className="hidden h-full w-80 min-w-[320px] shrink-0 flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--left-panel))] text-[hsl(var(--foreground))] shadow-lg lg:flex">
+            <aside className="hidden h-full w-[272px] min-w-[272px] shrink-0 flex-col border-r border-border bg-card lg:flex">
                 {panelContent(false)}
             </aside>
         </>

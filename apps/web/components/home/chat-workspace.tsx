@@ -52,8 +52,8 @@ export default function ChatWorkspace() {
     }, [isMobileViewport, isSidebarOpen]);
 
     return (
-        <main className="h-full min-h-0 bg-[hsl(var(--gray-secondary))]">
-            <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-[hsl(var(--gray-secondary))]">
+        <main className="h-full min-h-0 bg-background">
+            <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-background">
                 <UserListDialog
                     open={startConversationOpen}
                     onOpenChange={setStartConversationOpen}

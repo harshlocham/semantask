@@ -24,13 +24,13 @@ const UserProfile = () => {
                 <Button
                     type="button"
                     variant="ghost"
-                    className="size-12 shrink-0 rounded-full p-0 hover:bg-accent/50"
+                    className="size-8 shrink-0 rounded-full p-0 hover:bg-accent/50"
                     aria-label="Open profile settings"
                 >
                     <UserAvatar
                         username={user?.username}
                         profilePicture={user?.profilePicture}
-                        size={48}
+                        size={32}
                     />
                 </Button>
             </DialogTrigger>

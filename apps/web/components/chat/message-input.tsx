@@ -55,6 +55,9 @@ const MessageInput = () => {
         [selectedConversation]
     );
     const activeReply = sel ? repliedTo[sel] : undefined;
+    const composerPlaceholder = selectedConversation?.isGroup && selectedConversation.groupName
+        ? `Message ${selectedConversation.groupName}`
+        : "Type a message";
 
     useEffect(() => {
         if (editingMessage) {
@@ -233,24 +236,18 @@ const MessageInput = () => {
                 </div>
             </div>
         )}
-        <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-2 bg-[hsl(var(--card))] px-2 py-2 text-[hsl(var(--foreground))] lg:rounded-b-2xl sm:px-4 md:px-6">
-            <form className="flex w-full items-center gap-1.5 sm:gap-2" onSubmit={handleSendMessage}>
-                {/* Emoji, Attach, Image */}
-                <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-                    <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[hsl(var(--chat-hover))] sm:h-10 sm:w-10" aria-label="Add emoji">
-                        <Laugh className="text-[hsl(var(--muted-foreground))]" size={20} />
-                    </button>
-                    <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[hsl(var(--chat-hover))] sm:h-10 sm:w-10" aria-label="Attach file">
-                        <Plus className="text-[hsl(var(--muted-foreground))]" size={20} />
-                    </button>
-                    <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[hsl(var(--chat-hover))] sm:h-10 sm:w-10" aria-label="Upload image" onClick={() => setShowImageUpload(!showImageUpload)}>
-                        <ImageIcon className="text-[hsl(var(--muted-foreground))]" size={20} />
-                    </button>
-                </div>
+        <div className="relative flex w-full flex-col bg-background px-3 pb-3 pt-1 lg:px-4">
+            <form
+                className="relative flex w-full items-center gap-1 rounded-xl border border-border bg-background px-1.5 py-1 shadow-[var(--shadow-card)] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+                onSubmit={handleSendMessage}
+            >
+                <button type="button" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent" aria-label="Attach file">
+                    <Plus size={18} />
+                </button>
                 {/* Input */}
-                <div className="flex-1 relative">
+                <div className="min-w-0 flex-1">
                     {(activeReply || editingMessage) && (
-                        <div className="absolute -top-12 left-0 z-10 flex w-full items-center justify-between rounded-t-md border border-[hsl(var(--border))] bg-[hsl(var(--gray-primary))] p-2 text-[11px] text-[hsl(var(--foreground))] sm:-top-10 sm:text-xs">
+                        <div className="absolute -top-10 left-0 z-10 flex w-full items-center justify-between rounded-t-lg border border-b-0 border-border bg-muted p-2 text-[11px] text-foreground sm:text-xs">
                             {activeReply && (
                                 <span>
                                     Replying to{" "}
@@ -283,8 +280,9 @@ const MessageInput = () => {
                     )}
                     <Input
                         type="text"
-                        placeholder={isRateLimited ? `Please wait ${timeLeft}s...` : "Type a message"}
-                        className="h-10 w-full rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--input))] px-4 py-2 text-sm text-[hsl(var(--foreground))] shadow-none transition focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] sm:h-11"
+                        placeholder={isRateLimited ? `Please wait ${timeLeft}s...` : composerPlaceholder}
+                        aria-label="Message"
+                        className="h-8 w-full border-0 bg-transparent px-1.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
                         value={msgText}
                         onChange={(e) => {
                             setMsgText(e.target.value);
@@ -302,27 +300,35 @@ const MessageInput = () => {
                         }}
                     />
                 </div>
+                <div className="flex shrink-0 items-center">
+                    <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent" aria-label="Add emoji">
+                        <Laugh size={18} />
+                    </button>
+                    <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent" aria-label="Upload image" onClick={() => setShowImageUpload(!showImageUpload)}>
+                        <ImageIcon size={18} />
+                    </button>
+                </div>
                 {/* Send / Mic */}
                 <div className="flex items-center gap-1">
                     {msgText.trim().length > 0 ? (
                         <Button
                             type="submit"
                             size="icon"
-                            className="h-9 w-9 rounded-full bg-green-primary p-2 text-white shadow-none transition-opacity hover:opacity-90 sm:h-10 sm:w-10"
+                            className="h-8 w-8 rounded-lg bg-primary p-2 text-primary-foreground shadow-none hover:bg-primary/90"
                             disabled={isRateLimited}
                             aria-label="Send message"
                         >
-                            <Send size={20} />
+                            <Send size={16} />
                         </Button>
                     ) : (
                         <Button
                             type="button"
                             size="icon"
-                            className="h-9 w-9 rounded-full bg-green-primary p-2 text-white transition-opacity hover:opacity-90 sm:h-10 sm:w-10"
+                            className="h-8 w-8 rounded-lg bg-primary p-2 text-primary-foreground shadow-none hover:bg-primary/90"
                             disabled={isRateLimited}
                             aria-label="Record voice"
                         >
-                            <Mic size={20} />
+                            <Mic size={16} />
                         </Button>
                     )}
                 </div>

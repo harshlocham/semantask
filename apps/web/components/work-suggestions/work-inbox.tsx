@@ -9,8 +9,8 @@ import {
     type WorkSuggestionStatus,
 } from "@semantask/types";
 import { useQueryClient } from "@tanstack/react-query";
-import { APP_HOME } from "@/lib/routes";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CalendarDays, FileText, SlidersHorizontal, UserRound } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,9 +33,16 @@ import {
     useWorkSuggestionsList,
 } from "@/lib/queries/use-work-suggestions";
 import { conversationMessageHref } from "@/lib/work-links";
-import { SuggestionTrustPanel } from "@/components/work-suggestions/suggestion-trust";
-import { suggestionConfidencePercent, suggestionOutcome } from "@/lib/work-suggestions/trust";
+import { PriorityBadge } from "@/components/work-suggestions/priority-badge";
+import {
+    suggestionConfidencePercent,
+    suggestionOutcome,
+    suggestionPolicyLabel,
+    suggestionSignalLabels,
+    suggestionToolLabel,
+} from "@/lib/work-suggestions/trust";
 import { getWorkSuggestion } from "@/lib/utils/api";
+import { cn } from "@/lib/utils/utils";
 import {
     DEEP_LINK_HIGHLIGHT_CLASS,
     inboxSuggestionElementId,
@@ -43,11 +50,11 @@ import {
 import { useDeepLinkScroll } from "@/hooks/useDeepLinkScroll";
 
 const STATUS_OPTIONS: Array<{ value: "" | WorkSuggestionStatus; label: string }> = [
-    { value: "proposed", label: "proposed" },
-    { value: "accepted", label: "accepted" },
-    { value: "dismissed", label: "dismissed" },
-    { value: "converted", label: "converted" },
-    { value: "", label: "all" },
+    { value: "proposed", label: "Needs review" },
+    { value: "accepted", label: "Accepted" },
+    { value: "dismissed", label: "Dismissed" },
+    { value: "converted", label: "Converted" },
+    { value: "", label: "All" },
 ];
 
 const QUEUE_TABS: Array<{ value: WorkSuggestionStatus; label: string }> = [
@@ -65,7 +72,18 @@ const EMPTY_INBOX_ITEMS: WorkSuggestionRecord[] = [];
 function formatTimestamp(iso: string) {
     const value = new Date(iso);
     if (Number.isNaN(value.getTime())) return "-";
-    return value.toLocaleString();
+    return value.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
+function formatDay(iso: string) {
+    const value = new Date(iso);
+    if (Number.isNaN(value.getTime())) return "-";
+    return value.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function summarize(text: string, max = 140) {
@@ -88,7 +106,7 @@ function ownersForSuggestion(
 }
 
 export function WorkInboxView() {
-    const { organizationId, organization } = useActiveOrganization();
+    const { organizationId } = useActiveOrganization();
     const { user } = useUser();
     const currentUserId = user?._id ?? null;
     const searchParams = useSearchParams();
@@ -104,6 +122,7 @@ export function WorkInboxView() {
     const [ownerById, setOwnerById] = useState<Record<string, string[]>>({});
     const [actingId, setActingId] = useState<string | null>(null);
     const [actionErrorById, setActionErrorById] = useState<Record<string, string | null>>({});
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     const queryClient = useQueryClient();
     const refreshConversation = useWorkSuggestionStore((state) => state.refreshConversation);
@@ -180,6 +199,14 @@ export function WorkInboxView() {
             })),
         [membersQuery.data]
     );
+    const memberNameById = useMemo(
+        () => new Map(members.map((member) => [member.userId, member.user.username ?? "Unknown user"])),
+        [members]
+    );
+    const filtersVisible = filtersOpen
+        || !organizationId
+        || Boolean(conversationId.trim())
+        || !QUEUE_TABS.some((tab) => tab.value === status);
 
     const acceptMutation = useAcceptWorkSuggestion(listQuery.listParams);
     const dismissMutation = useDismissWorkSuggestion(listQuery.listParams);
@@ -328,103 +355,100 @@ export function WorkInboxView() {
     }
 
     return (
-        <div className="space-y-6" data-testid="work-inbox">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h1 className="text-2xl font-bold">Work inbox</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Triage reviewable work suggestions without opening the orchestration panel.
-                        Accept creates coordination work only — it never starts autonomous tool
-                        execution.
-                    </p>
-                </div>
-                <Button asChild variant="outline">
-                    <Link href={APP_HOME}>Back to chat</Link>
-                </Button>
-            </div>
+        <div className="space-y-3" data-testid="work-inbox">
+            {!organizationId ? (
+                <p className="text-xs text-muted-foreground" data-testid="work-inbox-scope">
+                    Personal — select a conversation to load suggestions
+                </p>
+            ) : null}
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Scope and filters</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div
-                        className="rounded-md border border-border px-3 py-2 text-sm"
-                        data-testid="work-inbox-scope"
-                    >
-                        {organizationId ? (
-                            <>
-                                <span className="text-muted-foreground">Organization </span>
-                                <span className="font-medium" data-testid="work-inbox-org-name">
-                                    {organization?.name ?? "Organization"}
-                                </span>
-                            </>
-                        ) : (
-                            <span className="text-muted-foreground">
-                                Personal — select a conversation to load suggestions
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="flex flex-wrap gap-2" data-testid="work-inbox-queue">
-                        {QUEUE_TABS.map((tab) => (
-                            <Button
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border">
+                <div className="-mb-px flex flex-wrap" data-testid="work-inbox-queue" role="group" aria-label="Review queue">
+                    {QUEUE_TABS.map((tab) => {
+                        const active = status === tab.value;
+                        return (
+                            <button
                                 key={tab.value}
                                 type="button"
-                                size="sm"
-                                variant={status === tab.value ? "default" : "outline"}
+                                className={cn(
+                                    "inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[13px] font-medium transition-colors",
+                                    active
+                                        ? "border-primary text-foreground"
+                                        : "border-transparent text-muted-foreground hover:text-foreground"
+                                )}
                                 data-testid={`work-inbox-queue-${tab.value}`}
-                                aria-pressed={status === tab.value}
+                                aria-pressed={active}
                                 onClick={() => {
                                     setPage(1);
                                     setStatus(tab.value);
                                 }}
                             >
                                 {tab.label}
-                            </Button>
-                        ))}
-                    </div>
+                                {active && pagination ? (
+                                    <span className="rounded-md bg-primary/10 px-1.5 text-[11px] font-medium text-primary">
+                                        {pagination.total}
+                                    </span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="mb-1.5 h-8 gap-1.5 rounded-lg"
+                    aria-expanded={filtersVisible}
+                    aria-controls="work-inbox-filters"
+                    onClick={() => setFiltersOpen((open) => !open)}
+                >
+                    <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
+                    Filter
+                </Button>
+            </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="inbox-status">Status</Label>
-                            <select
-                                id="inbox-status"
-                                data-testid="work-inbox-status"
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                value={status}
-                                onChange={(event) => {
-                                    setPage(1);
-                                    setStatus(event.target.value as "" | WorkSuggestionStatus);
-                                }}
-                            >
-                                {STATUS_OPTIONS.map((option) => (
-                                    <option key={option.label} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="inbox-conversation">Conversation</Label>
-                            <Input
-                                id="inbox-conversation"
-                                data-testid="work-inbox-conversation"
-                                value={conversationId}
-                                onChange={(event) => {
-                                    setPage(1);
-                                    setConversationId(event.target.value);
-                                }}
-                                placeholder={organizationId ? "Optional filter" : "Required for personal"}
-                            />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+            <div
+                id="work-inbox-filters"
+                className={cn("grid gap-2 sm:grid-cols-[180px_minmax(0,320px)]", !filtersVisible && "hidden")}
+            >
+                <div className="space-y-1">
+                    <Label htmlFor="inbox-status" className="text-xs text-muted-foreground">Status</Label>
+                    <select
+                        id="inbox-status"
+                        data-testid="work-inbox-status"
+                        className="flex h-8 w-full rounded-lg border border-input bg-background px-2 text-[13px]"
+                        value={status}
+                        onChange={(event) => {
+                            setPage(1);
+                            setStatus(event.target.value as "" | WorkSuggestionStatus);
+                        }}
+                    >
+                        {STATUS_OPTIONS.map((option) => (
+                            <option key={option.label} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="space-y-1">
+                    <Label htmlFor="inbox-conversation" className="text-xs text-muted-foreground">Conversation</Label>
+                    <Input
+                        id="inbox-conversation"
+                        data-testid="work-inbox-conversation"
+                        className="h-8 rounded-lg text-[13px]"
+                        value={conversationId}
+                        onChange={(event) => {
+                            setPage(1);
+                            setConversationId(event.target.value);
+                        }}
+                        placeholder={organizationId ? "Optional conversation id" : "Required for personal"}
+                    />
+                </div>
+            </div>
 
             {!hasScope ? (
                 <Card data-testid="work-inbox-onboarding">
-                    <CardContent className="space-y-3 p-6 text-sm">
+                    <CardContent className="space-y-3 py-3 text-sm">
                         <p className="font-medium">Choose a scope to load your inbox</p>
                         <p className="text-muted-foreground">
                             Set an active organization on the Organizations page, or enter a conversation
@@ -450,7 +474,7 @@ export function WorkInboxView() {
 
             {hasScope && error ? (
                 <Card data-testid="work-inbox-error">
-                    <CardContent className="space-y-3 p-6 text-sm">
+                    <CardContent className="space-y-3 py-3 text-sm">
                         <p className="font-medium">Unable to load inbox</p>
                         <p className="text-muted-foreground">{error}</p>
                         <Button
@@ -466,7 +490,7 @@ export function WorkInboxView() {
 
             {hasScope && listQuery.isSuccess && items.length === 0 ? (
                 <Card data-testid="work-inbox-empty">
-                    <CardContent className="space-y-2 p-6 text-sm">
+                    <CardContent className="space-y-2 py-3 text-sm">
                         <p className="font-medium">
                             {status === "proposed" || status === ""
                                 ? "No proposed suggestions"
@@ -480,98 +504,125 @@ export function WorkInboxView() {
             ) : null}
 
             {hasScope && listQuery.isSuccess && items.length > 0 ? (
-                <div className="space-y-6" data-testid="work-inbox-list">
+                <div className="space-y-4" data-testid="work-inbox-list">
                     {queueGroups.map((group) => (
-                    <section key={group.key} className="space-y-3" data-testid={`work-inbox-group-${group.key}`}>
-                    <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
-                    {group.rows.map((item) => (
-                        <Card
+                    <section key={group.key} className="space-y-2" data-testid={`work-inbox-group-${group.key}`}>
+                    {status === "" ? (
+                        <h2 className="text-xs font-medium text-muted-foreground">{group.label}</h2>
+                    ) : null}
+                    {group.rows.map((item) => {
+                        const toolLabel = suggestionToolLabel(item);
+                        const policyLabel = suggestionPolicyLabel(item);
+                        const signals = suggestionSignalLabels(item);
+                        const assigneeNames = (item.candidates.assigneeCandidates ?? [])
+                            .map((id) => memberNameById.get(id) ?? (id === currentUserId ? "Me" : null))
+                            .filter((name): name is string => Boolean(name));
+                        const assigneeCount = item.candidates.assigneeCandidates?.length ?? 0;
+                        const triage = item.status === "proposed" || item.status === "converted";
+                        return (
+                        <article
                             key={item._id}
                             id={inboxSuggestionElementId(item._id)}
                             data-testid="work-inbox-row"
                             data-highlighted={item._id === highlightedSuggestionId ? "true" : "false"}
-                            className={item._id === highlightedSuggestionId ? DEEP_LINK_HIGHLIGHT_CLASS : undefined}
+                            className={cn(
+                                "flex flex-col gap-3 rounded-xl border border-border bg-card p-3 lg:flex-row lg:items-start",
+                                item._id === highlightedSuggestionId && DEEP_LINK_HIGHLIGHT_CLASS
+                            )}
                         >
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base">
-                                    <Link
-                                        href={`/work-suggestions/${item._id}`}
-                                        className="hover:underline"
-                                        data-testid="work-inbox-row-link"
-                                    >
-                                        {item.title}
-                                    </Link>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
-                                <p className="text-muted-foreground">
-                                    {summarize(suggestionOutcome(item))}
-                                </p>
-                                <SuggestionTrustPanel suggestion={item} />
-                                <dl className="grid gap-2 sm:grid-cols-3">
-                                    <div>
-                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                                            Status
-                                        </dt>
-                                        <dd className="font-medium capitalize">{item.status}</dd>
+                            <div className="flex min-w-0 flex-1 gap-3">
+                                <span
+                                    aria-hidden="true"
+                                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0 flex-1 space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Link
+                                            href={`/work-suggestions/${item._id}`}
+                                            className="truncate text-sm font-semibold text-foreground hover:underline"
+                                            data-testid="work-inbox-row-link"
+                                        >
+                                            {item.title}
+                                        </Link>
+                                        {item.candidates.priorityCandidate ? (
+                                            <PriorityBadge priority={item.candidates.priorityCandidate} />
+                                        ) : null}
+                                        {item.status !== "proposed" ? (
+                                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">
+                                                {item.status}
+                                            </span>
+                                        ) : null}
                                     </div>
-                                    <div>
-                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                                            Assignee
-                                        </dt>
-                                        <dd className="font-medium">
-                                            {(item.candidates.assigneeCandidates?.length ?? 0) > 0
-                                                ? `${item.candidates.assigneeCandidates.length} suggested`
-                                                : "Not suggested"}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                                            Due
-                                        </dt>
-                                        <dd className="font-medium">
-                                            {item.candidates.dueAtCandidate
-                                                ? formatTimestamp(item.candidates.dueAtCandidate)
-                                                : "Not suggested"}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                                            Priority
-                                        </dt>
-                                        <dd className="font-medium capitalize">
-                                            {item.candidates.priorityCandidate || "Not suggested"}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                                            Confidence
-                                        </dt>
-                                        <dd className="font-medium">{suggestionConfidencePercent(item)}%</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                                            Created
-                                        </dt>
-                                        <dd className="font-medium">{formatTimestamp(item.createdAt)}</dd>
-                                    </div>
-                                    <div className="sm:col-span-3">
-                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                                            Conversation
-                                        </dt>
-                                        <dd className="break-words">
-                                            <Link
-                                                href={conversationMessageHref(item.conversationId)}
-                                                className="font-medium underline underline-offset-2 hover:opacity-80"
-                                                data-testid="work-inbox-conversation-link"
-                                            >
-                                                {item.conversationLabel?.trim() || "Open conversation"}
-                                            </Link>
-                                        </dd>
-                                    </div>
-                                </dl>
+                                    <p className="text-xs text-muted-foreground">
+                                        From{" "}
+                                        <Link
+                                            href={conversationMessageHref(item.conversationId)}
+                                            className="font-medium text-foreground hover:underline"
+                                            data-testid="work-inbox-conversation-link"
+                                        >
+                                            {item.conversationLabel?.trim() || "Open conversation"}
+                                        </Link>
+                                        {" · "}
+                                        {formatTimestamp(item.createdAt)}
+                                    </p>
+                                    <p className="line-clamp-2 text-[13px] text-foreground/80">
+                                        {summarize(suggestionOutcome(item))}
+                                    </p>
+                                    <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-1">
+                                            <dt><UserRound aria-hidden="true" className="h-3.5 w-3.5" /><span className="sr-only">Assignee</span></dt>
+                                            <dd className="font-medium text-foreground">
+                                                {assigneeNames.length > 0
+                                                    ? assigneeNames.join(", ")
+                                                    : assigneeCount > 0
+                                                        ? `${assigneeCount} suggested`
+                                                        : "Unassigned"}
+                                            </dd>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <dt><CalendarDays aria-hidden="true" className="h-3.5 w-3.5" /><span className="sr-only">Due</span></dt>
+                                            <dd className="font-medium text-foreground">
+                                                {item.candidates.dueAtCandidate
+                                                    ? `Due ${formatDay(item.candidates.dueAtCandidate)}`
+                                                    : "No due date"}
+                                            </dd>
+                                        </div>
+                                        <div className="flex items-center gap-1" data-testid="suggestion-confidence">
+                                            <dt>Confidence</dt>
+                                            <dd className="font-medium text-foreground">{suggestionConfidencePercent(item)}%</dd>
+                                        </div>
+                                        {signals.length > 0 ? (
+                                            <div className="flex items-center gap-1" data-testid="suggestion-why">
+                                                <dt className="sr-only">Why this suggestion?</dt>
+                                                <dd>{signals.join(", ")}</dd>
+                                            </div>
+                                        ) : null}
+                                        {toolLabel ? (
+                                            <div className="flex items-center gap-1" data-testid="suggestion-tool">
+                                                <dt>Suggested action</dt>
+                                                <dd className="font-medium text-foreground">
+                                                    {toolLabel}
+                                                    {policyLabel ? (
+                                                        <span className="font-normal text-muted-foreground" data-testid="suggestion-execution-policy">
+                                                            {" "}({policyLabel})
+                                                        </span>
+                                                    ) : null}
+                                                </dd>
+                                            </div>
+                                        ) : null}
+                                    </dl>
+                                    {item.possibleDuplicateTaskId ? (
+                                        <p className="text-xs text-muted-foreground" data-testid="suggestion-duplicate-hint">
+                                            Similar open work already exists in this conversation. Accept only if this is new.
+                                        </p>
+                                    ) : null}
+                                </div>
+                            </div>
 
-                                {(item.status === "proposed" || item.status === "converted") ? (
+                            {triage ? (
+                                <div className="w-full shrink-0 lg:w-[340px]">
                                     <WorkInboxTriage
                                         suggestion={item}
                                         organizationId={organizationId}
@@ -585,10 +636,15 @@ export function WorkInboxView() {
                                         onDismiss={(reason) => handleDismiss(item, reason)}
                                         onAllowAiTools={() => handleAllowAiTools(item)}
                                     />
-                                ) : null}
-                            </CardContent>
-                        </Card>
-                    ))}
+                                </div>
+                            ) : item.dismissReason ? (
+                                <p className="text-xs text-muted-foreground lg:w-[340px]">
+                                    Dismissed: {item.dismissReason}
+                                </p>
+                            ) : null}
+                        </article>
+                        );
+                    })}
                     </section>
                     ))}
                 </div>

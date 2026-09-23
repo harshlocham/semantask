@@ -40,8 +40,8 @@ test("signed-in visit to / opens the workspace", async ({ page }) => {
 
     await page.goto("/");
     await expect(page).toHaveURL(APP_HOME, { timeout: 20_000 });
-    await expect(page.getByText("Welcome to your workspace")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Select a conversation")).toBeVisible({ timeout: 20_000 });
     await expect(
-        page.getByPlaceholder("Search or start a new chat").filter({ visible: true }),
+        page.getByPlaceholder("Search conversations").filter({ visible: true }),
     ).toBeVisible();
 });
