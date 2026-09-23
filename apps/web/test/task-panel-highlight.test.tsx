@@ -105,4 +105,12 @@ describe("TaskPanel deep links", () => {
         expect(screen.getByLabelText("Run status")).toBeInTheDocument();
         expect(screen.getByTestId("task-panel")).toHaveAttribute("data-mobile-visible", "true");
     });
+
+    it("opens below the desktop breakpoint when the work control asks for the drawer", async () => {
+        mockTaskSearch.value = "";
+        render(React.createElement(TaskPanel, { conversationId: "conv-1", mobileOpen: true }));
+        expect(await screen.findByTestId("task-panel")).toHaveAttribute("data-mobile-visible", "true");
+        expect(screen.getByTestId("task-panel-close")).toBeInTheDocument();
+        expect(screen.getByTestId("task-panel-mobile-backdrop")).toBeInTheDocument();
+    });
 });

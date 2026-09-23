@@ -59,6 +59,12 @@ function routeChrome(pathname: string): { title: string; description: string } |
             description: "Coordination and run state for this task.",
         };
     }
+    if (pathname === "/account") {
+        return {
+            title: "Account",
+            description: "Change your password or revoke every signed-in session.",
+        };
+    }
     return null;
 }
 

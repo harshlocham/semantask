@@ -299,17 +299,38 @@ export function InboxApprovalsView() {
                         <Card key={item._id} data-testid="inbox-approvals-row">
                             <CardHeader className="pb-2">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div className="space-y-1">
+                                    <div className="space-y-2">
                                         <CardTitle className="text-base">{item.actionType}</CardTitle>
-                                        <p className="text-xs text-muted-foreground">
-                                            Tool {item.toolName || "—"} ·{" "}
-                                            <Link
-                                                href={taskHref(item.taskId)}
-                                                className="underline underline-offset-2 hover:opacity-80"
-                                            >
-                                                Open task
-                                            </Link>
-                                        </p>
+                                        <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                                            <div>
+                                                <dt className="uppercase tracking-wide text-muted-foreground">Task</dt>
+                                                <dd>
+                                                    <Link
+                                                        href={taskHref(item.taskId)}
+                                                        className="font-medium underline underline-offset-2 hover:opacity-80"
+                                                        data-testid="inbox-approvals-task"
+                                                    >
+                                                        Open task
+                                                    </Link>
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="uppercase tracking-wide text-muted-foreground">Tool</dt>
+                                                <dd className="font-medium" data-testid="inbox-approvals-tool">
+                                                    Tool: {item.toolName || item.actionType}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="uppercase tracking-wide text-muted-foreground">State</dt>
+                                                <dd className="font-medium" data-testid="inbox-approvals-state">
+                                                    {item.executionState || "Pending"}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="uppercase tracking-wide text-muted-foreground">Policy</dt>
+                                                <dd data-testid="inbox-approvals-policy">{getPolicySummary(item)}</dd>
+                                            </div>
+                                        </dl>
                                         <p className="text-xs text-muted-foreground">
                                             <Link
                                                 href={conversationMessageHref(item.conversationId)}
@@ -352,11 +373,9 @@ export function InboxApprovalsView() {
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-3 text-sm">
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">Preview</p>
                                 <p className="text-muted-foreground">{item.summary || "No summary"}</p>
                                 <ExecutionPreview item={item} />
-                                <p className="text-xs text-amber-700 dark:text-amber-500">
-                                    {getPolicySummary(item)}
-                                </p>
                                 <div className="space-y-2">
                                     <Label htmlFor={`comment-${item._id}`}>Reviewer comment</Label>
                                     <Input
@@ -376,7 +395,7 @@ export function InboxApprovalsView() {
                                 </div>
                                 <details className="space-y-2">
                                     <summary className="cursor-pointer text-sm text-muted-foreground">
-                                        Edit parameters
+                                        Parameters
                                     </summary>
                                     <Label htmlFor={`params-${item._id}`}>
                                         Parameters override (JSON object)

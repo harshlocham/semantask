@@ -11,6 +11,7 @@ interface ChatHeaderProps {
     isGroup: boolean;
     onBack: () => void;
     onClearSelection: () => void;
+    onOpenTasks?: () => void;
 }
 
 export default function ChatHeader({
@@ -20,6 +21,7 @@ export default function ChatHeader({
     isGroup,
     onBack,
     onClearSelection,
+    onOpenTasks,
 }: ChatHeaderProps) {
     return (
         <div className="sticky top-0 z-30 border-b border-[hsl(var(--border))] bg-[hsl(var(--gray-primary))] px-3 py-2 sm:p-3">
@@ -51,14 +53,27 @@ export default function ChatHeader({
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={onClearSelection}
-                    className="hidden h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--chat-hover))] lg:inline-flex"
-                    aria-label="Close conversation"
-                >
-                    <X size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                    {onOpenTasks ? (
+                        <button
+                            type="button"
+                            onClick={onOpenTasks}
+                            className="inline-flex h-9 items-center rounded-md border border-[hsl(var(--border))] px-3 text-sm font-medium text-[hsl(var(--foreground))] lg:hidden"
+                            data-testid="open-task-drawer"
+                            aria-label="Open work"
+                        >
+                            Work
+                        </button>
+                    ) : null}
+                    <button
+                        type="button"
+                        onClick={onClearSelection}
+                        className="hidden h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--chat-hover))] lg:inline-flex"
+                        aria-label="Close conversation"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
             </div>
         </div>
     );

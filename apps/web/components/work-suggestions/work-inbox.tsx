@@ -34,7 +34,7 @@ import {
 } from "@/lib/queries/use-work-suggestions";
 import { conversationMessageHref } from "@/lib/work-links";
 import { SuggestionTrustPanel } from "@/components/work-suggestions/suggestion-trust";
-import { suggestionOutcome } from "@/lib/work-suggestions/trust";
+import { suggestionConfidencePercent, suggestionOutcome } from "@/lib/work-suggestions/trust";
 import { getWorkSuggestion } from "@/lib/utils/api";
 import {
     DEEP_LINK_HIGHLIGHT_CLASS,
@@ -49,6 +49,18 @@ const STATUS_OPTIONS: Array<{ value: "" | WorkSuggestionStatus; label: string }>
     { value: "converted", label: "converted" },
     { value: "", label: "all" },
 ];
+
+const QUEUE_TABS: Array<{ value: WorkSuggestionStatus; label: string }> = [
+    { value: "proposed", label: "Needs review" },
+    { value: "converted", label: "Converted" },
+    { value: "dismissed", label: "Dismissed" },
+];
+
+function queueLabel(value: WorkSuggestionStatus): string {
+    return QUEUE_TABS.find((tab) => tab.value === value)?.label ?? value;
+}
+
+const EMPTY_INBOX_ITEMS: WorkSuggestionRecord[] = [];
 
 function formatTimestamp(iso: string) {
     const value = new Date(iso);
@@ -174,7 +186,20 @@ export function WorkInboxView() {
     const assignMutation = useAssignWorkSuggestion(listQuery.listParams);
     const requestExecutionMutation = useRequestTaskExecution();
 
-    const items = listQuery.data?.items ?? [];
+    const items = listQuery.data?.items ?? EMPTY_INBOX_ITEMS;
+    const queueGroups = useMemo(() => {
+        const order: WorkSuggestionStatus[] = ["proposed", "converted", "dismissed", "accepted"];
+        if (status) {
+            return [{ key: status, label: queueLabel(status), rows: items }];
+        }
+        return order
+            .map((value) => ({
+                key: value,
+                label: queueLabel(value),
+                rows: items.filter((item) => item.status === value),
+            }))
+            .filter((group) => group.rows.length > 0);
+    }, [items, status]);
     const pagination = listQuery.data?.pagination;
     const totalPages = pagination?.totalPages ?? 1;
     const loading = resolvingDeepLink || listQuery.isLoading || listQuery.isFetching;
@@ -341,6 +366,25 @@ export function WorkInboxView() {
                         )}
                     </div>
 
+                    <div className="flex flex-wrap gap-2" data-testid="work-inbox-queue">
+                        {QUEUE_TABS.map((tab) => (
+                            <Button
+                                key={tab.value}
+                                type="button"
+                                size="sm"
+                                variant={status === tab.value ? "default" : "outline"}
+                                data-testid={`work-inbox-queue-${tab.value}`}
+                                aria-pressed={status === tab.value}
+                                onClick={() => {
+                                    setPage(1);
+                                    setStatus(tab.value);
+                                }}
+                            >
+                                {tab.label}
+                            </Button>
+                        ))}
+                    </div>
+
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
                             <Label htmlFor="inbox-status">Status</Label>
@@ -436,8 +480,11 @@ export function WorkInboxView() {
             ) : null}
 
             {hasScope && listQuery.isSuccess && items.length > 0 ? (
-                <div className="space-y-3" data-testid="work-inbox-list">
-                    {items.map((item) => (
+                <div className="space-y-6" data-testid="work-inbox-list">
+                    {queueGroups.map((group) => (
+                    <section key={group.key} className="space-y-3" data-testid={`work-inbox-group-${group.key}`}>
+                    <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
+                    {group.rows.map((item) => (
                         <Card
                             key={item._id}
                             id={inboxSuggestionElementId(item._id)}
@@ -467,6 +514,40 @@ export function WorkInboxView() {
                                             Status
                                         </dt>
                                         <dd className="font-medium capitalize">{item.status}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                            Assignee
+                                        </dt>
+                                        <dd className="font-medium">
+                                            {(item.candidates.assigneeCandidates?.length ?? 0) > 0
+                                                ? `${item.candidates.assigneeCandidates.length} suggested`
+                                                : "Not suggested"}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                            Due
+                                        </dt>
+                                        <dd className="font-medium">
+                                            {item.candidates.dueAtCandidate
+                                                ? formatTimestamp(item.candidates.dueAtCandidate)
+                                                : "Not suggested"}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                            Priority
+                                        </dt>
+                                        <dd className="font-medium capitalize">
+                                            {item.candidates.priorityCandidate || "Not suggested"}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                            Confidence
+                                        </dt>
+                                        <dd className="font-medium">{suggestionConfidencePercent(item)}%</dd>
                                     </div>
                                     <div>
                                         <dt className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -507,6 +588,8 @@ export function WorkInboxView() {
                                 ) : null}
                             </CardContent>
                         </Card>
+                    ))}
+                    </section>
                     ))}
                 </div>
             ) : null}

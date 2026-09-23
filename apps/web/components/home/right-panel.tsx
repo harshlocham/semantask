@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import MessageInput from "../chat/message-input";
 import MessageList from "../chat/message-list";
 import TaskPanel from "../chat/task-panel";
@@ -19,6 +20,7 @@ function isUser(p: ClientUser) {
 const RightPanel = ({ onStartConversation }: { onStartConversation?: () => void }) => {
     const { user } = useUser();
     const currentUserEmail = user?.email;
+    const [tasksOpen, setTasksOpen] = useState(false);
 
     const conversations = useChatStore((s) => s.conversations);
     const selectedConversationId = useChatStore(
@@ -69,6 +71,7 @@ const RightPanel = ({ onStartConversation }: { onStartConversation?: () => void 
                 isGroup={selectedConversation.isGroup}
                 onBack={() => setSelectedConversation(null)}
                 onClearSelection={() => setSelectedConversation(null)}
+                onOpenTasks={() => setTasksOpen(true)}
             />
 
             <div className="min-h-0 flex flex-1">
@@ -77,7 +80,11 @@ const RightPanel = ({ onStartConversation }: { onStartConversation?: () => void 
                         conversationId={conversationId}
                     />
                 </div>
-                <TaskPanel conversationId={conversationId} />
+                <TaskPanel
+                    conversationId={conversationId}
+                    mobileOpen={tasksOpen}
+                    onMobileOpenChange={setTasksOpen}
+                />
             </div>
 
             <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[hsl(var(--border))] bg-[hsl(var(--card))] pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:border-t-0 lg:bg-transparent lg:pb-0">

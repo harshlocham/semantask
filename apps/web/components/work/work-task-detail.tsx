@@ -9,6 +9,24 @@ import { UserChip } from "@/components/people/user-chip";
 import { conversationMessageHref } from "@/lib/work-links";
 import { ApiHttpError, authenticatedFetch, getTask, requestTaskExecutionApi } from "@/lib/utils/api";
 
+const BOARD_LABELS: Record<string, string> = {
+    todo: "Todo",
+    doing: "Doing",
+    done: "Done",
+};
+
+function runStateLabel(status: string) {
+    const labels: Record<string, string> = {
+        pending: "Pending",
+        executing: "Executing",
+        completed: "Completed",
+        failed: "Failed",
+        partial: "Partial",
+        waiting_for_input: "Waiting for input",
+    };
+    return labels[status] ?? status;
+}
+
 function formatTimestamp(iso: string | null | undefined) {
     if (!iso) return "—";
     const value = new Date(iso);
@@ -138,6 +156,12 @@ export function WorkTaskDetailView({ taskId }: { taskId: string }) {
                     <h1 className="text-2xl font-bold">{task.title}</h1>
                     <p className="text-sm text-muted-foreground" data-testid="work-task-status">
                         {task.coordinationStatus ?? task.boardStatus}
+                    </p>
+                    <p className="text-sm text-foreground" data-testid="work-task-board-status">
+                        Board: {BOARD_LABELS[task.boardStatus] ?? task.boardStatus}
+                    </p>
+                    <p className="text-sm text-foreground" data-testid="work-task-run-status">
+                        Run: {runStateLabel(task.status)}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

@@ -20,7 +20,7 @@ import {
 } from "@/lib/queries/use-organizations";
 import { UserChip } from "@/components/people/user-chip";
 import { writeActiveOrganizationId, readActiveOrganizationId } from "@/hooks/useActiveOrganizationId";
-import { getOrganizationUsage, listOrganizationToolGrants } from "@/lib/utils/api";
+import { getOrganizationPolicy, getOrganizationUsage, listOrganizationToolGrants } from "@/lib/utils/api";
 
 export default function OrganizationsPage() {
     const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
@@ -410,14 +410,40 @@ export default function OrganizationsPage() {
                 </Card>
             ) : null}
 
-            {activeOrgId ? <OrgPolicyQuotaPanel organizationId={activeOrgId} /> : null}
+            {activeOrgId ? (
+                <OrgPolicyQuotaPanel organizationId={activeOrgId} canManage={canManage} />
+            ) : null}
             {activeOrgId ? <OrgUsageGrantsPanel organizationId={activeOrgId} members={members} /> : null}
         </div>
     );
 }
 
-function OrgPolicyQuotaPanel({ organizationId }: { organizationId: string }) {
+function csv(values: unknown): string {
+    return Array.isArray(values) ? values.filter((value) => typeof value === "string").join(", ") : "";
+}
+
+function parseCsv(value: string): string[] {
+    return value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+}
+
+function OrgPolicyQuotaPanel({
+    organizationId,
+    canManage,
+}: {
+    organizationId: string;
+    canManage: boolean;
+}) {
+    const [executionMode, setExecutionMode] = useState("suggest_only");
+    const [effectiveMode, setEffectiveMode] = useState("suggest_only");
+    const [confidenceThresholds, setConfidenceThresholds] = useState("");
+    const [allowedDomains, setAllowedDomains] = useState("");
     const [requireApproval, setRequireApproval] = useState("send_email");
+    const [toolDenyList, setToolDenyList] = useState("");
+    const [defaultGrants, setDefaultGrants] = useState("");
+    const [promptGuardMode, setPromptGuardMode] = useState("");
     const [maxTokens, setMaxTokens] = useState("");
     const [maxMembers, setMaxMembers] = useState("");
     const [message, setMessage] = useState<string | null>(null);
@@ -425,17 +451,75 @@ function OrgPolicyQuotaPanel({ organizationId }: { organizationId: string }) {
     const policyMutation = useUpdateOrganizationPolicy(organizationId);
     const quotaMutation = useUpdateOrganizationQuota(organizationId);
 
+    useEffect(() => {
+        let cancelled = false;
+        void getOrganizationPolicy(organizationId)
+            .then((policy) => {
+                if (cancelled) return;
+                const storedMode = typeof policy.executionMode === "string" ? policy.executionMode : "";
+                const effective =
+                    typeof policy.effectiveExecutionMode === "string"
+                        ? policy.effectiveExecutionMode
+                        : "suggest_only";
+                setExecutionMode(storedMode || effective || "suggest_only");
+                setEffectiveMode(effective || "suggest_only");
+                const thresholds = policy.confidenceThresholds;
+                setConfidenceThresholds(
+                    thresholds && typeof thresholds === "object" && !Array.isArray(thresholds)
+                        ? JSON.stringify(thresholds, null, 2)
+                        : ""
+                );
+                setAllowedDomains(csv(policy.allowedEmailDomains));
+                setRequireApproval(csv(policy.requireApprovalFor) || "send_email");
+                setToolDenyList(csv(policy.toolDenyList));
+                setDefaultGrants(csv(policy.defaultToolGrants));
+                setPromptGuardMode(typeof policy.promptGuardMode === "string" ? policy.promptGuardMode : "");
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setMessage("Could not load the current policy.");
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [organizationId]);
+
     async function savePolicy() {
         setMessage(null);
+        if (!canManage) {
+            setMessage("Only an owner or admin can change organization policy.");
+            return;
+        }
         try {
-            const tools = requireApproval
-                .split(",")
-                .map((t) => t.trim())
-                .filter(Boolean);
+            let thresholds: Record<string, number> | null = null;
+            if (confidenceThresholds.trim()) {
+                const parsed = JSON.parse(confidenceThresholds) as unknown;
+                if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                    setMessage("Confidence thresholds must be a JSON object.");
+                    return;
+                }
+                const next: Record<string, number> = {};
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (typeof value !== "number" || !Number.isFinite(value)) {
+                        setMessage(`Confidence threshold “${key}” must be a number.`);
+                        return;
+                    }
+                    next[key] = value;
+                }
+                thresholds = next;
+            }
+
             await policyMutation.mutateAsync({
-                requireApprovalFor: tools,
+                executionMode,
+                confidenceThresholds: thresholds,
+                allowedEmailDomains: parseCsv(allowedDomains),
+                requireApprovalFor: parseCsv(requireApproval),
+                toolDenyList: parseCsv(toolDenyList),
+                defaultToolGrants: parseCsv(defaultGrants),
+                promptGuardMode: promptGuardMode || null,
             });
-            setMessage("Policy saved.");
+            setEffectiveMode(executionMode);
+            setMessage("Policy saved. The default execution mode is suggest_only unless you change it.");
         } catch (error) {
             setMessage(error instanceof Error ? error.message : "Failed to save policy");
         }
@@ -443,6 +527,10 @@ function OrgPolicyQuotaPanel({ organizationId }: { organizationId: string }) {
 
     async function saveQuota() {
         setMessage(null);
+        if (!canManage) {
+            setMessage("Only an owner or admin can change quotas.");
+            return;
+        }
         try {
             let maxTokensPerMonth: number | null = null;
             let maxMembersValue: number | null = null;
@@ -476,35 +564,112 @@ function OrgPolicyQuotaPanel({ organizationId }: { organizationId: string }) {
     }
 
     return (
-        <Card>
+        <Card data-testid="organization-policy">
             <CardHeader>
                 <CardTitle>Policy &amp; quotas</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 {message ? <p className="text-sm">{message}</p> : null}
-                <div className="space-y-2">
-                    <p className="text-sm font-medium">Require approval for tools (comma-separated)</p>
-                    <div className="flex gap-2">
-                        <Input value={requireApproval} onChange={(e) => setRequireApproval(e.target.value)} />
-                        <Button onClick={() => void savePolicy()} disabled={policyMutation.isPending}>
-                            Save policy
-                        </Button>
-                    </div>
-                </div>
+                <p className="text-sm text-muted-foreground" data-testid="organization-execution-mode">
+                    Effective execution mode: {effectiveMode}. Default is suggest_only.
+                </p>
+                <label className="block space-y-1 text-sm">
+                    <span className="font-medium">Execution mode</span>
+                    <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        data-testid="organization-policy-execution-mode"
+                        value={executionMode}
+                        disabled={!canManage || policyMutation.isPending}
+                        onChange={(event) => setExecutionMode(event.target.value)}
+                    >
+                        <option value="suggest_only">suggest_only</option>
+                        <option value="require_approval">require_approval</option>
+                        <option value="auto_execute">auto_execute</option>
+                    </select>
+                </label>
+                <label className="block space-y-1 text-sm">
+                    <span className="font-medium">Confidence thresholds (JSON object)</span>
+                    <textarea
+                        className="min-h-24 w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+                        data-testid="organization-policy-thresholds"
+                        value={confidenceThresholds}
+                        disabled={!canManage}
+                        onChange={(event) => setConfidenceThresholds(event.target.value)}
+                        placeholder='{"task": 0.8}'
+                    />
+                </label>
+                <label className="block space-y-1 text-sm">
+                    <span className="font-medium">Allowed email domains</span>
+                    <Input
+                        data-testid="organization-policy-domains"
+                        value={allowedDomains}
+                        disabled={!canManage}
+                        onChange={(event) => setAllowedDomains(event.target.value)}
+                        placeholder="example.com, acme.com"
+                    />
+                </label>
+                <label className="block space-y-1 text-sm">
+                    <span className="font-medium">Require approval for tools</span>
+                    <Input
+                        data-testid="organization-policy-require-approval"
+                        value={requireApproval}
+                        disabled={!canManage}
+                        onChange={(event) => setRequireApproval(event.target.value)}
+                    />
+                </label>
+                <label className="block space-y-1 text-sm">
+                    <span className="font-medium">Tool deny list</span>
+                    <Input
+                        data-testid="organization-policy-deny"
+                        value={toolDenyList}
+                        disabled={!canManage}
+                        onChange={(event) => setToolDenyList(event.target.value)}
+                        placeholder="send_email"
+                    />
+                </label>
+                <label className="block space-y-1 text-sm">
+                    <span className="font-medium">Default tool grants</span>
+                    <Input
+                        data-testid="organization-policy-grants"
+                        value={defaultGrants}
+                        disabled={!canManage}
+                        onChange={(event) => setDefaultGrants(event.target.value)}
+                    />
+                </label>
+                <label className="block space-y-1 text-sm">
+                    <span className="font-medium">Prompt guard</span>
+                    <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        data-testid="organization-policy-prompt-guard"
+                        value={promptGuardMode}
+                        disabled={!canManage}
+                        onChange={(event) => setPromptGuardMode(event.target.value)}
+                    >
+                        <option value="">unset</option>
+                        <option value="off">off</option>
+                        <option value="monitor">monitor</option>
+                        <option value="enforce">enforce</option>
+                    </select>
+                </label>
+                <Button onClick={() => void savePolicy()} disabled={!canManage || policyMutation.isPending}>
+                    Save policy
+                </Button>
                 <div className="space-y-2">
                     <p className="text-sm font-medium">Quotas</p>
                     <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
                             placeholder="Max tokens / month"
                             value={maxTokens}
+                            disabled={!canManage}
                             onChange={(e) => setMaxTokens(e.target.value)}
                         />
                         <Input
                             placeholder="Max members"
                             value={maxMembers}
+                            disabled={!canManage}
                             onChange={(e) => setMaxMembers(e.target.value)}
                         />
-                        <Button onClick={() => void saveQuota()} disabled={quotaMutation.isPending}>
+                        <Button onClick={() => void saveQuota()} disabled={!canManage || quotaMutation.isPending}>
                             Save quota
                         </Button>
                     </div>

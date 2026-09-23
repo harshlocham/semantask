@@ -21,9 +21,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UIMessage } from "@semantask/types";
 import ChatBubbleAvatar from "../home/chat-bubble-avatar";
 import { IntentBadge } from "./intent-badge";
+import { ConversationSuggestionCard } from "./conversation-suggestion-card";
 import { reviewSuggestionHref } from "@/lib/work-suggestions/map";
 import { DEEP_LINK_HIGHLIGHT_CLASS } from "@/lib/deep-link-highlight";
 import { cn } from "@/lib/utils/utils";
+import type { WorkSuggestionRecord } from "@semantask/types";
 
 interface ChatBubbleProps {
     message: UIMessage;
@@ -35,6 +37,8 @@ interface ChatBubbleProps {
     showUsername?: boolean;
     /** Existing WorkSuggestion id for this message, if any. */
     suggestionId?: string | null;
+    /** Full suggestion record when the conversation store has one. */
+    suggestion?: WorkSuggestionRecord | null;
     highlighted?: boolean;
 }
 
@@ -76,6 +80,7 @@ const ChatBubble = ({
     showAvatar = true,
     showUsername = true,
     suggestionId = null,
+    suggestion = null,
     highlighted = false,
 }: ChatBubbleProps) => {
     const selectedConversation = useChatStore((s) => s.selectedConversation);
@@ -284,7 +289,7 @@ const ChatBubble = ({
                         {message.sender.username}
                     </div>
                 )}
-                {message.aiStatus === "classified" && message.semanticType ? (
+                {message.aiStatus === "classified" && message.semanticType && !suggestion ? (
                     <div className={`mb-1 ${isMine ? "self-end" : "self-start"}`}>
                         <IntentBadge
                             semanticType={message.semanticType}
@@ -405,6 +410,7 @@ const ChatBubble = ({
                         <span className="ml-1 text-xs text-[hsl(var(--green-primary))]">✓✓</span>
                     )}
                 </div>
+                {suggestion ? <ConversationSuggestionCard suggestion={suggestion} /> : null}
             </div>
         </div>
     );

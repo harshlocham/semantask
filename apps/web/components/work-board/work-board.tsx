@@ -31,6 +31,18 @@ const COLUMN_LABELS: Record<BoardStatus, string> = {
     done: "Done",
 };
 
+function runStateLabel(status: string) {
+    const labels: Record<string, string> = {
+        pending: "Pending",
+        executing: "Executing",
+        completed: "Completed",
+        failed: "Failed",
+        partial: "Partial",
+        waiting_for_input: "Waiting for input",
+    };
+    return labels[status] ?? status;
+}
+
 function formatDue(iso: string | null) {
     if (!iso) return "No due date";
     const value = new Date(iso);
@@ -318,6 +330,20 @@ export function WorkBoardView() {
                                     </CardHeader>
                                     <CardContent className="space-y-3 text-sm">
                                         <dl className="grid gap-2">
+                                            <div>
+                                                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                    Board
+                                                </dt>
+                                                <dd className="font-medium">{COLUMN_LABELS[task.boardStatus]}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                    Run
+                                                </dt>
+                                                <dd className="font-medium" data-testid="work-board-run-state">
+                                                    {runStateLabel(task.status)}
+                                                </dd>
+                                            </div>
                                             <div>
                                                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                                                     Priority

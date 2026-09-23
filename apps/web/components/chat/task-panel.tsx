@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils/utils";
 
 interface TaskPanelProps {
     conversationId: string;
+    mobileOpen?: boolean;
+    onMobileOpenChange?: (open: boolean) => void;
 }
 
 const TASK_STATUSES: TaskStatus[] = ["pending", "executing", "completed", "failed", "partial"];
@@ -414,9 +416,14 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
     );
 }
 
-export default function TaskPanel({ conversationId }: TaskPanelProps) {
+export default function TaskPanel({
+    conversationId,
+    mobileOpen = false,
+    onMobileOpenChange,
+}: TaskPanelProps) {
     const searchParams = useSearchParams();
     const highlightedTaskId = searchParams.get("task");
+    const [dismissedHighlight, setDismissedHighlight] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -442,7 +449,8 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
     const highlightedOnPage = Boolean(
         highlightedTaskId && tasks.some((task) => task._id === highlightedTaskId)
     );
-    const showMobileTaskSurface = Boolean(highlightedTaskId);
+    const highlightOpen = Boolean(highlightedTaskId) && dismissedHighlight !== highlightedTaskId;
+    const showMobileTaskSurface = mobileOpen || highlightOpen;
     useDeepLinkScroll(
         highlightedTaskId ? taskPanelElementId(highlightedTaskId) : null,
         highlightedOnPage
@@ -556,9 +564,13 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
         <>
             {showMobileTaskSurface ? (
                 <div
-                    className="fixed inset-0 z-30 bg-black/40 xl:hidden"
+                    className="fixed inset-0 z-30 bg-black/40 lg:hidden"
                     data-testid="task-panel-mobile-backdrop"
                     aria-hidden="true"
+                    onClick={() => {
+                        onMobileOpenChange?.(false);
+                        if (highlightedTaskId) setDismissedHighlight(highlightedTaskId);
+                    }}
                 />
             ) : null}
             <aside
@@ -567,8 +579,8 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
                 className={cn(
                     "min-h-0 shrink-0 border-l border-border bg-[hsl(var(--left-panel))] text-foreground dark:bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.12),transparent_28%),linear-gradient(180deg,hsl(var(--left-panel)),hsl(var(--background)))]",
                     showMobileTaskSurface
-                        ? "fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col shadow-xl xl:static xl:z-auto xl:w-85 xl:shadow-none"
-                        : "hidden w-85 xl:flex xl:flex-col"
+                        ? "fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col shadow-xl lg:static lg:z-auto lg:w-85 lg:shadow-none"
+                        : "hidden w-85 lg:flex lg:flex-col"
                 )}
             >
             <div className="border-b border-border px-4 py-4">
@@ -577,9 +589,22 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
                         <h3 className="text-sm font-semibold tracking-tight text-foreground">Work</h3>
                         <p className="mt-1 text-xs text-muted-foreground">Tasks for this conversation</p>
                     </div>
-                    <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
-                        Live
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            className="inline-flex h-8 items-center rounded-md border border-border px-2 text-xs lg:hidden"
+                            data-testid="task-panel-close"
+                            onClick={() => {
+                                onMobileOpenChange?.(false);
+                                if (highlightedTaskId) setDismissedHighlight(highlightedTaskId);
+                            }}
+                        >
+                            Close
+                        </button>
+                        <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
+                            Live
+                        </span>
+                    </div>
                 </div>
             </div>
 

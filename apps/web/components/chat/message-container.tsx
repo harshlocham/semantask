@@ -48,7 +48,7 @@ const MessageContainer = ({ conversationId }: MessageContainerProps) => {
 
     useConversationPresence(conversationId);
     useMessageDelivery({ conversationId, currentUserId });
-    const { getSuggestionId } = useConversationWorkSuggestions(conversationId);
+    const { getSuggestionId, getSuggestion } = useConversationWorkSuggestions(conversationId);
 
     const fetchMessages = useCallback(async (cursor?: string, signal?: AbortSignal) => {
         if (!sel) return;
@@ -261,6 +261,7 @@ const MessageContainer = ({ conversationId }: MessageContainerProps) => {
                                     showAvatar={group.showAvatar && i === 0}
                                     showUsername={group.showUsername && i === 0}
                                     suggestionId={getSuggestionId(String(msg._id))}
+                                    suggestion={getSuggestion(String(msg._id))}
                                     highlighted={highlightedMessageId === String(msg._id)}
                                 />
                             ))}

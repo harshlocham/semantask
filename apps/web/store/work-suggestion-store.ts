@@ -7,11 +7,14 @@ import { buildSuggestionIdByMessageId } from "@/lib/work-suggestions/map";
 
 type WorkSuggestionStore = {
     suggestionIdByMessageId: Record<string, Record<string, string>>;
+    suggestionByMessageId: Record<string, Record<string, WorkSuggestionRecord>>;
     loadingByConversation: Record<string, boolean>;
     errorByConversation: Record<string, string | null>;
     loadConversation: (conversationId: string) => Promise<void>;
     refreshConversation: (conversationId: string) => Promise<void>;
     getSuggestionId: (conversationId: string, messageId: string) => string | null;
+    getSuggestion: (conversationId: string, messageId: string) => WorkSuggestionRecord | null;
+    applySuggestion: (conversationId: string, record: WorkSuggestionRecord) => void;
 };
 
 const inFlight = new Map<string, Promise<void>>();
@@ -20,7 +23,10 @@ const pendingTrailingRefresh = new Set<string>();
 
 const PAGE_LIMIT = 100;
 
-async function fetchAllProposedSuggestions(conversationId: string): Promise<WorkSuggestionRecord[]> {
+async function fetchAllSuggestions(
+    conversationId: string,
+    status: "proposed" | "converted"
+): Promise<WorkSuggestionRecord[]> {
     const items: WorkSuggestionRecord[] = [];
     let page = 1;
     let totalPages = 1;
@@ -28,7 +34,7 @@ async function fetchAllProposedSuggestions(conversationId: string): Promise<Work
     do {
         const result = await listWorkSuggestions({
             conversationId,
-            status: "proposed",
+            status,
             page,
             limit: PAGE_LIMIT,
         });
@@ -38,6 +44,16 @@ async function fetchAllProposedSuggestions(conversationId: string): Promise<Work
     } while (page <= totalPages);
 
     return items;
+}
+
+function recordsByMessage(items: WorkSuggestionRecord[]): Record<string, WorkSuggestionRecord> {
+    const map: Record<string, WorkSuggestionRecord> = {};
+    for (const item of items) {
+        const messageId = String(item.messageId);
+        if (!messageId || map[messageId]) continue;
+        map[messageId] = item;
+    }
+    return map;
 }
 
 async function fetchConversationSuggestions(
@@ -73,12 +89,20 @@ async function fetchConversationSuggestions(
             }));
 
             try {
-                const items = await fetchAllProposedSuggestions(conversationId);
-                const map = buildSuggestionIdByMessageId(items);
+                const proposed = await fetchAllSuggestions(conversationId, "proposed");
+                const converted = await fetchAllSuggestions(conversationId, "converted");
+                const map = buildSuggestionIdByMessageId(proposed);
                 set((state) => ({
                     suggestionIdByMessageId: {
                         ...state.suggestionIdByMessageId,
                         [conversationId]: map,
+                    },
+                    suggestionByMessageId: {
+                        ...state.suggestionByMessageId,
+                        [conversationId]: {
+                            ...recordsByMessage(converted),
+                            ...recordsByMessage(proposed),
+                        },
                     },
                     loadingByConversation: {
                         ...state.loadingByConversation,
@@ -112,6 +136,7 @@ async function fetchConversationSuggestions(
 
 const useWorkSuggestionStore = create<WorkSuggestionStore>((set, get) => ({
     suggestionIdByMessageId: {},
+    suggestionByMessageId: {},
     loadingByConversation: {},
     errorByConversation: {},
 
@@ -129,6 +154,41 @@ const useWorkSuggestionStore = create<WorkSuggestionStore>((set, get) => ({
         const map = get().suggestionIdByMessageId[conversationId];
         if (!map) return null;
         return map[String(messageId)] ?? null;
+    },
+
+    getSuggestion: (conversationId: string, messageId: string) => {
+        const map = get().suggestionByMessageId[conversationId];
+        if (!map) return null;
+        return map[String(messageId)] ?? null;
+    },
+
+    applySuggestion: (conversationId: string, record: WorkSuggestionRecord) => {
+        const messageId = String(record.messageId);
+        set((state) => {
+            const ids = { ...(state.suggestionIdByMessageId[conversationId] ?? {}) };
+            const records = { ...(state.suggestionByMessageId[conversationId] ?? {}) };
+            if (record.status === "dismissed") {
+                delete ids[messageId];
+                delete records[messageId];
+            } else {
+                records[messageId] = record;
+                if (record.status === "proposed") {
+                    ids[messageId] = String(record._id);
+                } else {
+                    delete ids[messageId];
+                }
+            }
+            return {
+                suggestionIdByMessageId: {
+                    ...state.suggestionIdByMessageId,
+                    [conversationId]: ids,
+                },
+                suggestionByMessageId: {
+                    ...state.suggestionByMessageId,
+                    [conversationId]: records,
+                },
+            };
+        });
     },
 }));
 
