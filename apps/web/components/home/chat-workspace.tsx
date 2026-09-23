@@ -52,8 +52,8 @@ export default function ChatWorkspace() {
     }, [isMobileViewport, isSidebarOpen]);
 
     return (
-        <main className="min-h-dvh bg-[hsl(var(--gray-secondary))] p-0 sm:p-2 lg:p-5">
-            <div className="relative mx-auto flex h-dvh w-full max-w-425 overflow-hidden bg-[hsl(var(--gray-secondary))] sm:h-[calc(100dvh-1rem)] lg:rounded-2xl lg:shadow-2xl">
+        <main className="h-full min-h-0 bg-[hsl(var(--gray-secondary))]">
+            <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-[hsl(var(--gray-secondary))]">
                 <UserListDialog
                     open={startConversationOpen}
                     onOpenChange={setStartConversationOpen}

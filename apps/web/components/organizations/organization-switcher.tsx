@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActiveOrganization } from "@/lib/hooks/useActiveOrganization";
+import { Select } from "@/components/ui/select";
+import { useActiveOrganization } from "@/hooks/useActiveOrganization";
 import { writeActiveOrganizationId } from "@/hooks/useActiveOrganizationId";
 import { useOrganizationsList } from "@/lib/queries/use-organizations";
 
@@ -19,10 +20,10 @@ export function OrganizationSwitcher({
             <label htmlFor="organization-switcher" className="sr-only">
                 Active organization
             </label>
-            <select
+            <Select
                 id="organization-switcher"
                 data-testid="organization-switcher-select"
-                className="flex h-9 max-w-[220px] rounded-md border border-input bg-background px-2 text-sm"
+                className="h-9 w-full max-w-full sm:w-[220px]"
                 value={organizationId ?? ""}
                 onChange={(event) => {
                     writeActiveOrganizationId(event.target.value || null);
@@ -34,7 +35,7 @@ export function OrganizationSwitcher({
                         {org.name}
                     </option>
                 ))}
-            </select>
+            </Select>
             {compact ? null : (
                 <Link
                     href="/organizations"

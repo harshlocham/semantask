@@ -320,14 +320,14 @@ const Sidebar = ({
     return (
         <>
             <div
-                className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 lg:hidden ${isMobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+                className={`absolute inset-0 z-40 bg-black/40 transition-opacity duration-300 lg:hidden ${isMobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
                     }`}
                 onClick={onMobileClose}
                 aria-hidden="true"
             />
 
             <aside
-                className={`fixed inset-0 z-50 flex h-full w-full flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--left-panel))] text-[hsl(var(--foreground))] shadow-lg transition-transform duration-300 ease-out lg:hidden ${isMobileOpen ? "translate-x-0" : "-translate-x-full"
+                className={`absolute inset-0 z-50 flex h-full w-full flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--left-panel))] text-[hsl(var(--foreground))] shadow-lg transition-transform duration-300 ease-out lg:hidden ${isMobileOpen ? "translate-x-0" : "-translate-x-full"
                     }`}
                 role="dialog"
                 aria-modal="true"

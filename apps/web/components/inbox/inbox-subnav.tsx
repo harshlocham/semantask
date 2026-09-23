@@ -2,15 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+    CheckSquare,
+    Inbox,
+    LayoutDashboard,
+    MessageSquare,
+    ShieldCheck,
+    type LucideIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils/utils";
 
-const BASE_LINKS = [
-    { href: "/inbox", label: "Suggestions", testId: "inbox-nav-suggestions" },
-    { href: "/inbox/approvals", label: "Approvals", testId: "inbox-nav-approvals" },
-] as const;
+type NavItem = {
+    href: string;
+    label: string;
+    testId: string;
+    icon: LucideIcon;
+    count?: number;
+    countTestId?: string;
+};
 
 function isActive(pathname: string, href: string) {
+    if (href === "/app") {
+        return pathname === "/app" || pathname.startsWith("/c/");
+    }
     if (href === "/inbox") {
-        return pathname === "/inbox";
+        return pathname === "/inbox" || pathname.startsWith("/work-suggestions/");
     }
     return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -18,42 +34,90 @@ function isActive(pathname: string, href: string) {
 export function InboxSubnav({
     boardEnabled = false,
     dashboardEnabled = false,
+    suggestionCount,
+    approvalCount,
+    onNavigate,
 }: {
     boardEnabled?: boolean;
     dashboardEnabled?: boolean;
+    suggestionCount?: number;
+    approvalCount?: number;
+    onNavigate?: () => void;
 }) {
     const pathname = usePathname() ?? "";
-    const optionalLinks = [
+    const links: NavItem[] = [
+        {
+            href: "/app",
+            label: "Conversations",
+            testId: "workspace-nav-conversations",
+            icon: MessageSquare,
+        },
+        {
+            href: "/inbox",
+            label: "Suggestions",
+            testId: "inbox-nav-suggestions",
+            icon: Inbox,
+            count: suggestionCount,
+            countTestId: "nav-suggestion-count",
+        },
+        {
+            href: "/inbox/approvals",
+            label: "Approvals",
+            testId: "inbox-nav-approvals",
+            icon: ShieldCheck,
+            count: approvalCount,
+            countTestId: "nav-approval-count",
+        },
         ...(boardEnabled
-            ? [{ href: "/inbox/board", label: "Board", testId: "inbox-nav-board" }]
+            ? [{
+                href: "/inbox/board",
+                label: "Board",
+                testId: "inbox-nav-board",
+                icon: CheckSquare,
+            }]
             : []),
         ...(dashboardEnabled
-            ? [{ href: "/inbox/dashboard", label: "Dashboard", testId: "inbox-nav-dashboard" }]
+            ? [{
+                href: "/inbox/dashboard",
+                label: "Dashboard",
+                testId: "inbox-nav-dashboard",
+                icon: LayoutDashboard,
+            }]
             : []),
     ];
-    const links = [...BASE_LINKS, ...optionalLinks];
 
     return (
         <nav
-            className="flex flex-wrap gap-4 border-b border-border pb-3 text-sm"
+            className="flex flex-col gap-1"
             aria-label="Work inbox sections"
             data-testid="inbox-subnav"
         >
             {links.map((link) => {
                 const active = isActive(pathname, link.href);
+                const Icon = link.icon;
+                const showCount = typeof link.count === "number" && link.count > 0;
                 return (
                     <Link
                         key={link.href}
                         href={link.href}
                         data-testid={link.testId}
                         aria-current={active ? "page" : undefined}
-                        className={
-                            active
-                                ? "font-semibold text-foreground underline"
-                                : "text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                        }
+                        onClick={() => onNavigate?.()}
+                        className={cn(
+                            "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                            active && "bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary"
+                        )}
                     >
-                        {link.label}
+                        <Icon aria-hidden="true" size={16} />
+                        <span>{link.label}</span>
+                        {showCount ? (
+                            <span
+                                data-testid={link.countTestId}
+                                className="ml-auto rounded-lg bg-primary/10 px-1.5 text-xs tabular-nums text-primary"
+                            >
+                                {link.count}
+                            </span>
+                        ) : null}
                     </Link>
                 );
             })}
