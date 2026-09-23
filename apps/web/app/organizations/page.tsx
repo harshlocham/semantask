@@ -222,18 +222,6 @@ export default function OrganizationsPage() {
 
                     {loading ? <p className="text-sm">Loading…</p> : null}
 
-                    <div
-                        className="rounded-md border border-dashed border-border px-3 py-3 text-sm"
-                        data-testid="organization-onboarding"
-                    >
-                        <p className="font-medium">First-run checklist</p>
-                        <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
-                            <li>Create an organization</li>
-                            <li>Invite a teammate</li>
-                            <li>Connect tools via policy grants</li>
-                            <li>Send a sample request in chat, then accept it from Inbox</li>
-                        </ol>
-                    </div>
                 </CardContent>
             </Card>
 

@@ -99,6 +99,7 @@ export default async function middleware(req: NextRequest) {
         pathname === "/" ||
         pathname === "/login" ||
         pathname === "/register" ||
+        pathname === "/forgot-password" ||
         pathname === "/error";
 
     if (isPublic) {
@@ -152,6 +153,9 @@ export const config = {
          */
         "/login",
         "/register",
+        "/forgot-password",
+        "/onboarding",
+        "/onboarding/:path*",
         "/",
         "/app",
         "/app/:path*",

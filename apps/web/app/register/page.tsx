@@ -19,7 +19,6 @@ import ThemeSwitch from "@/components/home/theme-switch";
 import { toast } from "sonner";
 import { resetAuthBootstrap } from "@/lib/auth/authBootstrap";
 import { useUser } from "@/context/UserContext";
-import { APP_HOME } from "@/lib/routes";
 
 export default function RegisterPage() {
     const [step, setStep] = useState<"register" | "verify">("register");
@@ -134,7 +133,7 @@ export default function RegisterPage() {
             }
 
             toast.success("Account created successfully");
-            router.push(APP_HOME);
+            router.push("/onboarding");
         } catch (error) {
             if (error instanceof Error) {
                 toast.error(error.message);

@@ -16,7 +16,7 @@ function isUser(p: ClientUser) {
     return typeof p === "object" && p !== null && "email" in p;
 }
 
-const RightPanel = () => {
+const RightPanel = ({ onStartConversation }: { onStartConversation?: () => void }) => {
     const { user } = useUser();
     const currentUserEmail = user?.email;
 
@@ -36,7 +36,7 @@ const RightPanel = () => {
     if (!selectedConversation) {
         return (
             <div className="hidden min-h-0 flex-1 p-2 sm:p-3 lg:flex">
-                <ChatPlaceHolder />
+                <ChatPlaceHolder onStartConversation={onStartConversation} />
             </div>
         );
     }

@@ -198,6 +198,12 @@ export async function getUsers(): Promise<ClientUser[]> {
     return request<ClientUser[]>("/api/users");
 }
 
+export async function completeOnboarding(): Promise<{ conversationId: string }> {
+    return request<{ conversationId: string }>("/api/onboarding/complete", {
+        method: "POST",
+    });
+}
+
 export async function getConversations(): Promise<ClientConversation[]> {
     return request<ClientConversation[]>("/api/conversations");
 }

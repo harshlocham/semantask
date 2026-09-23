@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 import Image from "next/image";
 import { Button } from "../ui/button";
 
-const ChatPlaceHolder = () => {
+const ChatPlaceHolder = ({ onStartConversation }: { onStartConversation?: () => void }) => {
     return (
         <div className="w-full max-w-3xl mx-auto flex flex-col items-center justify-center py-16 px-4 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-lg min-h-[400px] text-[hsl(var(--foreground))]">
             <div className="flex flex-col items-center w-full justify-center gap-6">
@@ -11,7 +11,11 @@ const ChatPlaceHolder = () => {
                 <p className="max-w-md text-center text-base text-muted-foreground">
                     Select a conversation or start a new one to begin chatting.<br />Your messages are secure, real-time, and private.
                 </p>
-                <Button className="mt-2 rounded-full px-6 py-2 shadow" onClick={() => window.location.reload()}>
+                <Button
+                    className="mt-2 rounded-full px-6 py-2 shadow"
+                    data-testid="start-conversation"
+                    onClick={onStartConversation}
+                >
                     Start a Conversation
                 </Button>
             </div>
