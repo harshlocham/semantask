@@ -6,7 +6,7 @@
 
 [semantask.com](https://semantask.com)
 
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D24-brightgreen)](https://nodejs.org/)
 [![Turborepo](https://img.shields.io/badge/monorepo-Turborepo-EF4444)](https://turbo.build/)
 [![Next.js](https://img.shields.io/badge/web-Next.js_15-black)](https://nextjs.org/)
 
