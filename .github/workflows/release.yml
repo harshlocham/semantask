@@ -36,10 +36,10 @@ jobs:
       - name: Prepare pnpm
         run: bash .github/scripts/prepare-pnpm.sh
 
-      - name: Setup Node.js 22 with pnpm cache
+      - name: Setup Node.js 24 with pnpm cache
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
