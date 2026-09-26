@@ -6,7 +6,10 @@ import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 import { GETTING_STARTED_GROUP_NAME, GETTING_STARTED_PROMPT } from "./constants";
 
-export async function completeOnboardingConversation(userId: string): Promise<{ conversationId: string }> {
+export async function completeOnboardingConversation(
+    userId: string,
+    organizationId: string | null = null
+): Promise<{ conversationId: string }> {
     const user = mongoose.Types.ObjectId.isValid(userId)
         ? await User.findById(userId)
         : null;
@@ -14,11 +17,15 @@ export async function completeOnboardingConversation(userId: string): Promise<{ 
         throw new Error("User not found");
     }
 
+    const orgScope = organizationId
+        ? { organizationId }
+        : { $or: [{ organizationId: null }, { organizationId: { $exists: false } }] };
+
     const existing = await Conversation.findOne({
         isGroup: true,
         groupName: GETTING_STARTED_GROUP_NAME,
         participants: user._id,
-        $or: [{ organizationId: null }, { organizationId: { $exists: false } }],
+        ...orgScope,
     });
 
     if (existing) {
@@ -40,7 +47,7 @@ export async function completeOnboardingConversation(userId: string): Promise<{ 
         admin: String(user._id),
         groupName: GETTING_STARTED_GROUP_NAME,
         name: GETTING_STARTED_GROUP_NAME,
-        organizationId: null,
+        organizationId: organizationId || null,
     });
 
     await seedGettingStartedMessage(conversation._id, user._id);

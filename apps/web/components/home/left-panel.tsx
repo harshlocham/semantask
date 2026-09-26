@@ -9,6 +9,7 @@ import { ClientUser, ClientConversation } from "@semantask/types";
 import VirtualConversationList from "../sidebar/VirtualConversationList";
 import { authenticatedFetch } from "@/lib/utils/api";
 import { recordApiTiming } from "@/lib/utils/performance";
+import { useActiveOrganization } from "@/hooks/useActiveOrganization";
 
 function isUser(p: unknown): p is ClientUser {
     return typeof p === "object" && p !== null && "username" in p;
@@ -33,9 +34,15 @@ const Sidebar = ({
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
+    const { organizationId, organizationScopeReady } = useActiveOrganization();
 
     // Fetch conversations with explicit cancellation and retry handling.
     useEffect(() => {
+        if (!organizationScopeReady) {
+            return;
+        }
+
         const controller = new AbortController();
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
         let active = true;
@@ -114,7 +121,7 @@ const Sidebar = ({
             if (timeoutId) clearTimeout(timeoutId);
             controller.abort();
         };
-    }, [setConversations]);
+    }, [organizationId, organizationScopeReady, retryCount, setConversations]);
 
     useEffect(() => {
         const handler = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -232,9 +239,13 @@ const Sidebar = ({
                 )}
 
                 {!loading && fetchError && (
-                    <p className="mt-6 text-center text-sm text-red-500">
+                    <button
+                        type="button"
+                        className="mt-6 px-3 text-center text-sm text-red-500"
+                        onClick={() => setRetryCount((count) => count + 1)}
+                    >
                         {fetchError}
-                    </p>
+                    </button>
                 )}
 
                 {!loading && !fetchError && conversations.length === 0 && (

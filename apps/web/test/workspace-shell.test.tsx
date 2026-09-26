@@ -8,6 +8,7 @@ import { WorkspaceShell } from "@/components/shell/workspace-shell";
 
 var mockPathname = "/inbox";
 var mockOrganizationId: string | null = null;
+var mockOrgs: Array<{ id: string; name: string; role: string }> = [];
 var mockSuggestionTotal: number | undefined;
 var mockApprovalLength: number | undefined;
 
@@ -25,7 +26,7 @@ jest.mock("@/hooks/useActiveOrganizationId", () => ({
 }));
 
 jest.mock("@/lib/queries/use-organizations", () => ({
-    useOrganizationsList: () => ({ data: [], isLoading: false }),
+    useOrganizationsList: () => ({ data: mockOrgs, isLoading: false, isError: false }),
 }));
 
 jest.mock("@/lib/queries/use-work-suggestions", () => ({
@@ -73,6 +74,7 @@ describe("WorkspaceShell", () => {
     beforeEach(() => {
         mockPathname = "/inbox";
         mockOrganizationId = null;
+        mockOrgs = [];
         mockSuggestionTotal = undefined;
         mockApprovalLength = undefined;
     });
@@ -116,11 +118,21 @@ describe("WorkspaceShell", () => {
 
     it("shows pending counts from the organization queries", () => {
         mockOrganizationId = "org-1";
+        mockOrgs = [{ id: "org-1", name: "Acme", role: "owner" }];
         mockSuggestionTotal = 4;
         mockApprovalLength = 2;
         renderShell();
         expect(screen.getByTestId("nav-suggestion-count")).toHaveTextContent("4");
         expect(screen.getByTestId("nav-approval-count")).toHaveTextContent("2");
+    });
+
+    it("ignores a stored organization the current user does not belong to", () => {
+        mockOrganizationId = "org-from-another-account";
+        mockSuggestionTotal = 4;
+        mockApprovalLength = 2;
+        renderShell();
+        expect(screen.queryByTestId("nav-suggestion-count")).toBeNull();
+        expect(screen.queryByTestId("nav-approval-count")).toBeNull();
     });
 
     it("opens the same links from the mobile navigation button", () => {

@@ -22,6 +22,7 @@ import {
     createOrganizationInvitation,
 } from "@/lib/utils/api";
 import { FORGOT_PASSWORD_PATH } from "@/lib/routes";
+import { writeActiveOrganizationId } from "@/hooks/useActiveOrganizationId";
 
 type Step = "workspace" | "invite";
 
@@ -45,6 +46,7 @@ export default function OnboardingPage() {
     }
 
     async function handlePersonal() {
+        writeActiveOrganizationId(null);
         await finish();
     }
 
@@ -58,6 +60,7 @@ export default function OnboardingPage() {
         setLoading(true);
         try {
             const org = await createOrganization({ name: orgName.trim() });
+            writeActiveOrganizationId(org.id);
             setOrgId(org.id);
             setStep("invite");
         } catch (error) {
