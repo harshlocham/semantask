@@ -2,43 +2,59 @@
 
 # Semantask
 
-**AI-native work coordination — teams talk, AI extracts the work, managers stay in control. Autonomy is optional.**
+**Teams talk. AI extracts the work. Managers stay in control.**
 
-[semantask.com](https://semantask.com)
+Conversation becomes reviewable suggestions. Autonomy is optional — not the product promise.
 
+[Architecture](docs/ARCHITECTURE.md) · [ADR-005](docs/decisions/ADR-005-suggest-first-work-coordination.md)
+
+[![CI](https://github.com/harshlocham/semantask/actions/workflows/node.js.yml/badge.svg)](https://github.com/harshlocham/semantask/actions/workflows/node.js.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D24-brightgreen)](https://nodejs.org/)
-[![Turborepo](https://img.shields.io/badge/monorepo-Turborepo-EF4444)](https://turbo.build/)
 [![Next.js](https://img.shields.io/badge/web-Next.js_15-black)](https://nextjs.org/)
-
-*Originally a real-time collaboration stack; evolved into a coordination platform with suggest-first AI, approvals, org visibility, and optional autonomous execution.*
+[![Turborepo](https://img.shields.io/badge/monorepo-Turborepo-EF4444)](https://turbo.build/)
 
 </div>
 
+- **Who it's for** — teams that already talk in chat and need extracted work a manager can review.
+- **What it does** — turns conversation into suggestions, approvals, and org-wide status. Tools run only when policy allows.
+- **How to try it** — there is no hosted demo right now. Run it locally with the quick start below.
+
 <p align="center">
-  <img src="docs/screenshots/semantask-dashboard.png" alt="Semantask dashboard with conversations and work coordination surfaces" width="920" />
+  <img src="docs/screenshots/semantask-dashboard.png" alt="Semantask conversation with AI work suggestions ready to review" width="920" />
   <br />
-  <sub>Natural conversation with live work visibility — suggestions, approvals, and optional run detail.</sub>
+  <sub>Chat stays the source of truth. Extracted work shows up as suggestions you can dismiss or approve.</sub>
 </p>
 
----
+<p align="center">
+  <img src="docs/screenshots/semantask-inbox.png" alt="Semantask suggestions inbox for reviewing extracted work" width="920" />
+  <br />
+  <sub>The inbox is for review — accept, assign, or dismiss before anything becomes a task.</sub>
+</p>
 
-## Overview
+## Quick start
 
-**Semantask** is an AI-native work coordination platform. Teams communicate in realtime chat; AI extracts important work as suggestions; managers approve, assign, and see organization-wide status. **Autonomous tool execution** (async workers, leases, retries, multi-provider LLMs) is an **optional** capability behind policy — not the core experience.
+```bash
+pnpm install
+cp env.sample .env   # set MongoDB, Redis, and auth secrets
+pnpm run dev
+```
 
-Product direction: [ADR-005](docs/decisions/ADR-005-suggest-first-work-coordination.md) (roadmap lives in Notion, not this repo).
+Then open **http://localhost:3000** (socket server on **http://localhost:3001**).
 
-**Product contract:** Suggest → (approve when policy requires) → coordinate. Proposals and audit records are persisted before any tool execution. Autonomy is an optional, policy-gated capability — not the product promise. Execution mode is always enforced: false tool side effects under effective `suggest_only` are a **P0** product bug. See [ADR-005](docs/decisions/ADR-005-suggest-first-work-coordination.md).
+Need the worker in isolation? `pnpm run task-worker`. Full env notes are in [Environment](#environment-configuration).
 
 ## Why Semantask
 
 | Theme | What you get |
 | --- | --- |
-| **Suggest-first extraction** | Chat → intents / proposed work; review before side effects (including task creation and audit writes). |
+| **Suggest-first extraction** | Chat → proposed work you review before side effects. |
 | **Manager control** | Approvals, tool grants, org policy, and audit trails. |
-| **Org visibility** | Personal workspace by default; optional organizations (ADR-004). |
+| **Org visibility** | Personal workspace by default; optional organizations ([ADR-004](docs/decisions/ADR-004-personal-and-optional-organizations.md)). |
 | **Realtime collaboration** | Socket.IO for messages, presence, and work updates. |
-| **Optional autonomy** | Multi-provider LLM worker when policy allows — see [archived operator docs](docs/archive/optional-autonomy/). |
+| **Optional autonomy** | Multi-provider LLM worker when policy allows. |
+
+Product contract: suggest → (approve when policy requires) → coordinate. False tool side effects under effective `suggest_only` are a P0. See [ADR-005](docs/decisions/ADR-005-suggest-first-work-coordination.md). Roadmap lives in Notion, not this repo.
 
 ## Architecture
 
@@ -76,7 +92,7 @@ flowchart LR
 
 Full system map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Optional LLM/worker operator docs: [`docs/archive/optional-autonomy/`](docs/archive/optional-autonomy/).
 
-**Ingress note:** new chat messages are classified via `classifyMessage()` in `packages/services/task-intelligence.service.ts` using the current **regex/heuristic** path (`TASK_CLASSIFIER_MODE` defaults to `regex`). Product direction is **suggest-first** ([ADR-005](docs/decisions/ADR-005-suggest-first-work-coordination.md)). LLM providers are used for optional **task execution** (`task.execution.requested`); LLM ingress classification (`shadow` / `llm` modes) is available but not the default.
+**Ingress:** new chat messages are classified with `classifyMessage()` in `packages/services/task-intelligence.service.ts` on the **regex/heuristic** path (`TASK_CLASSIFIER_MODE` defaults to `regex`). LLM providers are used for optional **task execution**; `shadow` / `llm` ingress modes exist but are not the default.
 
 ## Platform stack
 
@@ -84,10 +100,10 @@ Full system map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Optional LLM/wo
 | --- | --- |
 | Monorepo | **Turborepo** — unified build, cache-friendly pipelines |
 | Web | **Next.js 15** — App Router, API routes, auth integration |
-| Data | **MongoDB** — durable tasks and application state |
+| Data | **MongoDB** — durable tasks and application state (external to Compose) |
 | Coordination | **Redis** — queues, presence-style coordination, socket scaling |
 | Real-time | **Socket.IO** — streaming updates to connected clients |
-| Containers | **Docker Compose** — nginx, web, socket, worker, MongoDB, Redis |
+| Containers | **Docker Compose** — nginx, web, socket, worker, and Redis |
 
 ## Monorepo layout
 
@@ -95,15 +111,15 @@ Full system map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Optional LLM/wo
 .
 ├── apps/
 │   ├── web/           # Next.js — UI, APIs, auth flows
-│   ├── socket/      # Socket.IO — real-time observability transport
-│   ├── task-worker/ # Task-intelligence/outbox worker; optional AgentRunner + tools when policy allows
-│   └── mobile/      # React Native client (optional)
+│   ├── socket/        # Socket.IO — real-time observability transport
+│   ├── task-worker/   # Task-intelligence/outbox worker; optional AgentRunner + tools when policy allows
+│   └── mobile/        # React Native client (optional)
 ├── packages/
-│   ├── auth/        # Shared auth utilities
-│   ├── db/          # MongoDB models and access patterns
-│   ├── redis/       # Redis helpers
-│   ├── services/    # Domain logic, validators, repositories
-│   └── types/       # Shared contracts and event shapes
+│   ├── auth/          # Shared auth utilities
+│   ├── db/            # MongoDB models and access patterns
+│   ├── redis/         # Redis helpers
+│   ├── services/      # Domain logic, validators, repositories
+│   └── types/         # Shared contracts and event shapes
 ├── docker/
 ├── nginx/
 ├── docker-compose.yml
@@ -112,7 +128,7 @@ Full system map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Optional LLM/wo
 
 ## Prerequisites
 
-- **Node.js** 20+
+- **Node.js** 24+ (see `.nvmrc` and `engines` in `package.json`)
 - **pnpm** 11+ (see `packageManager` in root `package.json`)
 - **MongoDB** (replica set for production — see [`docs/operations/PRODUCTION_REQUIREMENTS.md`](docs/operations/PRODUCTION_REQUIREMENTS.md))
 - **Redis** (required for production-like / multi-instance socket and task-worker dedupe)
@@ -128,7 +144,7 @@ Copy [`env.sample`](env.sample) to `.env` at the repository root and adjust for 
 **Optional LLM / autonomy providers:** set `LLM_PROVIDER`, `LLM_API_KEY`, and `LLM_BASE_URL` when policy-enabled tool execution is used. Supports **OpenAI**, **OpenAI-compatible** bases (including **AMD**), and **Hugging Face**. See `env.sample`.
 
 ```env
-# Core (abbreviated — see env.sample for full list)
+# Core (abbreviated — see env.sample for the full list)
 MONGODB_URI=mongodb://localhost:27017/semantask
 ACCESS_TOKEN_SECRET=replace_with_a_strong_secret
 REFRESH_TOKEN_SECRET=replace_with_a_strong_secret
@@ -141,31 +157,6 @@ NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
 LLM_PROVIDER=openai
 LLM_API_KEY=
 # LLM_BASE_URL=             # OpenAI-compatible / vLLM / custom gateway
-```
-
-## Local development
-
-1. Install dependencies.
-
-```bash
-pnpm install
-```
-
-2. Start all workspaces in development mode.
-
-```bash
-pnpm run dev
-```
-
-3. Open the apps.
-
-- **Web:** http://localhost:3000  
-- **Socket server:** http://localhost:3001  
-
-Run the task worker explicitly when developing agents in isolation:
-
-```bash
-pnpm run task-worker
 ```
 
 ## Scripts
@@ -186,7 +177,15 @@ pnpm run task-worker
 docker compose up --build
 ```
 
-The Compose stack includes **nginx**, **nextapp** (Next.js), **socket**, **task-worker**, and **Redis**. **MongoDB is external** — set `MONGODB_URI` in `.env` to a reachable **replica set** for production task-worker retries. See [`docs/operations/PRODUCTION_REQUIREMENTS.md`](docs/operations/PRODUCTION_REQUIREMENTS.md).
+The Compose stack includes **nginx**, **nextapp** (Next.js), **socket**, **task-worker**, and **Redis**. **MongoDB is not in Compose** — set `MONGODB_URI` in `.env` to a reachable instance (replica set required for production task-worker retries). See [`docs/operations/PRODUCTION_REQUIREMENTS.md`](docs/operations/PRODUCTION_REQUIREMENTS.md).
+
+## Releases
+
+GitHub Release tags track package versions and can lag `main`. See [`CHANGELOG.md`](CHANGELOG.md) for what actually shipped.
+
+## Contributing
+
+This repo is set up for local `pnpm` development. After `pnpm install`, `pnpm test` is the default check. Repository invariants and where code belongs live in [`AGENTS.md`](AGENTS.md).
 
 ## Troubleshooting
 
@@ -197,4 +196,4 @@ The Compose stack includes **nginx**, **nextapp** (Next.js), **socket**, **task-
 
 ## License
 
-See [LICENSE](LICENSE).
+[MIT](LICENSE)
