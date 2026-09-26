@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import type { TaskExecutionEventRecord, TaskRecord, TaskStatus } from "@semantask/types";
+import type { BoardStatus, TaskExecutionEventRecord, TaskRecord } from "@semantask/types";
 import { authenticatedFetch } from "@/lib/utils/api";
 import { getSocket } from "@/hooks/socketClient";
 import { useTaskExecution } from "@/hooks/useTaskExecution";
@@ -27,7 +27,11 @@ interface TaskPanelProps {
     onMobileOpenChange?: (open: boolean) => void;
 }
 
-const TASK_STATUSES: TaskStatus[] = ["pending", "executing", "completed", "failed", "partial"];
+const BOARD_STATUSES: { value: BoardStatus; label: string }[] = [
+    { value: "todo", label: "Todo" },
+    { value: "doing", label: "Doing" },
+    { value: "done", label: "Done" },
+];
 const EMPTY_TASK_IDS: string[] = [];
 const EMPTY_STEPS: ExecutionStep[] = [];
 const EMPTY_EXECUTION_EVENTS: TaskExecutionEventRecord[] = [];
@@ -44,7 +48,7 @@ interface ExecutionStep {
 interface TaskInlineCardProps {
     task: TaskRecord;
     highlighted?: boolean;
-    onStatusChange: (taskId: string, status: TaskStatus) => void;
+    onBoardStatusChange: (taskId: string, status: BoardStatus) => void;
     onCancel: (taskId: string) => Promise<void>;
 }
 
@@ -155,7 +159,9 @@ const StepRow = memo(function StepRow({
 
             <div className="min-w-0 flex-1">
                 <p className={`text-sm font-medium ${tone.text}`}>{step.label}</p>
-                <p className={`mt-0.5 text-xs leading-5 ${tone.detail}`}>{step.detail}</p>
+                {step.detail ? (
+                    <p className={`mt-0.5 text-xs leading-5 ${tone.detail}`}>{step.detail}</p>
+                ) : null}
             </div>
         </motion.div>
     );
@@ -169,7 +175,7 @@ function canCancelTask(task: TaskRecord): boolean {
         && !task.cancelRequestedAt;
 }
 
-function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }: TaskInlineCardProps) {
+function TaskInlineCard({ task, highlighted = false, onBoardStatusChange, onCancel }: TaskInlineCardProps) {
     const shouldReduceMotion = useReducedMotion();
     const executionView = useTaskExecution(task._id);
     const setExecutionEvents = useTaskStore((state) => state.setExecutionEvents);
@@ -191,7 +197,15 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
     );
 
     const progress = executionView.progress > 0 ? executionView.progress : getProgressValue(steps);
-    const hasRunningStep = steps.some((step) => step.status === "running") || task.status === "executing";
+    const executionFailed = task.status === "failed" || Boolean(executionView.failureReason && !executionView.approvalPending);
+    const executionTerminal = executionFailed || task.status === "completed";
+    const visibleSteps = executionView.approvalPending || executionTerminal
+        ? []
+        : steps.filter((step) => step.label.trim().length > 0);
+    const hasRunningStep = task.status === "executing"
+        && visibleSteps.some((step) => step.status === "running");
+    const showApproval = executionView.approvalPending && !executionFailed && task.status !== "completed";
+    const showProgress = visibleSteps.length > 0 && !executionTerminal;
     const showCancel = canCancelTask(task);
 
     const replayExecutionEvents = useCallback(async () => {
@@ -298,20 +312,16 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
                 </div>
             </div>
 
-            <div className={cn((executionView.runId || executionView.failureReason || executionView.retryStatus || executionView.approvalPending || task.cancelRequestedAt || hasRunningStep || steps.length > 0) && "mt-2.5")}>
-                {executionView.runId && (
-                    <p className="mb-2 font-mono text-[10px] text-muted-foreground">
-                        run {executionView.runId}
-                        {executionView.durationMs !== null ? ` · ${Math.round(executionView.durationMs / 1000)}s` : ""}
+            <div className={cn((executionView.failureReason || executionView.retryStatus || showApproval || task.cancelRequestedAt || hasRunningStep || visibleSteps.length > 0) && "mt-2.5")}>
+                {executionFailed && executionView.failureReason ? (
+                    <p className="mb-2 text-xs text-destructive" data-testid="task-panel-failure">
+                        {executionView.failureReason}
                     </p>
-                )}
-                {executionView.failureReason && (
-                    <p className="mb-2 text-xs text-destructive">{executionView.failureReason}</p>
-                )}
-                {executionView.retryStatus && (
+                ) : null}
+                {executionView.retryStatus && !executionTerminal ? (
                     <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">{executionView.retryStatus}</p>
-                )}
-                {executionView.approvalPending && (
+                ) : null}
+                {showApproval ? (
                     <div className="mb-2 space-y-1">
                         <p className="text-xs text-amber-700 dark:text-amber-300">
                             Awaiting human approval to allow AI tools
@@ -320,11 +330,11 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
                             <Link href="/inbox/approvals">Allow AI tools</Link>
                         </Button>
                     </div>
-                )}
+                ) : null}
                 {task.cancelRequestedAt && task.status !== "failed" && task.status !== "completed" && (
                     <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">Cancellation requested…</p>
                 )}
-                {steps.length === 0 && task.status === "executing" && (
+                {visibleSteps.length === 0 && task.status === "executing" && !showApproval && (
                     <p className="mb-2 text-xs text-muted-foreground">Waiting for execution telemetry...</p>
                 )}
                 {hasRunningStep && (
@@ -363,17 +373,17 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
                 )}
 
                 <AnimatePresence initial={false} mode="popLayout">
-                    {steps.map((step) => (
+                    {visibleSteps.map((step) => (
                         <StepRow key={step.id} step={step} shouldReduceMotion={Boolean(shouldReduceMotion)} />
                     ))}
                 </AnimatePresence>
             </div>
 
-            {steps.length > 0 ? (
+            {showProgress ? (
                 <div className="mt-2 space-y-1">
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span>{Math.round(progress)}% complete</span>
-                        <span>{steps.filter((step) => step.status === "completed").length} of {steps.length} steps done</span>
+                        <span>{visibleSteps.filter((step) => step.status === "completed").length} of {visibleSteps.length} steps done</span>
                     </div>
                     <div className="h-1 overflow-hidden rounded-full bg-muted">
                         <motion.div
@@ -389,15 +399,16 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
 
             <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2.5">
                 <label className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground">
-                    Run status
+                    Status
                     <select
-                        value={task.status}
-                        className="h-7 rounded-md border border-input bg-background px-1.5 text-[11px] capitalize text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-                        onChange={(event) => onStatusChange(task._id, event.target.value as TaskStatus)}
+                        aria-label="Board status"
+                        value={task.boardStatus}
+                        className="h-7 rounded-md border border-input bg-background px-1.5 text-[11px] text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+                        onChange={(event) => onBoardStatusChange(task._id, event.target.value as BoardStatus)}
                     >
-                        {TASK_STATUSES.map((status) => (
-                            <option key={status} value={status}>
-                                {status.replace("_", " ")}
+                        {BOARD_STATUSES.map((status) => (
+                            <option key={status.value} value={status.value}>
+                                {status.label}
                             </option>
                         ))}
                     </select>
@@ -529,14 +540,14 @@ export default function TaskPanel({
         }
     };
 
-    const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    const updateBoardStatus = async (taskId: string, boardStatus: BoardStatus) => {
         try {
             const response = await authenticatedFetch(`/api/tasks/${taskId}`, {
                 method: "PATCH",
-                body: JSON.stringify({ status }),
+                body: JSON.stringify({ boardStatus }),
             });
             if (!response.ok) {
-                throw new Error("Failed to update task status");
+                throw new Error("Failed to update board status");
             }
 
             const updated = (await response.json()) as TaskRecord;
@@ -624,7 +635,7 @@ export default function TaskPanel({
                                 key={task._id}
                                 task={task}
                                 highlighted={task._id === highlightedTaskId}
-                                onStatusChange={updateTaskStatus}
+                                onBoardStatusChange={updateBoardStatus}
                                 onCancel={cancelTask}
                             />
                         ))}
