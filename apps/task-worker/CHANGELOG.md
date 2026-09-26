@@ -1,5 +1,85 @@
 # @semantask/task-worker
 
+## 3.3.0
+
+### Minor Changes
+
+- 293f039: ADR-005 S0.2 — default workspace `executionMode` (`suggest_only` | `require_approval` | `auto_execute`) with shadow→enforce flags.
+
+  ### Added
+  - `ExecutionMode` type and `OrganizationPolicy.executionMode` (+ updatedAt/By)
+  - `getEffectiveExecutionMode` / `EXECUTION_MODE_ENFORCE` / `DEFAULT_EXECUTION_MODE` / `GRANDFATHER_AUTO_TENANTS`
+  - Policy GET/PUT surfaces `executionMode`; logs `policy.execution_mode.changed`
+  - Worker policy gate: enforce + `suggest_only` blocks tools (`EXECUTION_MODE_DENIED`); `require_approval` caps auto-execute; shadow logs; tool-executor fail-closed
+
+### Patch Changes
+
+- acb22ec: Always enforce execution mode. `EXECUTION_MODE_ENFORCE=0` is ignored (one-time warning). The env parser stays until a later delete PR.
+- 78ee072: Stop reading `EXECUTION_MODE_ENFORCE`. `isExecutionModeEnforce()` is a constant `true`; the env name is unused.
+- 073bdfd: Deprecate `EXECUTION_MODE_ENFORCE=0` with a one-time boot/read warning. Shadow (`0`) is still honored this release; the next cutover ignores it.
+- 90eedd7: Parse FSM migration flags through `apps/task-worker/config/migration` and derive `getFsmRollout()` from the existing env names.
+
+  Individual parsers keep today's defaults and mixed-flag behavior; env variable names are unchanged.
+
+- a0d4e81: Document execution-mode overlay order and lock it with tests: env → org field → grandfather; org `confidenceThresholds` / `allowedEmailDomains` beat env JSON. No runtime change.
+- 6f8a55d: Worker Redis is `REDIS_URL` only (`UPSTASH_REDIS_REST_URL` is web REST, not ioredis). Boot warns once when only a dual-read alias is set; alias reads are unchanged.
+- fc4cade: Bake remaining config cutovers: accept never enqueues execution, inbox always on, FSM authoritative, `TASK_TOOL_RBAC` default enforce, `TASK_PROMPT_GUARD` default monitor, drop `NEXT_PUBLIC_APP_URL` Docker ARG, and hard-cut dual-read aliases except `INTERNAL_SECRET`.
+- fc4cade: WorkSuggestion ingress is always on. `shouldBlockExecutionEnqueue` is `suggest_only` only. `SUGGESTION_INGRESS` and `SUGGESTION_BLOCK_EXEC` are no longer read.
+- 3b8f53c: Parse task-worker LLM and runtime knobs through `apps/task-worker/config`. Credential, base URL, and provider come from `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_PROVIDER` only.
+- 70f89dc: Parse worker tool credentials and the email-domain allowlist through `apps/task-worker/config/tools`.
+
+  `ALLOWED_EMAIL_DOMAINS` remains an alias of `TASK_WORKER_ALLOWED_EMAIL_DOMAINS`. Env names are unchanged.
+
+- d63de76: Harden classifier shadow metrics/isolation, add assignee/due heuristics, and ship a labeled evaluation harness. Production default remains `TASK_CLASSIFIER_MODE=regex`.
+
+  ### Added
+  - `classifier_classifications_total{mode,source}`; disagreement counter labels `{regex_type,llm_type}`
+  - Failure-isolated disagreement hooks; shadow LLM failures cannot break classification
+  - Deterministic assignee (@mention/email) + due-date heuristics → MessageIntent / WorkSuggestion candidates
+  - Extractor version `intelligent-v7-entity-heuristics`
+  - Seed gold eval harness (`packages/services/eval/`) with CI gate (≥0.7 type accuracy)
+
+  ### Compatibility
+  - `regex` remains default authority; shadow never alters product path or execution
+
+- 5049ff5: Classifier ingress creates reviewable WorkSuggestions under `suggest_only` without enqueueing execution.
+
+  ### Added
+  - `SUGGESTION_INGRESS` / `SUGGESTION_BLOCK_EXEC` flags and `shouldBlockExecutionEnqueue`
+  - Dual-write: actionable classify → MessageIntent + idempotent WorkSuggestion (`SUGGESTION_INGRESS=1`)
+  - Shared enqueue guard: refuse `task.execution.requested` at the worker/enqueue boundary under suggest_only
+  - Worker defense-in-depth for leaked execution events; `classifier_disagreement_total` hook
+  - Metrics: `suggestions_created_total`, `suggestion_latency_ms`, `execution_enqueue_attempted_while_suggest_only_total` + P0 alert
+
+  ### Compatibility
+  - `SUGGESTION_INGRESS=0` (default) preserves legacy classify → Task → enqueue behavior
+
+- 24955f9: Phase 2 PR5 — Explicit manager “Allow AI tools” / request-execution path, distinct from WorkSuggestion accept, reusing TaskAction approvals.
+- Updated dependencies [acb22ec]
+- Updated dependencies [78ee072]
+- Updated dependencies [073bdfd]
+- Updated dependencies [f688f0c]
+- Updated dependencies [a0d4e81]
+- Updated dependencies [fc4cade]
+- Updated dependencies [fc4cade]
+- Updated dependencies [bc0f525]
+- Updated dependencies [45d3e43]
+- Updated dependencies [293f039]
+- Updated dependencies [d63de76]
+- Updated dependencies [5049ff5]
+- Updated dependencies [78a9a0a]
+- Updated dependencies [4de730c]
+- Updated dependencies [24955f9]
+- Updated dependencies [eb2ed2b]
+- Updated dependencies [0e84316]
+- Updated dependencies [5bcff34]
+- Updated dependencies [3861d6e]
+- Updated dependencies [428d748]
+  - @semantask/services@3.3.0
+  - @semantask/db@3.3.0
+  - @semantask/types@2.2.0
+  - @semantask/observability@1.2.0
+
 ## 3.2.0
 
 ### Minor Changes
