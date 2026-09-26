@@ -4,6 +4,7 @@ import MessageModel from "@/models/Message";
 import { User } from "@/models/User";
 import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
+import { enqueueOutboxEvent } from "@/lib/services/outbox.service";
 import { GETTING_STARTED_GROUP_NAME, GETTING_STARTED_PROMPT } from "./constants";
 
 export async function completeOnboardingConversation(
@@ -80,9 +81,6 @@ async function seedGettingStartedMessage(
         conversationId,
         messageType: "text",
         status: "sent",
-        semanticType: "task",
-        semanticConfidence: 0.9,
-        aiStatus: "classified",
     });
 
     await Conversation.findByIdAndUpdate(conversationId, {
@@ -92,6 +90,18 @@ async function seedGettingStartedMessage(
             messageType: "text",
             content: message.content,
             _creationTime: message.createdAt,
+        },
+    });
+
+    await enqueueOutboxEvent({
+        topic: "message.created",
+        dedupeKey: `message.created:${message._id.toString()}`,
+        payload: {
+            messageId: message._id.toString(),
+            conversationId: conversationId.toString(),
+            senderId: senderId.toString(),
+            content: message.content,
+            messageType: "text",
         },
     });
 }
