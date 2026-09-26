@@ -63,7 +63,7 @@ function groupByBoardStatus(items: TaskRecord[]): Record<BoardStatus, TaskRecord
 }
 
 export function WorkBoardView() {
-    const { organizationId, organization } = useActiveOrganization();
+    const { organizationId, organization, organizationScopeReady } = useActiveOrganization();
     const searchParams = useSearchParams();
     const highlightedTaskId = searchParams.get("task");
     const queryConversationId = searchParams.get("conversationId")?.trim() ?? "";
@@ -111,6 +111,7 @@ export function WorkBoardView() {
 
     const scopedConversationId = conversationId.trim() || undefined;
     const resolvingDeepLink = Boolean(highlightedTaskId && !deepLinkResolved);
+    const waitingForScope = !organizationScopeReady && !scopedConversationId && !resolvingDeepLink;
     const hasScope = Boolean(organizationId || scopedConversationId || resolvingDeepLink);
 
     const listQuery = useWorkBoardList({
@@ -120,7 +121,7 @@ export function WorkBoardView() {
         limit: WORK_BOARD_PAGE_LIMIT,
         priority: priorityFilter || undefined,
         due: dueFilter,
-        enabled: deepLinkResolved,
+        enabled: deepLinkResolved && !waitingForScope,
     });
     const moveMutation = useMoveWorkBoardCard(listQuery.listParams);
 
@@ -246,7 +247,18 @@ export function WorkBoardView() {
                 </CardContent>
             </Card>
 
-            {!hasScope ? (
+            {waitingForScope ? (
+                <div className="grid gap-4 md:grid-cols-3" data-testid="work-board-loading">
+                    {[0, 1, 2].map((index) => (
+                        <div
+                            key={index}
+                            className="h-40 animate-pulse rounded-md border border-border bg-muted/40"
+                        />
+                    ))}
+                </div>
+            ) : null}
+
+            {!waitingForScope && !hasScope ? (
                 <Card data-testid="work-board-onboarding">
                     <CardContent className="space-y-3 p-6 text-sm">
                         <p className="font-medium">Choose a scope to load the board</p>

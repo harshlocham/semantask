@@ -106,7 +106,7 @@ function ownersForSuggestion(
 }
 
 export function WorkInboxView() {
-    const { organizationId } = useActiveOrganization();
+    const { organizationId, organizationScopeReady } = useActiveOrganization();
     const { user } = useUser();
     const currentUserId = user?._id ?? null;
     const searchParams = useSearchParams();
@@ -175,6 +175,8 @@ export function WorkInboxView() {
     const listOrganizationId = highlightedSuggestionId
         ? (deepLinkOrganizationId ?? undefined)
         : organizationId;
+    const waitingForScope = !organizationScopeReady && !scopedConversationId && !resolvingDeepLink
+        && !highlightedSuggestionId;
     const hasScope = Boolean(listOrganizationId || scopedConversationId || resolvingDeepLink);
 
     const listQuery = useWorkSuggestionsList({
@@ -183,7 +185,7 @@ export function WorkInboxView() {
         status,
         page,
         limit: WORK_INBOX_PAGE_LIMIT,
-        enabled: deepLinkResolved,
+        enabled: deepLinkResolved && !waitingForScope,
     });
 
     const membersQuery = useOrganizationMembers(organizationId);
@@ -356,7 +358,7 @@ export function WorkInboxView() {
 
     return (
         <div className="space-y-3" data-testid="work-inbox">
-            {!organizationId ? (
+            {organizationScopeReady && !organizationId ? (
                 <p className="text-xs text-muted-foreground" data-testid="work-inbox-scope">
                     Personal — select a conversation to load suggestions
                 </p>
@@ -446,7 +448,18 @@ export function WorkInboxView() {
                 </div>
             </div>
 
-            {!hasScope ? (
+            {waitingForScope ? (
+                <div className="space-y-3" data-testid="work-inbox-loading">
+                    {[0, 1, 2].map((index) => (
+                        <div
+                            key={index}
+                            className="h-24 animate-pulse rounded-md border border-border bg-muted/40"
+                        />
+                    ))}
+                </div>
+            ) : null}
+
+            {!waitingForScope && !hasScope ? (
                 <Card data-testid="work-inbox-onboarding">
                     <CardContent className="space-y-3 py-3 text-sm">
                         <p className="font-medium">Choose a scope to load your inbox</p>

@@ -34,9 +34,12 @@ export function useActiveOrganization() {
         };
     }, [organizationId, orgs]);
 
+    const canManageMembers = organization?.role === "owner" || organization?.role === "admin";
+
     return {
         organizationId,
         organization,
+        canManageMembers,
         isLoading: orgsQuery.isLoading,
         organizationScopeReady: orgs !== undefined || orgsQuery.isError,
     };

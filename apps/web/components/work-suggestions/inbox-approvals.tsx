@@ -122,7 +122,7 @@ function getPolicySummary(item: TaskApprovalRecord) {
 }
 
 export function InboxApprovalsView() {
-    const { organizationId } = useActiveOrganization();
+    const { organizationId, canManageMembers, organizationScopeReady } = useActiveOrganization();
     const [conversationId, setConversationId] = useState("");
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [actingId, setActingId] = useState<string | null>(null);
@@ -133,11 +133,13 @@ export function InboxApprovalsView() {
     const editedParamIdsRef = useRef<Record<string, true>>({});
 
     const scopedConversation = conversationId.trim() || undefined;
-    const hasScope = Boolean(scopedConversation || organizationId);
+    const waitingForScope = !organizationScopeReady && !scopedConversation;
+    const hasOrgScope = Boolean(canManageMembers && organizationId);
+    const hasScope = Boolean(scopedConversation || hasOrgScope);
     const filtersVisible = filtersOpen || !organizationId || Boolean(scopedConversation);
 
     const listQuery = useTaskApprovalsList({
-        organizationId,
+        organizationId: hasOrgScope ? organizationId : null,
         conversationId: scopedConversation,
     });
 
@@ -178,10 +180,15 @@ export function InboxApprovalsView() {
         }
     }, [listQuery.data]);
 
-    const loading = hasScope && (listQuery.isLoading || listQuery.isFetching) && !listQuery.data;
-    const scopeError = !hasScope
-        ? "Select an active organization or enter a conversation id to load execution approvals."
-        : null;
+    const loading = waitingForScope
+        || (hasScope && (listQuery.isLoading || listQuery.isFetching) && !listQuery.data);
+    const scopeError = waitingForScope
+        ? null
+        : !hasScope && organizationId && !canManageMembers
+            ? "Only owners and admins can review organization-wide tool approvals. Enter a conversation id to review one thread."
+        : !hasScope
+            ? "Select an active organization or enter a conversation id to load execution approvals."
+            : null;
     const loadError = listQuery.error ? taskApprovalsErrorMessage(listQuery.error) : null;
     const listError = scopeError ?? loadError;
 

@@ -220,12 +220,25 @@ function ApprovalWidget({
 }
 
 export function WorkDashboardView({ boardEnabled = false }: { boardEnabled?: boolean }) {
-    const { organizationId, organization } = useActiveOrganization();
+    const { organizationId, organization, organizationScopeReady } = useActiveOrganization();
     const summaryQuery = useOrganizationWorkSummary(organizationId);
 
     const error = summaryQuery.error
         ? mutationErrorMessage(summaryQuery.error, "Failed to load dashboard")
         : null;
+
+    if (!organizationScopeReady) {
+        return (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="work-dashboard-loading">
+                {[0, 1, 2, 3].map((index) => (
+                    <div
+                        key={index}
+                        className="h-20 animate-pulse rounded-xl border border-border bg-muted/40"
+                    />
+                ))}
+            </div>
+        );
+    }
 
     if (!organizationId) {
         return (

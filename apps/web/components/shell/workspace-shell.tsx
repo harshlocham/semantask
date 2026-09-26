@@ -89,7 +89,7 @@ export function WorkspaceShell({
     const router = useRouter();
     const { user } = useUser();
     const [navOpen, setNavOpen] = useState(false);
-    const { organizationId } = useActiveOrganization();
+    const { organizationId, canManageMembers } = useActiveOrganization();
     const suggestionsQuery = useWorkSuggestionsList({
         organizationId,
         status: "proposed",
@@ -97,7 +97,9 @@ export function WorkspaceShell({
         limit: 1,
         enabled: Boolean(organizationId),
     });
-    const approvalsQuery = useTaskApprovalsList({ organizationId });
+    const approvalsQuery = useTaskApprovalsList({
+        organizationId: canManageMembers ? organizationId : null,
+    });
     const chrome = routeChrome(pathname);
     const isChat = chrome === null && (pathname === "/app" || pathname.startsWith("/c/"));
     const suggestionCount = organizationId && suggestionsQuery.data

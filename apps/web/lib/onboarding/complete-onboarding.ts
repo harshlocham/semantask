@@ -55,17 +55,23 @@ export async function completeOnboardingConversation(
     await ensureUserConversation(user, conversation._id);
 
     const participantIds = [String(user._id)];
-    const internalResponse = await fetch(`${getInternalSocketServerUrl()}/internal/conversation-created`, {
-        method: "POST",
-        headers: createInternalRequestHeaders(),
-        body: JSON.stringify({
-            conversationId: String(conversation._id),
-            participantIds,
-        }),
-    });
-
-    if (!internalResponse.ok) {
-        throw new Error("Failed to broadcast conversation creation");
+    try {
+        const internalResponse = await fetch(`${getInternalSocketServerUrl()}/internal/conversation-created`, {
+            method: "POST",
+            headers: createInternalRequestHeaders(),
+            body: JSON.stringify({
+                conversationId: String(conversation._id),
+                participantIds,
+            }),
+        });
+        if (!internalResponse.ok) {
+            console.warn("Onboarding conversation created but socket fan-out failed", {
+                conversationId: String(conversation._id),
+                status: internalResponse.status,
+            });
+        }
+    } catch (error) {
+        console.warn("Onboarding conversation created but socket fan-out failed", error);
     }
 
     return { conversationId: String(conversation._id) };

@@ -41,8 +41,8 @@ jest.mock("@/lib/queries/use-work-suggestions", () => ({
 }));
 
 jest.mock("@/lib/queries/use-task-approvals", () => ({
-    useTaskApprovalsList: () => ({
-        data: mockApprovalLength === undefined
+    useTaskApprovalsList: (params: { organizationId?: string | null }) => ({
+        data: !params.organizationId || mockApprovalLength === undefined
             ? undefined
             : Array.from({ length: mockApprovalLength }, (_, index) => ({ _id: `approval-${index}` })),
     }),
@@ -124,6 +124,16 @@ describe("WorkspaceShell", () => {
         renderShell();
         expect(screen.getByTestId("nav-suggestion-count")).toHaveTextContent("4");
         expect(screen.getByTestId("nav-approval-count")).toHaveTextContent("2");
+    });
+
+    it("does not show approval counts for organization members", () => {
+        mockOrganizationId = "org-1";
+        mockOrgs = [{ id: "org-1", name: "Acme", role: "member" }];
+        mockSuggestionTotal = 4;
+        mockApprovalLength = 2;
+        renderShell();
+        expect(screen.getByTestId("nav-suggestion-count")).toHaveTextContent("4");
+        expect(screen.queryByTestId("nav-approval-count")).toBeNull();
     });
 
     it("ignores a stored organization the current user does not belong to", () => {
