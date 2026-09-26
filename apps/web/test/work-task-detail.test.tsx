@@ -102,7 +102,7 @@ describe("WorkTaskDetailView", () => {
         render(<WorkTaskDetailView taskId="task-1" />);
 
         expect(await screen.findByTestId("work-task-detail")).toBeInTheDocument();
-        expect(screen.getByTestId("work-task-status")).toHaveTextContent("AWAITING_APPROVAL");
+        expect(screen.getByTestId("work-task-status")).toHaveTextContent("Awaiting approval");
         expect(screen.getByTestId("work-task-owner")).toHaveTextContent("Alex");
         expect(screen.getByTestId("work-task-source")).toHaveAttribute("href", "/c/conv-1?msg=msg-1");
         expect(screen.getByTestId("work-task-timeline")).toHaveTextContent("Approval requested");

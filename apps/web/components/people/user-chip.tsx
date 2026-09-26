@@ -20,11 +20,13 @@ export function UserChip({ user, size = 24, className, showEmail = false }: User
             data-user-id={user.id}
             title={user.email ? `${name} <${user.email}>` : name}
         >
-            <UserAvatar
-                username={user.username}
-                profilePicture={user.profilePicture ?? undefined}
-                size={size}
-            />
+            <span className="inline-flex shrink-0">
+                <UserAvatar
+                    username={user.username}
+                    profilePicture={user.profilePicture ?? undefined}
+                    size={size}
+                />
+            </span>
             <span className="min-w-0 truncate font-medium">{name}</span>
             {showEmail && user.email ? (
                 <span className="min-w-0 truncate text-xs text-muted-foreground">{user.email}</span>

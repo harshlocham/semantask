@@ -105,18 +105,13 @@ export function WorkInboxTriage({
         .map((id) => memberById.get(id)?.user ?? { id, username: "Unknown user" });
 
     return (
-        <div className="space-y-3 border-t border-border pt-3" data-testid="work-inbox-triage">
-            <p className="text-xs text-muted-foreground">
-                Accept creates coordination work only — it does not execute tools. Assign updates the
-                converted task owner. Execution approval lives under Approvals.
-            </p>
-
-            <div className="space-y-2">
-                <Label htmlFor={`inbox-owner-${suggestion._id}`}>Owner</Label>
+        <div className="space-y-1.5" data-testid="work-inbox-triage">
+            <div className="flex gap-1.5">
+                <Label htmlFor={`inbox-owner-${suggestion._id}`} className="sr-only">Owner</Label>
                 <select
                     id={`inbox-owner-${suggestion._id}`}
                     data-testid="suggestion-assignees"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2 text-[13px]"
                     value={selectedOwnerId}
                     disabled={actionPending || (!canAcceptOrDismiss && !canAssign)}
                     onChange={(event) => {
@@ -134,55 +129,11 @@ export function WorkInboxTriage({
                             </option>
                         ))}
                 </select>
-                {!organizationId ? (
-                    <p className="text-xs text-muted-foreground">
-                        Personal workspace: Me or Unassigned only.
-                    </p>
-                ) : null}
-                {currentOwners.length > 0 ? (
-                    <div
-                        className="flex flex-wrap gap-2 text-xs text-muted-foreground"
-                        data-testid="work-inbox-owner"
-                    >
-                        <span>Current:</span>
-                        {currentOwners.map((user) => (
-                            <UserChip key={user.id} user={user} size={20} />
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-xs text-muted-foreground" data-testid="work-inbox-owner">
-                        No owner selected
-                    </p>
-                )}
-            </div>
-
-            {canAcceptOrDismiss ? (
-                <div className="space-y-2">
-                    <Label htmlFor={`inbox-dismiss-${suggestion._id}`}>Dismiss reason</Label>
-                    <Input
-                        id={`inbox-dismiss-${suggestion._id}`}
-                        data-testid="suggestion-dismiss-reason"
-                        value={dismissReason}
-                        onChange={(event) => setDismissReason(event.target.value)}
-                        placeholder="Required to dismiss"
-                        disabled={actionPending}
-                    />
-                </div>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-                <Button
-                    data-testid="suggestion-accept"
-                    size="sm"
-                    disabled={actionPending || !canAcceptOrDismiss}
-                    onClick={() => void onAccept(resolveAssignees())}
-                >
-                    Accept & assign
-                </Button>
                 <Button
                     data-testid="suggestion-assign"
                     size="sm"
                     variant="outline"
+                    className="h-8 rounded-lg"
                     disabled={actionPending || !canAssign}
                     title={canAssign ? "Update converted task owner" : "Accept first"}
                     onClick={() => void onAssign(resolveAssignees())}
@@ -190,38 +141,70 @@ export function WorkInboxTriage({
                     Assign
                 </Button>
                 <Button
-                    data-testid="suggestion-dismiss"
+                    data-testid="suggestion-accept"
                     size="sm"
-                    variant="outline"
-                    disabled={actionPending || !canAcceptOrDismiss || !dismissReason.trim()}
-                    onClick={() => void onDismiss(dismissReason.trim())}
+                    className="h-8 rounded-lg"
+                    disabled={actionPending || !canAcceptOrDismiss}
+                    onClick={() => void onAccept(resolveAssignees())}
                 >
-                    Dismiss
+                    Accept & assign
                 </Button>
-                {isConverted && suggestion.convertedTaskId ? (
+            </div>
+            {canAcceptOrDismiss ? (
+                <div className="flex gap-1.5">
+                    <Label htmlFor={`inbox-dismiss-${suggestion._id}`} className="sr-only">Dismiss reason</Label>
+                    <Input
+                        id={`inbox-dismiss-${suggestion._id}`}
+                        data-testid="suggestion-dismiss-reason"
+                        className="h-8 min-w-0 flex-1 rounded-lg text-[13px]"
+                        value={dismissReason}
+                        onChange={(event) => setDismissReason(event.target.value)}
+                        placeholder="Reason required to dismiss"
+                        disabled={actionPending}
+                    />
                     <Button
-                        data-testid="suggestion-allow-ai-tools"
+                        data-testid="suggestion-dismiss"
                         size="sm"
                         variant="outline"
-                        disabled={actionPending || !onAllowAiTools}
-                        onClick={() => void onAllowAiTools?.()}
+                        className="h-8 rounded-lg"
+                        disabled={actionPending || !dismissReason.trim()}
+                        onClick={() => void onDismiss(dismissReason.trim())}
                     >
-                        Allow AI tools
+                        Dismiss
                     </Button>
-                ) : null}
-            </div>
-
-            {!canAssign && isProposed ? (
-                <p className="text-xs text-muted-foreground">Assign is available after Accept converts the suggestion.</p>
+                </div>
             ) : null}
-            {isConverted ? (
-                <p className="text-xs text-muted-foreground">
-                    Allow AI tools requests execution approval — separate from accepting a suggestion.
-                </p>
+            {isConverted && suggestion.convertedTaskId ? (
+                <Button
+                    data-testid="suggestion-allow-ai-tools"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-full rounded-lg"
+                    disabled={actionPending || !onAllowAiTools}
+                    onClick={() => void onAllowAiTools?.()}
+                >
+                    Allow AI tools
+                </Button>
             ) : null}
+            {currentOwners.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground" data-testid="work-inbox-owner">
+                    <span>Owner</span>
+                    {currentOwners.map((user) => (
+                        <UserChip key={user.id} user={user} size={18} />
+                    ))}
+                </div>
+            ) : (
+                <p className="text-[11px] text-muted-foreground" data-testid="work-inbox-owner">No owner selected</p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+                {isProposed
+                    ? "Accept creates a task. It does not run tools."
+                    : "Allow AI tools requests execution approval — separate from accepting a suggestion."}
+                {!organizationId ? " Personal workspace: Me or Unassigned only." : null}
+            </p>
 
             {actionError ? (
-                <p className="text-sm text-destructive" data-testid="suggestion-action-error">
+                <p className="text-xs text-destructive" data-testid="suggestion-action-error">
                     {actionError}
                 </p>
             ) : null}

@@ -2,7 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    CalendarClock,
+    Github,
+    Mail,
+    ShieldCheck,
+    SlidersHorizontal,
+    Wrench,
+    type LucideIcon,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,13 +23,17 @@ import {
     useTaskApprovalsList,
 } from "@/lib/queries/use-task-approvals";
 import { conversationMessageHref, taskHref } from "@/lib/work-links";
-import { APP_HOME } from "@/lib/routes";
-import { UserChip } from "@/components/people/user-chip";
+import { cn } from "@/lib/utils/utils";
 
 function formatTimestamp(iso: string) {
     const value = new Date(iso);
     if (Number.isNaN(value.getTime())) return "-";
-    return value.toLocaleString();
+    return value.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
 }
 
 function asStringList(value: unknown): string[] {
@@ -31,56 +44,64 @@ function asStringList(value: unknown): string[] {
     return [];
 }
 
+const PREVIEW_CLASS =
+    "grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-xs";
+
+function PreviewRow({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
+    return (
+        <>
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className={multiline ? "line-clamp-3 whitespace-pre-wrap break-words" : "truncate"}>{value}</dd>
+        </>
+    );
+}
+
 function ExecutionPreview({ item }: { item: TaskApprovalRecord }) {
     const params = item.parameters ?? {};
     const tool = item.toolName || item.actionType;
     if (tool === "send_email") {
         return (
-            <dl className="grid gap-2 rounded-md border border-border p-3" data-testid="approval-email-preview">
-                <div>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Recipient</dt>
-                    <dd>{asStringList(params.to).join(", ") || "Missing recipient"}</dd>
-                </div>
-                <div>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Subject</dt>
-                    <dd>{typeof params.subject === "string" ? params.subject : "—"}</dd>
-                </div>
-                <div>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Message</dt>
-                    <dd className="whitespace-pre-wrap">{typeof params.body === "string" ? params.body : "—"}</dd>
-                </div>
+            <dl className={PREVIEW_CLASS} data-testid="approval-email-preview">
+                <PreviewRow label="To" value={asStringList(params.to).join(", ") || "Missing recipient"} />
+                <PreviewRow label="Subject" value={typeof params.subject === "string" ? params.subject : "—"} />
+                <PreviewRow label="Message" value={typeof params.body === "string" ? params.body : "—"} multiline />
             </dl>
         );
     }
     if (tool === "create_github_issue") {
         return (
-            <dl className="grid gap-2 rounded-md border border-border p-3" data-testid="approval-github-preview">
-                <div>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Title</dt>
-                    <dd>{typeof params.title === "string" ? params.title : "—"}</dd>
-                </div>
-                <div>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Body</dt>
-                    <dd className="whitespace-pre-wrap">{typeof params.body === "string" ? params.body : "—"}</dd>
-                </div>
+            <dl className={PREVIEW_CLASS} data-testid="approval-github-preview">
+                <PreviewRow label="Title" value={typeof params.title === "string" ? params.title : "—"} />
+                <PreviewRow label="Body" value={typeof params.body === "string" ? params.body : "—"} multiline />
             </dl>
         );
     }
     if (tool === "schedule_meeting") {
         return (
-            <dl className="grid gap-2 rounded-md border border-border p-3" data-testid="approval-meeting-preview">
-                <div>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Summary</dt>
-                    <dd>{typeof params.summary === "string" ? params.summary : "—"}</dd>
-                </div>
-                <div>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Notes</dt>
-                    <dd className="whitespace-pre-wrap">{typeof params.notes === "string" ? params.notes : "—"}</dd>
-                </div>
+            <dl className={PREVIEW_CLASS} data-testid="approval-meeting-preview">
+                <PreviewRow label="Summary" value={typeof params.summary === "string" ? params.summary : "—"} />
+                <PreviewRow label="Notes" value={typeof params.notes === "string" ? params.notes : "—"} multiline />
             </dl>
         );
     }
     return null;
+}
+
+const TOOL_DISPLAY: Record<string, { label: string; icon: LucideIcon }> = {
+    send_email: { label: "Send email", icon: Mail },
+    create_github_issue: { label: "Create GitHub issue", icon: Github },
+    schedule_meeting: { label: "Schedule meeting", icon: CalendarClock },
+};
+
+function requesterLabel(actorType: TaskApprovalRecord["actorType"]) {
+    if (actorType === "agent") return "AI";
+    if (actorType === "user") return "A teammate";
+    return "System";
+}
+
+function stateLabel(state: string | null) {
+    if (!state || state === "approval_pending") return "Pending";
+    return state.replace(/_/g, " ");
 }
 
 function getPolicySummary(item: TaskApprovalRecord) {
@@ -101,8 +122,9 @@ function getPolicySummary(item: TaskApprovalRecord) {
 }
 
 export function InboxApprovalsView() {
-    const { organizationId, organization } = useActiveOrganization();
+    const { organizationId, canManageMembers, organizationScopeReady } = useActiveOrganization();
     const [conversationId, setConversationId] = useState("");
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [actingId, setActingId] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
     const [commentsById, setCommentsById] = useState<Record<string, string>>({});
@@ -111,10 +133,13 @@ export function InboxApprovalsView() {
     const editedParamIdsRef = useRef<Record<string, true>>({});
 
     const scopedConversation = conversationId.trim() || undefined;
-    const hasScope = Boolean(scopedConversation || organizationId);
+    const waitingForScope = !organizationScopeReady && !scopedConversation;
+    const hasOrgScope = Boolean(canManageMembers && organizationId);
+    const hasScope = Boolean(scopedConversation || hasOrgScope);
+    const filtersVisible = filtersOpen || !organizationId || Boolean(scopedConversation);
 
     const listQuery = useTaskApprovalsList({
-        organizationId,
+        organizationId: hasOrgScope ? organizationId : null,
         conversationId: scopedConversation,
     });
 
@@ -155,10 +180,15 @@ export function InboxApprovalsView() {
         }
     }, [listQuery.data]);
 
-    const loading = hasScope && (listQuery.isLoading || listQuery.isFetching) && !listQuery.data;
-    const scopeError = !hasScope
-        ? "Select an active organization or enter a conversation id to load execution approvals."
-        : null;
+    const loading = waitingForScope
+        || (hasScope && (listQuery.isLoading || listQuery.isFetching) && !listQuery.data);
+    const scopeError = waitingForScope
+        ? null
+        : !hasScope && organizationId && !canManageMembers
+            ? "Only owners and admins can review organization-wide tool approvals. Enter a conversation id to review one thread."
+        : !hasScope
+            ? "Select an active organization or enter a conversation id to load execution approvals."
+            : null;
     const loadError = listQuery.error ? taskApprovalsErrorMessage(listQuery.error) : null;
     const listError = scopeError ?? loadError;
 
@@ -197,60 +227,63 @@ export function InboxApprovalsView() {
     }
 
     return (
-        <div className="space-y-6" data-testid="inbox-approvals">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h1 className="text-2xl font-bold">Execution approvals</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Review tool actions waiting for human approval. This is separate from accepting a
-                        work suggestion — approving here can resume tool execution.
-                    </p>
-                    {organizationId ? (
-                        <p className="mt-1 text-sm" data-testid="inbox-approvals-org-name">
-                            Organization{" "}
-                            <span className="font-medium">{organization?.name ?? "Organization"}</span>
-                        </p>
+        <div className="space-y-3" data-testid="inbox-approvals">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border">
+                <p className="-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 border-primary px-3 text-[13px] font-medium text-foreground">
+                    Pending
+                    {listQuery.data ? (
+                        <span className="rounded-md bg-primary/10 px-1.5 text-[11px] font-medium text-primary">
+                            {approvals.length}
+                        </span>
                     ) : null}
+                </p>
+                <div className="mb-1.5 flex items-center gap-1.5">
+                    <Button
+                        data-testid="inbox-approvals-refresh"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-lg"
+                        onClick={() => void listQuery.refetch()}
+                        disabled={listQuery.isFetching || !hasScope}
+                    >
+                        {listQuery.isFetching ? "Loading…" : "Refresh"}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 rounded-lg"
+                        aria-expanded={filtersVisible}
+                        aria-controls="inbox-approvals-filters"
+                        onClick={() => setFiltersOpen((open) => !open)}
+                    >
+                        <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
+                        Filter
+                    </Button>
                 </div>
-                <Button asChild variant="outline">
-                    <Link href={APP_HOME}>Back to chat</Link>
-                </Button>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Filters</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                        <div className="w-full space-y-2">
-                            <Label htmlFor="inbox-approvals-conversation">Conversation</Label>
-                            <Input
-                                id="inbox-approvals-conversation"
-                                data-testid="inbox-approvals-conversation"
-                                value={conversationId}
-                                onChange={(event) => setConversationId(event.target.value)}
-                                placeholder="Optional filter"
-                            />
-                        </div>
-                        <Button
-                            data-testid="inbox-approvals-refresh"
-                            variant="outline"
-                            onClick={() => void listQuery.refetch()}
-                            disabled={listQuery.isFetching || !hasScope}
-                        >
-                            {listQuery.isFetching ? "Loading…" : "Refresh"}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+            <div
+                id="inbox-approvals-filters"
+                className={cn("max-w-sm space-y-1", !filtersVisible && "hidden")}
+            >
+                <Label htmlFor="inbox-approvals-conversation" className="text-xs text-muted-foreground">Conversation</Label>
+                <Input
+                    id="inbox-approvals-conversation"
+                    data-testid="inbox-approvals-conversation"
+                    className="h-8 rounded-lg text-[13px]"
+                    value={conversationId}
+                    onChange={(event) => setConversationId(event.target.value)}
+                    placeholder={organizationId ? "Optional conversation id" : "Required for personal"}
+                />
+            </div>
 
             {loading ? (
-                <div className="space-y-3" data-testid="inbox-approvals-loading">
+                <div className="space-y-2" data-testid="inbox-approvals-loading">
                     {[0, 1, 2].map((index) => (
                         <div
                             key={index}
-                            className="h-28 animate-pulse rounded-md border border-border bg-muted/40"
+                            className="h-28 animate-pulse rounded-xl border border-border bg-muted/40"
                         />
                     ))}
                 </div>
@@ -258,7 +291,7 @@ export function InboxApprovalsView() {
 
             {!loading && listError ? (
                 <Card data-testid="inbox-approvals-error">
-                    <CardContent className="space-y-3 p-6 text-sm">
+                    <CardContent className="space-y-2 py-3 text-sm">
                         <p className="font-medium">Unable to load approvals</p>
                         <p className="text-muted-foreground">{listError}</p>
                         {hasScope ? (
@@ -279,7 +312,7 @@ export function InboxApprovalsView() {
 
             {!loading && !listError && approvals.length === 0 ? (
                 <Card data-testid="inbox-approvals-empty">
-                    <CardContent className="space-y-2 p-6 text-sm">
+                    <CardContent className="space-y-2 py-3 text-sm">
                         <p className="font-medium">No pending approvals</p>
                         <p className="text-muted-foreground">
                             When policy requires approval for a tool action, it will appear here.
@@ -289,116 +322,141 @@ export function InboxApprovalsView() {
             ) : null}
 
             {!loading && !listError && approvals.length > 0 ? (
-                <div className="space-y-3" data-testid="inbox-approvals-list">
+                <div className="space-y-2" data-testid="inbox-approvals-list">
                     {actionError ? (
-                        <Card data-testid="inbox-approvals-action-error">
-                            <CardContent className="p-4 text-sm text-red-600">{actionError}</CardContent>
-                        </Card>
+                        <p
+                            className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                            data-testid="inbox-approvals-action-error"
+                        >
+                            {actionError}
+                        </p>
                     ) : null}
-                    {approvals.map((item) => (
-                        <Card key={item._id} data-testid="inbox-approvals-row">
-                            <CardHeader className="pb-2">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div className="space-y-1">
-                                        <CardTitle className="text-base">{item.actionType}</CardTitle>
-                                        <p className="text-xs text-muted-foreground">
-                                            Tool {item.toolName || "—"} ·{" "}
+                    {approvals.map((item) => {
+                        const toolId = item.toolName || item.actionType;
+                        const display = TOOL_DISPLAY[toolId];
+                        const ToolIcon = display?.icon ?? Wrench;
+                        return (
+                        <article
+                            key={item._id}
+                            className="rounded-xl border border-border bg-card p-3"
+                            data-testid="inbox-approvals-row"
+                        >
+                            <div className="flex gap-3">
+                                <span
+                                    aria-hidden="true"
+                                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
+                                >
+                                    <ToolIcon className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0 flex-1 space-y-2">
+                                    <div className="space-y-0.5">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h2 className="text-sm font-semibold text-foreground">
+                                                {display?.label ?? "Tool action"}
+                                            </h2>
+                                            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-muted-foreground">
+                                                {toolId}
+                                            </code>
+                                            <span
+                                                className="ml-auto rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium capitalize text-amber-700 dark:text-amber-300"
+                                                data-testid="inbox-approvals-state"
+                                            >
+                                                {stateLabel(item.executionState)}
+                                            </span>
+                                        </div>
+                                        <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                                            <span>Task:</span>
                                             <Link
                                                 href={taskHref(item.taskId)}
-                                                className="underline underline-offset-2 hover:opacity-80"
+                                                className="font-medium text-foreground hover:underline"
+                                                data-testid="inbox-approvals-task"
                                             >
                                                 Open task
                                             </Link>
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
+                                            <span aria-hidden="true">·</span>
                                             <Link
                                                 href={conversationMessageHref(item.conversationId)}
-                                                className="underline underline-offset-2 hover:opacity-80"
+                                                className="hover:text-foreground hover:underline"
                                             >
                                                 Open conversation
                                             </Link>
                                         </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            Requested {formatTimestamp(item.createdAt)}
+                                        <p className="text-xs text-muted-foreground" data-testid="approval-actor">
+                                            Requested by {requesterLabel(item.actorType)} · {formatTimestamp(item.createdAt)}
                                         </p>
-                                        {item.actorId ? (
-                                            <div className="pt-1" data-testid="approval-actor">
-                                                <UserChip
-                                                    user={{ id: item.actorId, username: "Requester" }}
-                                                    size={18}
-                                                />
-                                            </div>
-                                        ) : null}
                                     </div>
-                                    <div className="flex gap-2">
-                                        <Button
-                                            size="sm"
-                                            data-testid="inbox-approvals-approve"
-                                            onClick={() => void decide(item, "approve")}
-                                            disabled={actingId === item._id}
-                                        >
-                                            Approve
-                                        </Button>
+                                    <p className="text-[13px] text-foreground/80">{item.summary || "No summary"}</p>
+                                    <ExecutionPreview item={item} />
+                                    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                                        <ShieldCheck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        <span data-testid="inbox-approvals-policy">{getPolicySummary(item)}</span>
+                                    </p>
+                                    <div>
+                                        <Label htmlFor={`comment-${item._id}`} className="sr-only">Reviewer comment</Label>
+                                        <Input
+                                            id={`comment-${item._id}`}
+                                            data-testid="inbox-approvals-comment"
+                                            className="h-8 rounded-lg text-[13px]"
+                                            value={commentsById[item._id] ?? ""}
+                                            onChange={(event) => {
+                                                const value = event.target.value;
+                                                editedCommentIdsRef.current[item._id] = true;
+                                                setCommentsById((current) => ({
+                                                    ...current,
+                                                    [item._id]: value,
+                                                }));
+                                            }}
+                                            placeholder="Reviewer comment (optional)"
+                                        />
+                                    </div>
+                                    <details className="space-y-1.5">
+                                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                                            Edit parameters
+                                        </summary>
+                                        <Label htmlFor={`params-${item._id}`} className="text-xs text-muted-foreground">
+                                            Parameters override (JSON object)
+                                        </Label>
+                                        <textarea
+                                            id={`params-${item._id}`}
+                                            data-testid="inbox-approvals-params"
+                                            className="min-h-[96px] w-full rounded-lg border border-input bg-background p-2 font-mono text-xs"
+                                            value={paramsById[item._id] ?? "{}"}
+                                            onChange={(event) => {
+                                                const value = event.target.value;
+                                                editedParamIdsRef.current[item._id] = true;
+                                                setParamsById((current) => ({
+                                                    ...current,
+                                                    [item._id]: value,
+                                                }));
+                                            }}
+                                        />
+                                    </details>
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
                                         <Button
                                             size="sm"
                                             variant="outline"
+                                            className="h-8 rounded-lg"
                                             data-testid="inbox-approvals-reject"
                                             onClick={() => void decide(item, "reject")}
                                             disabled={actingId === item._id}
                                         >
                                             Reject
                                         </Button>
+                                        <Button
+                                            size="sm"
+                                            className="h-8 rounded-lg"
+                                            data-testid="inbox-approvals-approve"
+                                            onClick={() => void decide(item, "approve")}
+                                            disabled={actingId === item._id}
+                                        >
+                                            Approve
+                                        </Button>
                                     </div>
                                 </div>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
-                                <p className="text-muted-foreground">{item.summary || "No summary"}</p>
-                                <ExecutionPreview item={item} />
-                                <p className="text-xs text-amber-700 dark:text-amber-500">
-                                    {getPolicySummary(item)}
-                                </p>
-                                <div className="space-y-2">
-                                    <Label htmlFor={`comment-${item._id}`}>Reviewer comment</Label>
-                                    <Input
-                                        id={`comment-${item._id}`}
-                                        data-testid="inbox-approvals-comment"
-                                        value={commentsById[item._id] ?? ""}
-                                        onChange={(event) => {
-                                            const value = event.target.value;
-                                            editedCommentIdsRef.current[item._id] = true;
-                                            setCommentsById((current) => ({
-                                                ...current,
-                                                [item._id]: value,
-                                            }));
-                                        }}
-                                        placeholder="Add context for this decision"
-                                    />
-                                </div>
-                                <details className="space-y-2">
-                                    <summary className="cursor-pointer text-sm text-muted-foreground">
-                                        Edit parameters
-                                    </summary>
-                                    <Label htmlFor={`params-${item._id}`}>
-                                        Parameters override (JSON object)
-                                    </Label>
-                                    <textarea
-                                        id={`params-${item._id}`}
-                                        data-testid="inbox-approvals-params"
-                                        className="min-h-[120px] w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
-                                        value={paramsById[item._id] ?? "{}"}
-                                        onChange={(event) => {
-                                            const value = event.target.value;
-                                            editedParamIdsRef.current[item._id] = true;
-                                            setParamsById((current) => ({
-                                                ...current,
-                                                [item._id]: value,
-                                            }));
-                                        }}
-                                    />
-                                </details>
-                            </CardContent>
-                        </Card>
-                    ))}
+                            </div>
+                        </article>
+                        );
+                    })}
                 </div>
             ) : null}
         </div>

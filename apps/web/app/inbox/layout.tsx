@@ -1,23 +1,15 @@
-import {
-    isCoordinationBoardEnabled,
-    isOrgDashboardEnabled,
-} from "@semantask/services/organization-policy.service";
-import { InboxSubnav } from "@/components/inbox/inbox-subnav";
-import { OrganizationSwitcher } from "@/components/organizations/organization-switcher";
+import { WorkspaceLayout } from "@/components/shell/workspace-layout";
 import { WorkSearchBox } from "@/components/work/work-search-box";
 
 export default function InboxLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="mx-auto max-w-6xl space-y-6 p-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-                <InboxSubnav
-                    boardEnabled={isCoordinationBoardEnabled()}
-                    dashboardEnabled={isOrgDashboardEnabled()}
-                />
-                <OrganizationSwitcher />
-                <WorkSearchBox />
+        <WorkspaceLayout>
+            <div className="w-full max-w-6xl space-y-3 px-4 py-4 lg:px-5">
+                <div className="flex md:hidden">
+                    <WorkSearchBox />
+                </div>
+                {children}
             </div>
-            {children}
-        </div>
+        </WorkspaceLayout>
     );
 }

@@ -19,10 +19,10 @@ const ChatDaySeparator = ({ date }: ChatDaySeparatorProps) => {
     }
 
     return (
-        <div className="text-center my-3">
-            <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                {label}
-            </span>
+        <div className="my-2 flex items-center gap-3 px-2">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+            <span className="h-px flex-1 bg-border" />
         </div>
     );
 };

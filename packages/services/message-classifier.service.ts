@@ -119,9 +119,11 @@ export function classifyMessageWithRegex(content: string): MessageClassification
         /\b(raise (to|with) (management|leadership))\b/i,
     ];
     const taskPatterns = [
-        /^(create|make|build|fix|update|delete|add|remove|implement|design|plan|send|set)/i,
+        /^(create|make|build|fix|update|delete|add|remove|implement|design|plan|send|set|follow)/i,
+        /\bfollow[ -]?up\b/i,
         /\b(need|should|must|have to|required to|please|can you|will you|would you|could you)\b/i,
         /\b(task|todo|issue|bug|feature|request|action|step|deadline|due|urgent|asap)\b/i,
+        /\bby\s+\d{1,2}(:\d{2})?\s?(am|pm)\b/i,
         /[?!]$/,
     ];
     const chatPatterns = [

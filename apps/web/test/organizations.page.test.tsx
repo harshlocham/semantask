@@ -34,6 +34,17 @@ jest.mock("@/lib/utils/api", () => ({
     updateOrganizationQuota: (...args: unknown[]) => updateOrganizationQuota(...args),
     getOrganizationUsage: jest.fn(async () => ({ tokensThisMonth: 0, periodStart: "2026-08-01T00:00:00.000Z" })),
     listOrganizationToolGrants: jest.fn(async () => ({ grants: [] })),
+    getOrganizationPolicy: jest.fn(async () => ({
+        organizationId: "org-1",
+        executionMode: null,
+        effectiveExecutionMode: "suggest_only",
+        confidenceThresholds: null,
+        allowedEmailDomains: [],
+        requireApprovalFor: ["send_email"],
+        toolDenyList: [],
+        defaultToolGrants: [],
+        promptGuardMode: null,
+    })),
 }));
 
 import OrganizationsPage from "@/app/organizations/page";

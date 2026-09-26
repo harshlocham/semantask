@@ -135,6 +135,7 @@ describe("services/google-oauth.service (db integration)", () => {
         it("creates a brand-new Google user and issues a verifiable session", async () => {
             const result = await login({ sub: "sub-new", email: "New.User@Gmail.com" });
 
+            expect(result.created).toBe(true);
             expect(result.user.googleSub).toBe("sub-new");
             expect(result.user.email).toBe("new.user@gmail.com");
             expect(result.user.authProviders).toContain("google");
@@ -157,6 +158,7 @@ describe("services/google-oauth.service (db integration)", () => {
 
             const result = await login({ sub: "sub-existing", email: "returning@gmail.com" });
 
+            expect(result.created).toBe(false);
             expect(result.user._id.toString()).toBe(existing._id.toString());
             expect(await User.countDocuments({ email: "returning@gmail.com" })).toBe(1);
         });

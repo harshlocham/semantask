@@ -1,4 +1,5 @@
 'use client'
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -23,13 +24,13 @@ const UserProfile = () => {
                 <Button
                     type="button"
                     variant="ghost"
-                    className="size-12 shrink-0 rounded-full p-0 hover:bg-accent/50"
+                    className="size-8 shrink-0 rounded-full p-0 hover:bg-accent/50"
                     aria-label="Open profile settings"
                 >
                     <UserAvatar
                         username={user?.username}
                         profilePicture={user?.profilePicture}
-                        size={48}
+                        size={32}
                     />
                 </Button>
             </DialogTrigger>
@@ -45,7 +46,12 @@ const UserProfile = () => {
                     <ProfilePictureUpload onUpdate={() => { }} />
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="gap-2 sm:justify-between">
+                    <Button asChild variant="outline">
+                        <Link href="/account" data-testid="account-security-link">
+                            Account security
+                        </Link>
+                    </Button>
                     <DialogClose asChild>
                         <Button variant="outline">Close</Button>
                     </DialogClose>

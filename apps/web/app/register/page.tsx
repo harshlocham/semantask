@@ -19,6 +19,7 @@ import ThemeSwitch from "@/components/home/theme-switch";
 import { toast } from "sonner";
 import { resetAuthBootstrap } from "@/lib/auth/authBootstrap";
 import { useUser } from "@/context/UserContext";
+import { APP_HOME } from "@/lib/routes";
 
 export default function RegisterPage() {
     const [step, setStep] = useState<"register" | "verify">("register");
@@ -27,6 +28,7 @@ export default function RegisterPage() {
     const [password, setPassword] = useState("");
     const [otp, setOtp] = useState("");
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
     const [timer, setTimer] = useState(0);
 
     const router = useRouter();
@@ -320,9 +322,35 @@ export default function RegisterPage() {
                         </AnimatePresence>
                     </CardContent>
 
-                    <CardFooter className="text-xs leading-6 text-muted-foreground">
-                        We protect your account with email verification before first login.
-                    </CardFooter>
+                    {step === "register" ? (
+                        <CardFooter className="flex-col gap-3">
+                            <div className="flex w-full items-center gap-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                                <span className="h-px flex-1 bg-border" />
+                                <span>or</span>
+                                <span className="h-px flex-1 bg-border" />
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-11 w-full"
+                                disabled={loading || googleLoading}
+                                onClick={() => {
+                                    setGoogleLoading(true);
+                                    window.location.href = `/api/auth/google/start?callbackUrl=${APP_HOME}`;
+                                }}
+                            >
+                                {googleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                {googleLoading ? "Connecting Google..." : "Continue with Google"}
+                            </Button>
+                            <p className="text-xs leading-6 text-muted-foreground">
+                                We protect your account with email verification before first login.
+                            </p>
+                        </CardFooter>
+                    ) : (
+                        <CardFooter className="text-xs leading-6 text-muted-foreground">
+                            We protect your account with email verification before first login.
+                        </CardFooter>
+                    )}
                 </Card>
             </div>
         </div>

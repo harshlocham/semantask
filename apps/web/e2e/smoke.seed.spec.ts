@@ -24,9 +24,9 @@ test("alice can sign in and the coordination board is reachable", async ({ page 
     await page.getByRole("button", { name: "Login" }).click();
 
     await expect(page).toHaveURL("/app", { timeout: 20_000 });
-    await expect(page.getByText("Welcome to your workspace")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Select a conversation")).toBeVisible({ timeout: 20_000 });
     await expect(
-        page.getByPlaceholder("Search or start a new chat").filter({ visible: true }),
+        page.getByPlaceholder("Search conversations").filter({ visible: true }),
     ).toBeVisible();
     await expect(page.getByText("Bob").filter({ visible: true })).toBeVisible();
 

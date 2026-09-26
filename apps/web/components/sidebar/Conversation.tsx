@@ -92,17 +92,12 @@ const Conversation = ({ conversation }: ConversationProps) => {
 
     return (
         <div
-            className={`relative flex min-h-16.5 cursor-pointer items-center gap-3 px-3 py-2 transition-colors sm:min-h-18 sm:px-4
-      ${isActive ? "bg-[hsl(var(--card))]" : "hover:bg-[hsl(var(--chat-hover))]"}
+            className={`relative mx-2 my-0.5 flex min-h-14 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors
+      ${isActive ? "bg-primary/10" : "hover:bg-muted"}
       `}
             onClick={() => setSelectedConversation(conversation)}
         >
-            {isActive ? (
-                <span className="absolute inset-y-0 left-0 w-1 bg-[hsl(var(--primary))]" />
-            ) : null}
-
-            {/* Avatar */}
-            <Avatar className="relative h-10 w-10 shrink-0 overflow-visible border border-[hsl(var(--border))] sm:h-11 sm:w-11">
+            <Avatar className="relative h-8 w-8 shrink-0 overflow-visible">
                 {isDirectOnline && (
                     <span
                         className={`absolute -bottom-0.5 -right-0.5 z-10 h-3 w-3 rounded-full bg-green-500 border-2 ${onlineDotBorderClass}`}

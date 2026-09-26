@@ -11,7 +11,7 @@ import {
     buildAppRedirectUrl,
     getGoogleOAuthBaseUrl,
 } from "@/lib/utils/auth/googleOAuthBaseUrl";
-import { APP_HOME } from "@/lib/routes";
+import { APP_HOME, ONBOARDING_PATH } from "@/lib/routes";
 
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 const GOOGLE_CALLBACK_COOKIE = "google_oauth_callback";
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
     try {
         await connectToDatabase();
 
-        const { user, accessToken, refreshToken } = await loginWithGoogleCode({
+        const { user, accessToken, refreshToken, created } = await loginWithGoogleCode({
             code,
             redirectUri: getRedirectUri(req),
             state,
@@ -150,9 +150,10 @@ export async function GET(req: NextRequest) {
             userAgent,
         });
 
-        const safeRedirect = callbackUrl.startsWith("/") && callbackUrl !== "/"
+        const requestedRedirect = callbackUrl.startsWith("/") && callbackUrl !== "/"
             ? callbackUrl
             : APP_HOME;
+        const safeRedirect = created ? ONBOARDING_PATH : requestedRedirect;
         const response = NextResponse.redirect(buildAppRedirectUrl(req, safeRedirect));
         cleanupOAuthCookies(response);
         response.headers.append("Set-Cookie", buildAccessTokenCookie(accessToken));

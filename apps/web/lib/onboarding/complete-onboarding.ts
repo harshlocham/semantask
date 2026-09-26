@@ -4,9 +4,13 @@ import MessageModel from "@/models/Message";
 import { User } from "@/models/User";
 import { getInternalSocketServerUrl } from "@/lib/socket/socketConfig";
 import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
+import { enqueueOutboxEvent } from "@/lib/services/outbox.service";
 import { GETTING_STARTED_GROUP_NAME, GETTING_STARTED_PROMPT } from "./constants";
 
-export async function completeOnboardingConversation(userId: string): Promise<{ conversationId: string }> {
+export async function completeOnboardingConversation(
+    userId: string,
+    organizationId: string | null = null
+): Promise<{ conversationId: string }> {
     const user = mongoose.Types.ObjectId.isValid(userId)
         ? await User.findById(userId)
         : null;
@@ -14,11 +18,15 @@ export async function completeOnboardingConversation(userId: string): Promise<{ 
         throw new Error("User not found");
     }
 
+    const orgScope = organizationId
+        ? { organizationId }
+        : { $or: [{ organizationId: null }, { organizationId: { $exists: false } }] };
+
     const existing = await Conversation.findOne({
         isGroup: true,
         groupName: GETTING_STARTED_GROUP_NAME,
         participants: user._id,
-        $or: [{ organizationId: null }, { organizationId: { $exists: false } }],
+        ...orgScope,
     });
 
     if (existing) {
@@ -40,24 +48,30 @@ export async function completeOnboardingConversation(userId: string): Promise<{ 
         admin: String(user._id),
         groupName: GETTING_STARTED_GROUP_NAME,
         name: GETTING_STARTED_GROUP_NAME,
-        organizationId: null,
+        organizationId: organizationId || null,
     });
 
     await seedGettingStartedMessage(conversation._id, user._id);
     await ensureUserConversation(user, conversation._id);
 
     const participantIds = [String(user._id)];
-    const internalResponse = await fetch(`${getInternalSocketServerUrl()}/internal/conversation-created`, {
-        method: "POST",
-        headers: createInternalRequestHeaders(),
-        body: JSON.stringify({
-            conversationId: String(conversation._id),
-            participantIds,
-        }),
-    });
-
-    if (!internalResponse.ok) {
-        throw new Error("Failed to broadcast conversation creation");
+    try {
+        const internalResponse = await fetch(`${getInternalSocketServerUrl()}/internal/conversation-created`, {
+            method: "POST",
+            headers: createInternalRequestHeaders(),
+            body: JSON.stringify({
+                conversationId: String(conversation._id),
+                participantIds,
+            }),
+        });
+        if (!internalResponse.ok) {
+            console.warn("Onboarding conversation created but socket fan-out failed", {
+                conversationId: String(conversation._id),
+                status: internalResponse.status,
+            });
+        }
+    } catch (error) {
+        console.warn("Onboarding conversation created but socket fan-out failed", error);
     }
 
     return { conversationId: String(conversation._id) };
@@ -73,9 +87,6 @@ async function seedGettingStartedMessage(
         conversationId,
         messageType: "text",
         status: "sent",
-        semanticType: "task",
-        semanticConfidence: 0.9,
-        aiStatus: "classified",
     });
 
     await Conversation.findByIdAndUpdate(conversationId, {
@@ -85,6 +96,18 @@ async function seedGettingStartedMessage(
             messageType: "text",
             content: message.content,
             _creationTime: message.createdAt,
+        },
+    });
+
+    await enqueueOutboxEvent({
+        topic: "message.created",
+        dedupeKey: `message.created:${message._id.toString()}`,
+        payload: {
+            messageId: message._id.toString(),
+            conversationId: conversationId.toString(),
+            senderId: senderId.toString(),
+            content: message.content,
+            messageType: "text",
         },
     });
 }

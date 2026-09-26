@@ -40,6 +40,7 @@ describe("work-suggestion-store", () => {
         __workSuggestionStoreTestUtils.resetInFlight();
         useWorkSuggestionStore.setState({
             suggestionIdByMessageId: {},
+            suggestionByMessageId: {},
             loadingByConversation: {},
             errorByConversation: {},
         });
@@ -58,11 +59,15 @@ describe("work-suggestion-store", () => {
             .mockResolvedValueOnce({
                 items: [suggestion("s2", "m2")],
                 pagination: { page: 2, limit: 100, total: 101, totalPages: 2 },
+            })
+            .mockResolvedValueOnce({
+                items: [],
+                pagination: { page: 1, limit: 100, total: 0, totalPages: 1 },
             });
 
         await useWorkSuggestionStore.getState().loadConversation("conv-1");
 
-        expect(listWorkSuggestions).toHaveBeenCalledTimes(2);
+        expect(listWorkSuggestions).toHaveBeenCalledTimes(3);
         expect(listWorkSuggestions).toHaveBeenNthCalledWith(1, {
             conversationId: "conv-1",
             status: "proposed",
@@ -75,8 +80,15 @@ describe("work-suggestion-store", () => {
             page: 2,
             limit: 100,
         });
+        expect(listWorkSuggestions).toHaveBeenNthCalledWith(3, {
+            conversationId: "conv-1",
+            status: "converted",
+            page: 1,
+            limit: 100,
+        });
         expect(useWorkSuggestionStore.getState().getSuggestionId("conv-1", "m1")).toBe("s1");
         expect(useWorkSuggestionStore.getState().getSuggestionId("conv-1", "m2")).toBe("s2");
+        expect(useWorkSuggestionStore.getState().getSuggestion("conv-1", "m1")?._id).toBe("s1");
     });
 
     it("schedules a trailing refresh when a caller joins an in-flight request", async () => {
