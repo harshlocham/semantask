@@ -174,13 +174,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                 );
                 if (addedAssignees.length > 0) {
                     const { notifyUsers } = await import("@semantask/services/notify.service");
+                    const {
+                        absoluteTaskHref,
+                        withAbsoluteCta,
+                        withAbsoluteCtaText,
+                    } = await import("@semantask/services/notify-links");
+                    const taskLink = absoluteTaskHref(normalized._id);
+                    const text = `You were assigned "${normalized.title}".`;
+                    const html = `<p>You were assigned <b>${escapeHtml(normalized.title)}</b>.</p>`;
                     await notifyUsers(
                         addedAssignees,
                         {
                             kind: "task_assigned",
                             subject: `Assigned: ${normalized.title}`,
-                            text: `You were assigned "${normalized.title}".`,
-                            html: `<p>You were assigned <b>${escapeHtml(normalized.title)}</b>.</p>`,
+                            text: withAbsoluteCtaText(text, taskLink, "Open task"),
+                            html: withAbsoluteCta(html, taskLink, "Open task"),
                             dedupeKey: `assign-patch:${normalized._id}:${normalized.updatedAt}`,
                             conversationId: normalized.conversationId,
                             entityId: normalized._id,

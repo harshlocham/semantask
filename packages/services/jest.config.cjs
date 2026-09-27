@@ -23,6 +23,7 @@ module.exports = {
     moduleNameMapper: {
         "^(\\.{1,2}/.*)\\.js$": "$1",
         "^@semantask/types$": "<rootDir>/../types/index.ts",
+        "^@semantask/types/(.*)$": "<rootDir>/../types/$1",
         "^@semantask/observability/metrics$": "<rootDir>/../observability/metrics.ts",
         "^@semantask/observability$": "<rootDir>/../observability/index.ts",
         "^@semantask/db$": "<rootDir>/../db/db.ts",

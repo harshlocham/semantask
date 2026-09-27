@@ -146,6 +146,30 @@ export async function proposeExecutionFromSuggestion(input: {
             reason,
             idempotencyKey,
         });
+
+        const organizationId = input.task.organizationId?.toString?.() ?? null;
+        if (
+            organizationId
+            && action.executionState === "approval_pending"
+        ) {
+            void (async () => {
+                try {
+                    const { notifyApprovalRequired } = await import("./notify-approval.service");
+                    await notifyApprovalRequired({
+                        organizationId,
+                        taskId: input.task._id.toString(),
+                        actionId: action._id.toString(),
+                        title: input.task.title,
+                        conversationId: input.task.conversationId.toString(),
+                        actorUserId: input.actorUserId,
+                        reasonText: `Tool “${tool.replace(/_/g, " ")}” for "${input.task.title}" needs approval.`,
+                    });
+                } catch (error) {
+                    console.error("proposal approval notify failed", error);
+                }
+            })();
+        }
+
         return { action, created: true };
     } catch (error) {
         const code = (error as { code?: number })?.code;

@@ -711,13 +711,22 @@ export async function acceptWorkSuggestion(
             await enqueueTaskCreatedFanout(taskRecord, input.actorUserId);
             if (assignees.length > 0) {
                 const { notifyUsers } = await import("./notify.service");
+                const {
+                    absoluteTaskHref,
+                    withAbsoluteCta,
+                    withAbsoluteCtaText,
+                } = await import("./notify-links");
+                const { escapeHtml } = await import("./html-escape");
+                const taskLink = absoluteTaskHref(taskRecord._id);
+                const text = `You were assigned "${taskRecord.title}".`;
+                const html = `<p>You were assigned <b>${escapeHtml(taskRecord.title)}</b>.</p>`;
                 void notifyUsers(
                     assignees.filter((id) => id !== input.actorUserId),
                     {
                         kind: "task_assigned",
                         subject: `Assigned: ${taskRecord.title}`,
-                        text: `You were assigned "${taskRecord.title}".`,
-                        html: `<p>You were assigned <b>${taskRecord.title}</b>.</p>`,
+                        text: withAbsoluteCtaText(text, taskLink, "Open task"),
+                        html: withAbsoluteCta(html, taskLink, "Open task"),
                         dedupeKey: `assign:${taskRecord._id}:accept`,
                         conversationId: taskRecord.conversationId,
                         entityId: taskRecord._id,
@@ -962,13 +971,22 @@ export async function assignWorkSuggestion(
 
     if (input.assignees !== undefined && input.assignees.length > 0) {
         const { notifyUsers } = await import("./notify.service");
+        const {
+            absoluteTaskHref,
+            withAbsoluteCta,
+            withAbsoluteCtaText,
+        } = await import("./notify-links");
+        const { escapeHtml } = await import("./html-escape");
+        const taskLink = absoluteTaskHref(taskRecord._id);
+        const text = `You were assigned "${taskRecord.title}".`;
+        const html = `<p>You were assigned <b>${escapeHtml(taskRecord.title)}</b>.</p>`;
         void notifyUsers(
             input.assignees.filter((id) => id !== input.actorUserId),
             {
                 kind: "task_assigned",
                 subject: `Assigned: ${taskRecord.title}`,
-                text: `You were assigned "${taskRecord.title}".`,
-                html: `<p>You were assigned <b>${taskRecord.title}</b>.</p>`,
+                text: withAbsoluteCtaText(text, taskLink, "Open task"),
+                html: withAbsoluteCta(html, taskLink, "Open task"),
                 dedupeKey: `assign:${taskRecord._id}:${taskRecord.updatedAt}`,
                 conversationId: taskRecord.conversationId,
                 entityId: taskRecord._id,

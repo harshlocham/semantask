@@ -12,6 +12,11 @@ jest.mock("../repositories/task.repo", () => ({
     createTaskAction: (...args: unknown[]) => createTaskAction(...args),
 }));
 
+const notifyApprovalRequired = jest.fn<any>();
+jest.mock("../notify-approval.service", () => ({
+    notifyApprovalRequired: (...args: unknown[]) => notifyApprovalRequired(...args),
+}));
+
 const messageFindById = jest.fn<any>();
 jest.mock("@semantask/db/models/Message", () => ({
     __esModule: true,
@@ -36,12 +41,16 @@ describe("proposeExecutionFromSuggestion", () => {
     const taskId = new Types.ObjectId();
     const suggestionId = new Types.ObjectId();
     const conversationId = new Types.ObjectId();
+    const organizationId = new Types.ObjectId();
     const messageId = new Types.ObjectId();
     const actorUserId = new Types.ObjectId().toString();
+    const actionId = new Types.ObjectId();
 
     const task = {
         _id: taskId,
         conversationId,
+        organizationId,
+        title: "Send welcome email to new hire",
     } as ITask;
 
     const suggestion = {
@@ -56,6 +65,8 @@ describe("proposeExecutionFromSuggestion", () => {
 
     beforeEach(() => {
         createTaskAction.mockReset();
+        notifyApprovalRequired.mockReset();
+        notifyApprovalRequired.mockResolvedValue(undefined);
         messageFindById.mockReset();
         actionFindOne.mockReset();
         messageFindById.mockReturnValue({
@@ -67,9 +78,9 @@ describe("proposeExecutionFromSuggestion", () => {
         });
     });
 
-    it("creates an approval_pending proposal and does not invent email addresses", async () => {
+    it("creates an approval_pending proposal and notifies org managers", async () => {
         createTaskAction.mockResolvedValue({
-            _id: new Types.ObjectId(),
+            _id: actionId,
             executionState: "approval_pending",
             idempotencyKey: `${taskId}::proposal:send_email::${suggestionId}`,
         });
@@ -87,9 +98,18 @@ describe("proposeExecutionFromSuggestion", () => {
                 }),
             })
         );
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(notifyApprovalRequired).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationId: organizationId.toString(),
+                taskId: taskId.toString(),
+                actionId: actionId.toString(),
+                actorUserId,
+            })
+        );
     });
 
-    it("reuses the existing proposal on duplicate key", async () => {
+    it("reuses the existing proposal on duplicate key without re-notifying", async () => {
         const existing = { _id: new Types.ObjectId(), executionState: "approval_pending" };
         createTaskAction.mockRejectedValue({ code: 11000 });
         actionFindOne.mockReturnValue({ exec: jest.fn<any>().mockResolvedValue(existing) });
@@ -97,14 +117,16 @@ describe("proposeExecutionFromSuggestion", () => {
         const first = await proposeExecutionFromSuggestion({ task, suggestion, actorUserId });
         expect(first.created).toBe(false);
         expect(first.action).toBe(existing);
+        expect(notifyApprovalRequired).not.toHaveBeenCalled();
 
         const second = await proposeExecutionFromSuggestion({ task, suggestion, actorUserId });
         expect(second.created).toBe(false);
         expect(createTaskAction).toHaveBeenCalledTimes(2);
         expect(actionFindOne).toHaveBeenCalled();
+        expect(notifyApprovalRequired).not.toHaveBeenCalled();
     });
 
-    it("stores prohibited proposals as blocked with the policy reason", async () => {
+    it("stores prohibited proposals as blocked and does not notify", async () => {
         createTaskAction.mockResolvedValue({
             _id: new Types.ObjectId(),
             executionState: "blocked",
@@ -119,9 +141,9 @@ describe("proposeExecutionFromSuggestion", () => {
         expect(createTaskAction).toHaveBeenCalledWith(
             expect.objectContaining({
                 executionState: "blocked",
-                error: "Organization policy prohibits send_email.",
-                reason: "Organization policy prohibits send_email.",
             })
         );
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(notifyApprovalRequired).not.toHaveBeenCalled();
     });
 });
