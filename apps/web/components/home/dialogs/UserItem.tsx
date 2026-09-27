@@ -1,25 +1,41 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ClientUser } from "@semantask/types";
+import type { ComposeParticipant } from "@/lib/utils/api";
+import { cn } from "@/lib/utils/utils";
 
-interface Props {
-    user: ClientUser;
+type UserItemProps = {
+    user: ComposeParticipant;
     selected: boolean;
     onClick: () => void;
-}
+};
 
-export const UserItem = ({ user, selected, onClick }: Props) => (
-    <div
-        onClick={onClick}
-        className={`flex gap-3 items-center p-2 rounded cursor-pointer transition-all hover:bg-[hsl(var(--gray-secondary))] ${selected ? "bg-[hsl(var(--green-primary))]" : ""
-            }`}
-    >
-        <Avatar>
-            {user.isOnline && (
-                <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-foreground" />
+export const UserItem = ({ user, selected, onClick }: UserItemProps) => {
+    const label = user.username || user.email || "Person";
+
+    return (
+        <button
+            type="button"
+            data-person={user.id}
+            aria-pressed={selected}
+            onClick={onClick}
+            className={cn(
+                "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition hover:bg-accent",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                selected && "bg-accent"
             )}
-            <AvatarImage src={user.profilePicture || ""} className="object-cover rounded-full" />
-            <AvatarFallback className="bg-[hsl(var(--gray-tertiary))]" />
-        </Avatar>
-        <p className="text-md font-medium">{user.username || user.email.split("@")[0]}</p>
-    </div>
-);
+        >
+            <Avatar className="size-8">
+                <AvatarImage src={user.profilePicture || ""} alt="" className="object-cover" />
+                <AvatarFallback className="bg-muted text-xs">
+                    {label.slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+            </Avatar>
+            <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium text-foreground">{label}</span>
+                {user.existingDirectConversationId ? (
+                    <span className="block truncate text-xs text-muted-foreground">Already chatting</span>
+                ) : null}
+            </span>
+            {selected ? <span className="sr-only">Selected</span> : null}
+        </button>
+    );
+};

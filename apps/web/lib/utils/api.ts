@@ -198,6 +198,39 @@ export async function getUsers(): Promise<ClientUser[]> {
     return request<ClientUser[]>("/api/users");
 }
 
+export type ComposeParticipant = {
+    id: string;
+    username: string;
+    email?: string;
+    profilePicture?: string | null;
+    existingDirectConversationId: string | null;
+};
+
+export type ComposeDirectoryResponse = {
+    success: boolean;
+    suggestions: ComposeParticipant[];
+    results: ComposeParticipant[];
+    nextCursor: string | null;
+    invite: { email: string } | null;
+};
+
+export async function searchComposeDirectory(input: {
+    q?: string;
+    limit?: number;
+    cursor?: string | null;
+    signal?: AbortSignal;
+} = {}): Promise<ComposeDirectoryResponse> {
+    const params = new URLSearchParams();
+    if (input.q) params.set("q", input.q);
+    if (input.limit) params.set("limit", String(input.limit));
+    if (input.cursor) params.set("cursor", input.cursor);
+    const query = params.toString();
+    return request<ComposeDirectoryResponse>(
+        `/api/directory/compose${query ? `?${query}` : ""}`,
+        { signal: input.signal }
+    );
+}
+
 export async function completeOnboarding(): Promise<{ conversationId: string }> {
     return request<{ conversationId: string }>("/api/onboarding/complete", {
         method: "POST",
