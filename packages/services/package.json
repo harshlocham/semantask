@@ -85,6 +85,11 @@
             "types": "./dist/services/authorization.service.d.ts",
             "default": "./dist/services/authorization.service.js"
         },
+        "./compose-directory.service": {
+            "import": "./dist/services/compose-directory.service.js",
+            "types": "./dist/services/compose-directory.service.d.ts",
+            "default": "./dist/services/compose-directory.service.js"
+        },
         "./organization.service": {
             "import": "./dist/services/organization.service.js",
             "types": "./dist/services/organization.service.d.ts",
