@@ -4,7 +4,8 @@ description: >-
   Safely change Semantask execution policy, execution modes (suggest_only /
   require_approval / auto_execute), confidence thresholds, org overlays,
   prompt-guard, or suggest_only ingress gates. Use when editing when tools may
-  run. Do not use for adding tools or rewriting the agent loop.
+  run. Do not use for adding tools, rewriting the agent loop, or suggestion,
+  notification, and UI work that does not change execution mode (AGENTS.md §3).
 ---
 
 # Change Execution Policy
@@ -34,7 +35,7 @@ side effects under `suggest_only`.
 - Adding a new tool adapter → `add-worker-tool`.
 - Changing StepLoop / planner / memory → `change-agent-loop`.
 - Pure debugging of a single stuck task → `trace-task-execution` first.
-- Coordination/suggestion UX without execution-mode semantics → normal feature work.
+- Coordination, suggestions, or notifications that do not change execution mode → AGENTS.md §3.
 
 ## Workflow
 
@@ -42,6 +43,10 @@ side effects under `suggest_only`.
    - `apps/task-worker/services/execution-policy.ts`
      (`evaluateExecutionPolicy`, `applyExecutionModeGate`).
    - `apps/task-worker/services/suggest-only-execution-gate.ts`.
+   - Write-side refusal: `packages/services/task-execution-enqueue.service.ts`.
+   - Prompt-guard module: `apps/task-worker/services/prompt-guard.ts`
+     (imported by `execution-policy.ts`). Shadow emit:
+     `apps/task-worker/services/policy-shadow.ts`.
    - Effective mode helpers:
      `getEffectiveExecutionMode` / `isExecutionModeEnforce` (services package).
    - ADR-005: `docs/decisions/ADR-005-suggest-first-work-coordination.md`.
@@ -64,6 +69,11 @@ side effects under `suggest_only`.
    - Worker ingress may separately fail-closed for leaked suggest_only enqueues.
    - `ToolExecutor` also respects effective execution mode at tool time — policy
      and executor must stay consistent.
+   - Approval side effects that are not the mode gate:
+     `proposeExecutionFromSuggestion`
+     (`packages/services/execution-proposal.service.ts`) and
+     `requestTaskExecution`
+     (`packages/services/task-execution-request.service.ts`).
 
 4. **Evidence**
    - Existing reason strings and test assertions (do not rename casually).

@@ -1,11 +1,12 @@
 ---
 name: trace-task-execution
 description: >-
-  Trace a Semantask task or execution bug through outbox claim, policy gates,
-  AgentRunner/StepLoop, tools, leases, and socket bridge. Use when debugging
-  why a task did not run, ran unexpectedly, stalled, retried, or skipped tools.
-  Do not use for UI-only bugs, greenfield features, or as a substitute for the
-  change-* skills when the edit target is already known.
+  Trace a Semantask task or execution bug through accept or manager request,
+  outbox claim, policy gates, AgentRunner/StepLoop, tools, leases, and socket
+  bridge. Use when debugging why a task did not run, ran unexpectedly, stalled,
+  retried, or skipped tools. Do not use for UI-only bugs, greenfield features,
+  suggestion or notification work with no execution hop (AGENTS.md §3), or as a
+  substitute for the change-* skills when the edit target is already known.
 ---
 
 # Trace Task Execution
@@ -31,7 +32,7 @@ assumptions.
 
 ## When not to use
 
-- Pure web/UI, auth, or messaging bugs with no task-worker involvement → normal debugging.
+- Pure web/UI, auth, or messaging bugs with no task-worker involvement → AGENTS.md §3.
 - Adding a new tool end-to-end → `add-worker-tool`.
 - Changing policy thresholds or modes → `change-execution-policy`.
 - Changing planner/step-loop internals → `change-agent-loop`.
@@ -42,7 +43,7 @@ assumptions.
 1. **Inspect first**
    - Start at `apps/task-worker/index.ts` topic routing (`message.created`,
      `task.execution.requested`, `task.execution.approved`, `task.created` /
-     `task.updated`).
+     `task.updated`, `task.cancel.requested`).
    - Skim `docs/archive/optional-autonomy/task-worker-execution-flow.md` and
      ADR-002 / ADR-005 only for orientation; prefer code over docs if they disagree.
 
@@ -54,8 +55,16 @@ assumptions.
      tool RBAC (`TASK_TOOL_RBAC`), LLM provider config.
 
 3. **Trace relationships**
-   - `message.created` → `packages/services/task-intelligence.service.ts`
-     (`classifyMessage`) → may enqueue `task.execution.requested`.
+   - Product path before the worker: `acceptWorkSuggestion` never enqueues
+     `task.execution.*` (AGENTS.md §3) and may call
+     `proposeExecutionFromSuggestion`. A manager request that may enqueue is
+     `requestTaskExecution` → `enqueueTaskExecutionRequested`.
+   - `message.created` → `classifyMessage` in
+     `packages/services/message-classifier.service.ts`, called from
+     `packages/services/task-intelligence.service.ts`, which may enqueue
+     `task.execution.requested`.
+   - `task.cancel.requested` → `processTaskCancelRequested` /
+     `processTaskCancellation` (`services/task-cancellation.ts`).
    - `task.execution.requested` → `evaluateExecutionPolicy` +
      `suggest-only-execution-gate.ts` helpers → approval / blocked / lease + run.
    - Run path: `WorkflowRegistry` → `DefaultAgentLoopTemplate` →

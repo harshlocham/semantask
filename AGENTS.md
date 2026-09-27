@@ -1,8 +1,9 @@
 # AGENTS.md — Semantask
 
 Instructions for any AI coding agent working in this repository. Portable and
-tool-agnostic. Task-scoped agent workflows live in `.agents/skills/`; this file is
-the canonical source for repository invariants and conventions.
+tool-agnostic. This file is the canonical source for repository invariants and
+conventions. Worker procedures live in `.agents/skills/`; the router below names
+which file to open.
 
 ## 1. What this repository is
 
@@ -23,6 +24,17 @@ pnpm + Turborepo monorepo, ESM TypeScript, Node 24 (`.nvmrc`; CI matrix 24.x).
 | `packages/db` | Mongoose models |
 | `packages/services` | Domain logic, repositories, policy helpers |
 | `packages/auth`, `packages/observability`, `packages/redis` | Auth, logs/metrics/tracing, Redis shim |
+
+Open the matching skill before editing that layer.
+
+| If you are changing | Load |
+|---|---|
+| Modes, thresholds, prompt-guard, enqueue refusal | `change-execution-policy` |
+| Planner, StepLoop, ranking, workflows | `change-agent-loop` |
+| Outbox, leases, retries, idempotency, cancel | `change-async-reliability` |
+| A new tool adapter | `add-worker-tool` |
+| Why a task did or did not run | `trace-task-execution` first |
+| Suggestions, notifications, web UI, auth, orgs, socket handlers | this file only (§3) |
 
 ## 2. Non-negotiable invariants
 
@@ -78,24 +90,39 @@ Breaking any of these is a product or correctness bug, not a style preference.
 11. **Shared contracts live in `@semantask/types`** and stay dependency-free and
     side-effect-free (tool catalog: `packages/types/task/tools.ts`).
 12. **Domain logic belongs in `@semantask/services`.** See the honest caveat in
-    §5 before "fixing" existing violations.
+    §6 before "fixing" existing violations.
 
-## 3. Investigate before you change
+## 3. Coordination
+
+Chat is classified into reviewable work suggestions. Accepting a suggestion
+creates a coordination task. Tool execution is a later request, gated by §2.
+
+| Rule | Where | Pinning test |
+|---|---|---|
+| Accept never enqueues `task.execution.*`. It creates a coordination task and may call `proposeExecutionFromSuggestion`. `acceptWorkSuggestion` calls `assertAcceptCreatesCoordinationOnly`. | `packages/services/work-suggestion.service.ts`, `packages/services/execution-proposal.service.ts`, `packages/services/config/flags.ts` | `packages/services/__tests__/work-suggestion.mutations.test.ts` |
+| `isAcceptCreatesExecutionEnabled()` returns `false`. | `packages/services/config/flags.ts` | `packages/services/__tests__/config.flags.test.ts` |
+| A manager request that may enqueue goes through `requestTaskExecution`. | `packages/services/task-execution-request.service.ts` | `apps/web/test/task-request-execution.route.test.ts` |
+| `notifyUser` claims a `NotifyDedupe` key before send and releases it when delivery does not succeed. | `packages/services/notify.service.ts` | `packages/services/__tests__/notify.service.test.ts` |
+| Suggestion access, approval decisions, and coordination-task writes go through `authorization.service`. | `packages/services/authorization.service.ts` | `packages/services/__tests__/authorization.service.test.ts` |
+
+## 4. Investigate before you change
 
 If you are new to this repository, do this before editing:
 
 1. **Read the code, not just the docs.** Several docs under `docs/archive/`
-   describe removed behavior (see §7). Code wins, always.
+   describe removed behavior (see §8). Code wins, always.
 2. **Name the layer** your change touches: ingress classification → policy/mode
    gate → approval → lease → agent loop → tool grant → tool adapter →
    verification → retry/DLQ → socket bridge.
 3. **Find the pinning test first.** Most invariants above have a dedicated test
-   (§6). If you cannot find one, say so rather than assuming the behavior is
+   (§7). If you cannot find one, say so rather than assuming the behavior is
    unconstrained.
-4. **Trace, then edit.** For "why did/didn't this task run", follow the outbox
-   topic (`message.created`, `task.execution.requested`,
-   `task.execution.approved`, `task.created`/`task.updated`) through
-   `apps/task-worker/index.ts` before touching anything.
+4. **Trace, then edit.** For "why did/didn't this task run", follow accept /
+   `requestTaskExecution` / enqueue, then the outbox topic
+   (`message.created`, `task.execution.requested`, `task.execution.approved`,
+   `task.created`/`task.updated`, `task.cancel.requested`) through
+   `apps/task-worker/index.ts` before touching anything. Cancel is
+   `processTaskCancelRequested`.
 5. **Separate observation from assumption** in what you report. Mark files you
    did not open as unverified.
 6. **Reuse the existing pattern.** New tools mirror an existing
@@ -105,7 +132,7 @@ If you are new to this repository, do this before editing:
 7. **Never weaken a gate to make something work.** If a change requires relaxing
    `suggest_only`, grants, prompt-guard, or idempotency, stop and surface it.
 
-## 4. Where code belongs
+## 5. Where code belongs
 
 | Concern | Home |
 |---|---|
@@ -117,19 +144,20 @@ If you are new to this repository, do this before editing:
 | Outbox consumption, agent loop, tools | `apps/task-worker` |
 | Logging, metrics, tracing | `@semantask/observability` |
 
-## 5. Known leaky seams (do not mass-refactor)
+## 6. Known leaky seams (do not mass-refactor)
 
 These are real, pre-existing, and out of scope for unrelated changes:
 
-- **Web API routes**: ~32 route files go through `@semantask/services`, but ~15
-  import `@semantask/db/models` (or Mongoose) directly. Follow the pattern of
-  the route you are editing; do not migrate unrelated routes.
+- **Web API routes**: both patterns exist across `apps/web/app/api`. Some routes
+  go through `@semantask/services`; others import `@semantask/db/models` or
+  Mongoose directly. Follow the pattern of the route you are editing; do not
+  migrate unrelated routes.
 - **`@semantask/auth`** reaches models via `@/models/*` path aliases rather than
   `@semantask/db` (documented in `docs/architecture/shared-package-design.md`).
 - **`apps/task-worker/services/agent/step-loop.ts`** is very large and owns both
   loop styles. Prefer extracting a tested pure helper over reformatting the file.
 
-## 6. Testing and verification
+## 7. Testing and verification
 
 **Build shared packages first.** Workspace tests import built output from
 `packages/*/dist`. In a fresh or cleaned tree, `pnpm --filter @semantask/task-worker test`
@@ -175,8 +203,13 @@ Invariant → pinning test map:
 | lease contention defers | `apps/task-worker/tests/dispatch.lease-wrapper.test.ts`, `apps/task-worker/tests/lease.contention.test.ts` |
 | agent loop / cancellation | `apps/task-worker/tests/agent-runner.*.test.ts` |
 | workflow resolution | `apps/task-worker/tests/workflow-registry.test.ts` |
+| accept never enqueues execution | `packages/services/__tests__/work-suggestion.mutations.test.ts` |
+| accept-creates-execution stays off | `packages/services/__tests__/config.flags.test.ts` |
+| manager execution request | `apps/web/test/task-request-execution.route.test.ts` |
+| notify dedupe | `packages/services/__tests__/notify.service.test.ts` |
+| suggestion, approval, and coordination access | `packages/services/__tests__/authorization.service.test.ts` |
 
-## 7. Documentation drift (verify before citing)
+## 8. Documentation drift (verify before citing)
 
 - `docs/archive/optional-autonomy/task-worker-execution-flow.md` and
   [ADR-002](docs/decisions/ADR-002-retry-orchestration-strategy.md) still
@@ -189,7 +222,7 @@ Invariant → pinning test map:
 - Ingress classification defaults to **regex/heuristic** (`TASK_CLASSIFIER_MODE`),
   not an LLM; LLMs are used in optional execution (planning, decisions, reflection).
 
-## 8. Change conventions
+## 9. Change conventions
 
 - **Do not change application behavior as a side effect** of a docs, test, or
   tooling task.
@@ -203,7 +236,7 @@ Invariant → pinning test map:
 - If information is missing or repository behavior is ambiguous, **stop and ask**
   rather than inventing an API, env var, topic, or tool name.
 
-## 9. Reference map
+## 10. Reference map
 
 - ADRs: [001 lifecycle](docs/decisions/ADR-001-task-lifecycle-state-machine.md) ·
   [002 retry](docs/decisions/ADR-002-retry-orchestration-strategy.md) ·
@@ -213,5 +246,6 @@ Invariant → pinning test map:
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
   [`docs/architecture/shared-package-design.md`](docs/architecture/shared-package-design.md)
 - Operations: [`docs/operations/PRODUCTION_REQUIREMENTS.md`](docs/operations/PRODUCTION_REQUIREMENTS.md)
-- Task-scoped workflows: [`.agents/skills/*/SKILL.md`](.agents/skills/) (procedures
-  that build on this file; optional for agents that do not load skills).
+- Worker procedures: [`.agents/skills/*/SKILL.md`](.agents/skills/). Open the
+  skill named in §1 before editing that layer. Coordination, notifications,
+  web UI, auth, orgs, and socket handlers have no skill; use §3 and §2.
