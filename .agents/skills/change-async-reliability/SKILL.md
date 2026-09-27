@@ -4,7 +4,8 @@ description: >-
   Safely change Semantask outbox processing, leases, retries, dead-letter,
   idempotency keys, or stuck-task detection in the task-worker. Use when editing
   at-least-once delivery or duplicate side-effect prevention. Do not use for
-  tool adapters or suggest_only policy semantics alone.
+  tool adapters, suggest_only policy semantics alone, or suggestion and
+  notification work (AGENTS.md §3).
 ---
 
 # Change Async Reliability
@@ -33,6 +34,7 @@ create duplicate external side effects, per ADR-002.
 - Prompt/decision loop changes without retry/idempotency impact →
   `change-agent-loop`.
 - Need a failure map first → `trace-task-execution`.
+- Suggestions or notifications → AGENTS.md §3.
 
 ## Workflow
 
@@ -46,6 +48,8 @@ create duplicate external side effects, per ADR-002.
    - Idempotency: tool key builder / guards in `ToolExecutor` / tests in
      `tests/idempotent-tool-execution.test.ts`.
    - Stuck detection: `stuck-task-detector.ts`.
+   - Archival and retry shadow: `outbox-archival.ts`, `retry-shadow.ts`.
+   - Cancel topic: `task-cancellation.ts` (`task.cancel.requested`).
 
 2. **Gather context**
    - Which layer: outbox vs task-level retry vs inline RetryManager vs tool

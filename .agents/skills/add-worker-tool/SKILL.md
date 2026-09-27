@@ -4,7 +4,8 @@ description: >-
   Add a new Semantask task-worker execution tool end-to-end (types, Tool
   implementation, registry, policy/grants touchpoints, config, tests). Use when
   introducing a new external action the agent can call. Do not use for policy-only
-  changes, step-loop refactors, or non-tool worker work.
+  changes, step-loop refactors, non-tool worker work, or suggestion, notification,
+  and UI changes (those stay in AGENTS.md §3).
 ---
 
 # Add Worker Tool
@@ -31,7 +32,7 @@ idempotency, and tests. Do not invent a parallel tool system.
   `change-execution-policy`.
 - Changing how the loop chooses/executes tools → `change-agent-loop`.
 - Debugging why an existing tool did not run → `trace-task-execution` first.
-- Suggest-only / coordination UX with no tool adapter → not this skill.
+- Suggest-only / coordination UX with no tool adapter → AGENTS.md §3. There is no coordination skill.
 
 ## Workflow
 
@@ -53,6 +54,14 @@ idempotency, and tests. Do not invent a parallel tool system.
      (grants, prompt guard, idempotency, `TaskAction`) →
      `execution-policy.ts` action-specific checks if needed → config in
      `apps/task-worker/config/tools.ts` → tests.
+   - A new `TaskExecutionActionType` also lands in
+     `packages/services/tool-grant.service.ts` (`assertToolGrant`),
+     `packages/services/tool-normalizers.ts`,
+     `apps/task-worker/services/resolve-tool-params.ts`,
+     `SuggestedWorkTool` in `packages/types/work/suggestion.ts` and
+     `inferSuggestedTool` in `packages/services/work-suggestion-extract.ts`,
+     and tool-grant routes under `apps/web/app/api/admin/tool-grants/` and
+     `apps/web/app/api/organizations/[id]/tool-grants/`.
 
 4. **Evidence / patterns to reuse**
    - Zod `inputSchema` on the tool class; `execute` returns
@@ -103,10 +112,10 @@ idempotency, and tests. Do not invent a parallel tool system.
 - Reuse `Tool` / `ToolRegistry`; do not create a new plugin framework.
 - Do not invent APIs or env vars without adding them to `env.sample` when they
   are required for operators.
-- Do not weaken gates to demo a tool (AGENTS.md §2.1, §6 test-env note).
+- Do not weaken gates to demo a tool (AGENTS.md §2.1, §7 test-env note).
 - Preserve idempotency: stable params must not double-send across lease handoffs.
 - Prefer pure unit tests; avoid live Resend/GitHub/webhook calls.
-- Keep socket persistence boundaries: tools must not import socket mongoose models.
+- Tools do not pull the worker into socket persistence. Socket does not import Mongoose models (AGENTS.md §2.10).
 
 ## Output
 
@@ -140,6 +149,7 @@ idempotency, and tests. Do not invent a parallel tool system.
 
 - [ ] Mirrors an existing tool’s shape
 - [ ] Types catalog + `RequestedToolName` (and grep leftovers) updated
+- [ ] Grants, normalizers, `resolve-tool-params`, `SuggestedWorkTool` / `inferSuggestedTool`, and tool-grant routes updated when the name is new
 - [ ] Registered in `createDefaultToolRegistry`
 - [ ] Policy/grant implications considered
 - [ ] No live network in unit tests
