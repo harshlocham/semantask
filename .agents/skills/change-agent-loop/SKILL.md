@@ -4,7 +4,8 @@ description: >-
   Safely change Semantask planner, StepLoop, memory, tool-ranking, workflow
   templates, or AgentRunner collaborators without breaking the facade split or
   execution gates. Use when editing how the agent plans, decides, or iterates.
-  Do not use for adding tools or policy-only edits.
+  Do not use for adding tools, policy-only edits, or suggestion, notification,
+  and UI work (AGENTS.md §3).
 ---
 
 # Change Agent Loop
@@ -33,6 +34,7 @@ boundaries and suggest-first safety gates.
 - Mode/threshold/deny-list only → `change-execution-policy`.
 - Outbox/lease/retry key mechanics → `change-async-reliability`.
 - Need to understand a failure first → `trace-task-execution`.
+- Suggestions, notifications, or UI → AGENTS.md §3.
 
 ## Workflow
 
@@ -45,6 +47,11 @@ boundaries and suggest-first safety gates.
      `reflection-service.ts`, `tool-ranking.ts`.
    - Workflow: `workflow-registry.ts`, `default-agent-loop.template.ts`,
      registration in `apps/task-worker/index.ts`.
+   - Lifecycle: `task-state-machine.ts`, `execution-state-machine.ts`,
+     `state-projection.ts`, `state-divergence-check.ts`.
+   - Param resolution: `resolve-tool-params.ts`. Entity resolution:
+     `entity-resolution.service.ts`. LLM providers stay a pointer under
+     `services/llm/`; do not add a second planner procedure there.
 
 2. **Gather context**
    - Which loop path is in play: default autonomous iterations inside
