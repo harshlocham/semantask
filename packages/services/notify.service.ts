@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { connectToDatabase } from "@semantask/db";
 import NotifyDedupeModel from "@semantask/db/models/NotifyDedupe";
 import { User } from "@semantask/db/models/User";
+import { createInternalRequestHeaders } from "@semantask/types/utils/internal-bridge-auth";
 
 export type NotifyKind =
     | "task_assigned"
@@ -179,7 +180,7 @@ async function pushSocketNotify(input: NotifyUserInput): Promise<void> {
     try {
         await fetch(`${base.replace(/\/$/, "")}/internal/user-notify`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: createInternalRequestHeaders("socket"),
             body: JSON.stringify({
                 userId: input.userId,
                 payload: {

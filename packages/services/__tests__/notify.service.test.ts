@@ -56,6 +56,9 @@ describe("notify.service", () => {
         delete process.env.SMTP_HOST;
         delete process.env.EMAIL_FROM;
         delete process.env.SOCKET_INTERNAL_URL;
+        delete process.env.INTERNAL_SOCKET_URL;
+        delete process.env.INTERNAL_SECRET;
+        delete process.env.INTERNAL_SECRET_SOCKET;
     });
 
     it("resolves user and skips email when mail is not configured", async () => {
@@ -198,5 +201,42 @@ describe("notify.service", () => {
             })
         );
         expect(notifyDedupeDeleteOne).not.toHaveBeenCalled();
+    });
+
+    it("pushes socket notify with the socket internal secret", async () => {
+        process.env.SOCKET_INTERNAL_URL = "http://socket.test";
+        process.env.INTERNAL_SECRET = "test-internal-secret";
+        userFindById.mockReturnValue({
+            select: () => ({
+                lean: async () => ({
+                    email: "alex@example.com",
+                    username: "Alex",
+                }),
+            }),
+        });
+        fetchMock.mockResolvedValue({
+            ok: true,
+            text: async () => "",
+        });
+
+        await notifyUser({
+            userId: new Types.ObjectId().toString(),
+            kind: "approval_required",
+            subject: "Approval needed",
+            text: "Needs approval",
+            dedupeKey: "test-socket-auth",
+        });
+
+        const socketCall = fetchMock.mock.calls.find(([url]) =>
+            String(url).includes("/internal/user-notify")
+        );
+        expect(socketCall).toBeDefined();
+        expect(socketCall?.[0]).toBe("http://socket.test/internal/user-notify");
+        const headers = socketCall?.[1] && typeof socketCall[1] === "object" && "headers" in socketCall[1]
+            ? (socketCall[1] as { headers: Headers }).headers
+            : undefined;
+        expect(headers).toBeInstanceOf(Headers);
+        expect(headers?.get("x-internal-secret")).toBe("test-internal-secret");
+        expect(headers?.get("content-type")).toBe("application/json");
     });
 });
