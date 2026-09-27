@@ -28,6 +28,9 @@ const LABELED_MESSAGES: Array<{ content: string; expectType: string; actionable?
     { content: "hi there", expectType: "chat", actionable: false },
     { content: "thanks!", expectType: "chat", actionable: false },
     { content: "ok sounds good", expectType: "chat", actionable: false },
+    { content: "Follow up with Priya about the Friday report by 5pm.", expectType: "task", actionable: true },
+    { content: "Follow up with Xame about the Sunday report by 5pm.", expectType: "task", actionable: true },
+    { content: "follow up with @bob in 2 days", expectType: "task", actionable: true },
 ];
 
 function restoreEnvVar(key: string, value: string | undefined) {

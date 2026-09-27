@@ -20,7 +20,7 @@ const VirtualConversationList = () => {
     return (
         <div
             ref={parentRef}
-            className="flex-1 overflow-y-auto custom-scrollbar"
+            className="custom-scrollbar h-full overflow-y-auto"
         >
             <div
                 style={{

@@ -31,6 +31,18 @@ const COLUMN_LABELS: Record<BoardStatus, string> = {
     done: "Done",
 };
 
+function runStateLabel(status: string) {
+    const labels: Record<string, string> = {
+        pending: "Pending",
+        executing: "Executing",
+        completed: "Completed",
+        failed: "Failed",
+        partial: "Partial",
+        waiting_for_input: "Waiting for input",
+    };
+    return labels[status] ?? status;
+}
+
 function formatDue(iso: string | null) {
     if (!iso) return "No due date";
     const value = new Date(iso);
@@ -51,7 +63,7 @@ function groupByBoardStatus(items: TaskRecord[]): Record<BoardStatus, TaskRecord
 }
 
 export function WorkBoardView() {
-    const { organizationId, organization } = useActiveOrganization();
+    const { organizationId, organization, organizationScopeReady } = useActiveOrganization();
     const searchParams = useSearchParams();
     const highlightedTaskId = searchParams.get("task");
     const queryConversationId = searchParams.get("conversationId")?.trim() ?? "";
@@ -99,6 +111,7 @@ export function WorkBoardView() {
 
     const scopedConversationId = conversationId.trim() || undefined;
     const resolvingDeepLink = Boolean(highlightedTaskId && !deepLinkResolved);
+    const waitingForScope = !organizationScopeReady && !scopedConversationId && !resolvingDeepLink;
     const hasScope = Boolean(organizationId || scopedConversationId || resolvingDeepLink);
 
     const listQuery = useWorkBoardList({
@@ -108,7 +121,7 @@ export function WorkBoardView() {
         limit: WORK_BOARD_PAGE_LIMIT,
         priority: priorityFilter || undefined,
         due: dueFilter,
-        enabled: deepLinkResolved,
+        enabled: deepLinkResolved && !waitingForScope,
     });
     const moveMutation = useMoveWorkBoardCard(listQuery.listParams);
 
@@ -234,7 +247,18 @@ export function WorkBoardView() {
                 </CardContent>
             </Card>
 
-            {!hasScope ? (
+            {waitingForScope ? (
+                <div className="grid gap-4 md:grid-cols-3" data-testid="work-board-loading">
+                    {[0, 1, 2].map((index) => (
+                        <div
+                            key={index}
+                            className="h-40 animate-pulse rounded-md border border-border bg-muted/40"
+                        />
+                    ))}
+                </div>
+            ) : null}
+
+            {!waitingForScope && !hasScope ? (
                 <Card data-testid="work-board-onboarding">
                     <CardContent className="space-y-3 p-6 text-sm">
                         <p className="font-medium">Choose a scope to load the board</p>
@@ -318,6 +342,20 @@ export function WorkBoardView() {
                                     </CardHeader>
                                     <CardContent className="space-y-3 text-sm">
                                         <dl className="grid gap-2">
+                                            <div>
+                                                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                    Board
+                                                </dt>
+                                                <dd className="font-medium">{COLUMN_LABELS[task.boardStatus]}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                    Run
+                                                </dt>
+                                                <dd className="font-medium" data-testid="work-board-run-state">
+                                                    {runStateLabel(task.status)}
+                                                </dd>
+                                            </div>
                                             <div>
                                                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                                                     Priority

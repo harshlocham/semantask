@@ -266,7 +266,7 @@ export async function loginWithGoogleCode({
         throw new Error("Google account email is missing or unverified");
     }
 
-    const { user: existingOrCreatedUser } = await resolveGoogleUserProviderAware(profile);
+    const { user: existingOrCreatedUser, created } = await resolveGoogleUserProviderAware(profile);
     let user = await ensureGoogleProviderLinked(existingOrCreatedUser, profile);
 
     if (!user) {
@@ -304,5 +304,6 @@ export async function loginWithGoogleCode({
         user,
         accessToken,
         refreshToken,
+        created,
     };
 }

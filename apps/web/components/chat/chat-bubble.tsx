@@ -14,6 +14,7 @@ import {
     Edit,
     Trash2,
     Paperclip,
+    MoreHorizontal,
 } from "lucide-react";
 import { ReactionBar } from "../chat/reaction-bar";
 import { ClientUser } from "@semantask/types";
@@ -21,9 +22,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UIMessage } from "@semantask/types";
 import ChatBubbleAvatar from "../home/chat-bubble-avatar";
 import { IntentBadge } from "./intent-badge";
+import { ConversationSuggestionCard } from "./conversation-suggestion-card";
 import { reviewSuggestionHref } from "@/lib/work-suggestions/map";
 import { DEEP_LINK_HIGHLIGHT_CLASS } from "@/lib/deep-link-highlight";
 import { cn } from "@/lib/utils/utils";
+import { useUser } from "@/context/UserContext";
+import type { WorkSuggestionRecord } from "@semantask/types";
 
 interface ChatBubbleProps {
     message: UIMessage;
@@ -35,6 +39,8 @@ interface ChatBubbleProps {
     showUsername?: boolean;
     /** Existing WorkSuggestion id for this message, if any. */
     suggestionId?: string | null;
+    /** Full suggestion record when the conversation store has one. */
+    suggestion?: WorkSuggestionRecord | null;
     highlighted?: boolean;
 }
 
@@ -76,10 +82,12 @@ const ChatBubble = ({
     showAvatar = true,
     showUsername = true,
     suggestionId = null,
+    suggestion = null,
     highlighted = false,
 }: ChatBubbleProps) => {
     const selectedConversation = useChatStore((s) => s.selectedConversation);
     const setEditingMessage = useChatStore((s) => s.setEditingMessage);
+    const { user: me } = useUser();
     const [showReactions, setShowReactions] = useState(false);
     //const [hovered, setHovered] = useState(false);
     const senderId =
@@ -257,45 +265,90 @@ const ChatBubble = ({
         }
     };
 
+    const senderInfo = isUser(message.sender)
+        ? message.sender
+        : isMine && me
+            ? { username: me.username, profilePicture: me.profilePicture }
+            : null;
+    const senderName = senderInfo?.username ?? "Unknown";
+    const showHeader = showAvatar || showUsername;
+    const timeLabel = new Date(message.createdAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+    const receipt = receiptState === "sending"
+        ? <span className="text-[11px] text-muted-foreground">Sending…</span>
+        : receiptState === "sent"
+            ? <span className="text-[11px] text-muted-foreground" aria-label="Sent">✓</span>
+            : receiptState === "delivered"
+                ? <span className="text-[11px] text-muted-foreground" aria-label="Delivered">✓✓</span>
+                : receiptState === "seen"
+                    ? <span className="text-[11px] text-primary" aria-label="Seen">✓✓</span>
+                    : null;
+    const intentBadge = message.aiStatus === "classified" && message.semanticType && !suggestion ? (
+        <IntentBadge
+            semanticType={message.semanticType}
+            confidence={message.semanticConfidence}
+            reviewHref={reviewSuggestionHref(suggestionId)}
+        />
+    ) : null;
+
     return (
         <div
             id={String(message._id)}
             data-highlighted={highlighted ? "true" : "false"}
             className={cn(
-                "flex w-full px-1 sm:px-2 md:px-3",
-                isMine ? "justify-end" : "justify-start",
+                "group relative flex w-full gap-2.5 rounded-lg px-2 transition-colors hover:bg-muted/40",
+                showHeader ? "mt-1.5 pb-1 pt-1.5" : "py-0.5",
                 highlighted && DEEP_LINK_HIGHLIGHT_CLASS
             )}
         >
-            {/* Avatar only for others in group chats, and only if showAvatar */}
-            {!isMine && selectedConversation?.isGroup && isUser(message.sender) && showAvatar && (
-                <ChatBubbleAvatar
-                    isGroup={selectedConversation?.isGroup}
-                    isMember={true}
-                    sender={message.sender}
-                />
-            )}
-            <div
-                className={`group relative flex max-w-[88%] flex-col sm:max-w-[78%] md:max-w-[70%] lg:max-w-[65%] ${isMine ? "items-end" : "items-start"}`}
-            >
-                {/* Username for first message in group */}
-                {!isMine && showUsername && selectedConversation?.isGroup && isUser(message.sender) && (
-                    <div className="mb-1 text-xs font-semibold text-[hsl(var(--muted-foreground))]">
-                        {message.sender.username}
-                    </div>
+            <div className="w-8 shrink-0">
+                {showHeader ? (
+                    <ChatBubbleAvatar
+                        sender={senderInfo ?? { username: senderName }}
+                        showPresence={!isMine && Boolean(selectedConversation?.isGroup)}
+                    />
+                ) : (
+                    <span className="block pt-0.5 text-right text-[10px] leading-5 text-muted-foreground opacity-0 group-hover:opacity-100">
+                        {timeLabel}
+                    </span>
                 )}
-                {message.aiStatus === "classified" && message.semanticType ? (
-                    <div className={`mb-1 ${isMine ? "self-end" : "self-start"}`}>
-                        <IntentBadge
-                            semanticType={message.semanticType}
-                            confidence={message.semanticConfidence}
-                            reviewHref={reviewSuggestionHref(suggestionId)}
-                        />
+            </div>
+            <div className="relative flex min-w-0 max-w-2xl flex-1 flex-col items-start">
+                {showHeader ? (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-[13px] font-semibold text-foreground">{senderName}</span>
+                        <time
+                            className="text-[11px] text-muted-foreground"
+                            dateTime={new Date(message.createdAt).toISOString()}
+                        >
+                            {timeLabel}
+                        </time>
+                        {receipt}
+                        {intentBadge}
+                    </div>
+                ) : intentBadge || receiptState === "sending" ? (
+                    <div className="flex items-center gap-2">
+                        {intentBadge}
+                        {receiptState === "sending" ? receipt : null}
                     </div>
                 ) : null}
-                {/* Modern SaaS-style reaction badges */}
+                <div
+                    className={cn(
+                        "w-full text-foreground",
+                        message.messageType !== "text" && "mt-1 max-w-sm"
+                    )}
+                >
+                    {/* Reply preview (full: name + snippet) */}
+                    {(message).repliedTo && getRepliedPreview()}
+
+                    {/* Main content */}
+                    {renderContent()}
+                </div>
+
                 {hasReactions && !message.isDeleted && (
-                    <div className={`absolute -top-3 ${isMine ? "right-4" : "left-4"} flex gap-1 z-20`}>
+                    <div className="mt-1 flex flex-wrap gap-1">
                         <AnimatePresence>
                             {Object.entries(groupedReactions).map(([emoji, users]) => {
                                 const reactedByMe = users.some((u) => String(u) === String(currentUserId));
@@ -306,7 +359,12 @@ const ChatBubble = ({
                                         animate={{ scale: 1, y: 0, opacity: 1 }}
                                         exit={{ scale: 0, opacity: 0 }}
                                         transition={{ type: "spring", stiffness: 350, damping: 20 }}
-                                        className={`rounded-full px-2 py-0.5 text-[11px] shadow ${reactedByMe ? "bg-green-primary text-white" : "bg-[hsl(var(--gray-primary))] text-[hsl(var(--foreground))]"}`}
+                                        className={cn(
+                                            "rounded-full border px-1.5 py-0.5 text-[11px]",
+                                            reactedByMe
+                                                ? "border-primary/30 bg-primary/10 text-primary"
+                                                : "border-border bg-muted/50 text-foreground"
+                                        )}
                                     >
                                         {emoji}
                                         {users.length > 1 && ` ${users.length}`}
@@ -316,60 +374,6 @@ const ChatBubble = ({
                         </AnimatePresence>
                     </div>
                 )}
-                <div
-                    className={`w-full rounded-2xl transition duration-300 ease-in-out relative
-                        ${isMine
-                            ? "bg-[hsl(var(--green-chat))] text-[hsl(var(--foreground))]"
-                            : "border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))]"
-                        }
-                        ${(message).messageType !== "text"
-                            ? "p-0 bg-transparent shadow-none"
-                            : "p-3 shadow-sm sm:p-4"
-                        }
-                        `}
-                >
-                    {/* Reply preview (full: name + snippet) */}
-                    {(message).repliedTo && getRepliedPreview()}
-
-                    {/* Main content */}
-                    {renderContent()}
-
-                    {/* Dropdown for message actions (fallback for mobile) */}
-                    {("isDeleted" in message ? !message.isDeleted : true) && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <button className="z-10 absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition">
-                                    <span className="text-[hsl(var(--muted-foreground))]">•••</span>
-                                </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent side={isMine ? "left" : "right"}>
-                                <DropdownMenuItem onClick={() => setShowReactions(true)}>
-                                    <Smile className="w-4 h-4 mr-2" /> React
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onReply(message)}>
-                                    <MessageCircle className="w-4 h-4 mr-2" /> Reply
-                                </DropdownMenuItem>
-                                {isMine && (
-                                    <>
-                                        {message.messageType === "text" && (<DropdownMenuItem
-                                            onClick={() =>
-                                                setEditingMessage(message)
-
-                                            }
-                                        >
-                                            <Edit className="w-4 h-4 mr-2" /> Edit
-                                        </DropdownMenuItem>)}
-                                        <DropdownMenuItem
-                                            onClick={() => onDelete(message._id)}
-                                        >
-                                            <Trash2 className="w-4 h-4 mr-2 text-red-500" /> Delete
-                                        </DropdownMenuItem>
-                                    </>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                </div>
 
                 {/* Reaction picker bar */}
                 {showReactions && (
@@ -382,30 +386,47 @@ const ChatBubble = ({
                     />
                 )}
 
-                {/* Timestamp */}
-                <div className="flex items-center gap-1 mt-1">
-                    <span
-                        className={`block w-full text-[10px] ${isMine ? "ml-auto text-right text-[hsl(var(--muted-foreground))]" : "text-left text-[hsl(var(--muted-foreground))]"}`}
-                    >
-                        {new Date(message.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                        })}
-                    </span>
-                    {receiptState === "sending" && (
-                        <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">...</span>
-                    )}
-                    {receiptState === "sent" && (
-                        <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">✓</span>
-                    )}
-                    {receiptState === "delivered" && (
-                        <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">✓✓</span>
-                    )}
-                    {receiptState === "seen" && (
-                        <span className="ml-1 text-xs text-[hsl(var(--green-primary))]">✓✓</span>
-                    )}
-                </div>
+                {suggestion ? <ConversationSuggestionCard suggestion={suggestion} /> : null}
             </div>
+
+            {("isDeleted" in message ? !message.isDeleted : true) && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <button
+                            type="button"
+                            className="absolute right-2 top-1 z-10 inline-flex h-6 w-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground opacity-0 shadow-sm transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                            aria-label="Message actions"
+                        >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="left" align="start">
+                        <DropdownMenuItem onClick={() => setShowReactions(true)}>
+                            <Smile className="w-4 h-4 mr-2" /> React
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onReply(message)}>
+                            <MessageCircle className="w-4 h-4 mr-2" /> Reply
+                        </DropdownMenuItem>
+                        {isMine && (
+                            <>
+                                {message.messageType === "text" && (<DropdownMenuItem
+                                    onClick={() =>
+                                        setEditingMessage(message)
+
+                                    }
+                                >
+                                    <Edit className="w-4 h-4 mr-2" /> Edit
+                                </DropdownMenuItem>)}
+                                <DropdownMenuItem
+                                    onClick={() => onDelete(message._id)}
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2 text-red-500" /> Delete
+                                </DropdownMenuItem>
+                            </>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
         </div>
     );
 };

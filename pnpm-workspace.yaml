@@ -17,9 +17,14 @@ minimumReleaseAgeExclude:
   - brace-expansion@5.0.9
   - socket.io-parser@4.2.7
   - ip-address@10.3.1
-  - js-yaml@3.15.1
-  - js-yaml@4.3.1
+  - js-yaml@3.15.2
+  - js-yaml@4.3.2
   - js-yaml@5.2.1
+  - "@xmldom/xmldom@0.8.15"
+  - "@xmldom/xmldom@0.9.12"
+  - next@15.5.24
+  - nodemailer@9.1.0
+  - sharp@0.35.4
   - nanoid@3.3.18
   - nanoid@5.1.16
   - tar@7.5.22
@@ -38,7 +43,7 @@ auditConfig:
 overrides:
   react: "19.1.0"
   react-dom: "19.1.0"
-  next: "15.5.21"
+  next: "15.5.24"
   prettier: "^3.6.2"
   shell-quote: "^1.9.0"
   postcss: "^8.5.18"
@@ -46,7 +51,7 @@ overrides:
   jest-mock: "30.4.1"
   # GHSA-r292-9mhp-454m — node-tar mapHas stack-overflow DoS
   tar: "^7.5.21"
-  sharp: "^0.35.0"
+  sharp: "^0.35.4"
   axios: "^1.18.0"
   # GHSA-mh99-v99m-4gvg / GHSA-rgw5-rvv9-x895 — keep each major on its patched line for minimatch compat.
   "brace-expansion@<1.1.18": "1.1.18"
@@ -58,10 +63,13 @@ overrides:
   "socket.io-parser@>=4.0.0 <4.2.7": "4.2.7"
   # GHSA-mwp4-54f8-5fhr — socks → ip-address <=10.3.0
   "ip-address@<=10.3.0": "10.3.1"
-  # GHSA-5p4m-2wfm-xmqj — CVE-2026-59870 !!omap DoS; keep each major on patched line
-  "js-yaml@>=3 <3.15.1": "3.15.1"
-  "js-yaml@>=4 <4.3.1": "4.3.1"
+  # GHSA-5p4m-2wfm-xmqj / GHSA-2883-xcg3-v3hh — keep each major on patched line
+  "js-yaml@>=3 <3.15.2": "3.15.2"
+  "js-yaml@>=4 <4.3.2": "4.3.2"
   "js-yaml@>=5 <5.2.1": "5.2.1"
+  # xmldom injection / ReDoS / quadratic parse — keep 0.8 and 0.9 on patched lines
+  "@xmldom/xmldom@>=0.7.0 <0.8.15": "0.8.15"
+  "@xmldom/xmldom@>=0.9.0 <0.9.12": "0.9.12"
   "ws@>=6.0.0 <6.2.4": "^6.2.4"
   "ws@>=7.0.0 <7.5.11": "^7.5.11"
   "ws@>=8.0.0 <8.21.0": "^8.21.0"

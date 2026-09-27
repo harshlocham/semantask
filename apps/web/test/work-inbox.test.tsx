@@ -131,6 +131,20 @@ describe("WorkInboxView", () => {
         expect(decideTaskApproval).not.toHaveBeenCalled();
     });
 
+    it("uses the review queue tabs to select existing statuses", async () => {
+        renderWithQuery(<WorkInboxView />);
+        expect(await screen.findByTestId("work-inbox-status")).toHaveValue("proposed");
+        expect(screen.getByTestId("work-inbox-queue-proposed")).toHaveAttribute("aria-pressed", "true");
+
+        fireEvent.click(screen.getByTestId("work-inbox-queue-converted"));
+        expect(screen.getByTestId("work-inbox-status")).toHaveValue("converted");
+        expect(screen.getByTestId("work-inbox-queue-converted")).toHaveAttribute("aria-pressed", "true");
+
+        fireEvent.click(screen.getByTestId("work-inbox-queue-dismissed"));
+        expect(screen.getByTestId("work-inbox-status")).toHaveValue("dismissed");
+        expect(listWorkSuggestions).not.toHaveBeenCalled();
+    });
+
     it("loads org-scoped suggestions with triage actions and links to detail", async () => {
         window.localStorage.setItem("semantask.activeOrganizationId", "507f1f77bcf86cd799439015");
         listWorkSuggestions.mockResolvedValue({

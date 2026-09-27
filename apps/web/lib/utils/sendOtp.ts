@@ -1,27 +1,7 @@
-import nodemailer from "nodemailer";
-import { getSmtpConfig } from "@/lib/config/smtp";
-
-function getTransporter() {
-    const smtp = getSmtpConfig();
-
-    if (!smtp.user || !smtp.pass) {
-        throw new Error("SMTP credentials are not configured");
-    }
-
-    return nodemailer.createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.port === 465,
-        auth: { user: smtp.user, pass: smtp.pass },
-    });
-}
+import { sendTransactionalEmail } from "@/lib/utils/send-email";
 
 export async function sendOtpEmail(email: string, otp: string): Promise<void> {
-    const transporter = getTransporter();
-    const smtp = getSmtpConfig();
-
-    await transporter.sendMail({
-        from: smtp.from,
+    await sendTransactionalEmail({
         to: email,
         subject: "Your verification code",
         text: `Your OTP is ${otp}. It expires in 5 minutes.`,

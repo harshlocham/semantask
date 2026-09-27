@@ -11,13 +11,6 @@ const getTaskApprovals = jest.fn();
 const decideTaskApproval = jest.fn();
 const listOrganizations = jest.fn();
 
-jest.mock("@/lib/utils/api", () => ({
-    ApiHttpError,
-    getTaskApprovals: (...args: unknown[]) => getTaskApprovals(...args),
-    decideTaskApproval: (...args: unknown[]) => decideTaskApproval(...args),
-    listOrganizations: (...args: unknown[]) => listOrganizations(...args),
-}));
-
 class ApiHttpError extends Error {
     status: number;
     constructor(status: number, message: string) {
@@ -31,6 +24,7 @@ jest.mock("@/lib/utils/api", () => ({
     ApiHttpError,
     getTaskApprovals: (...args: unknown[]) => getTaskApprovals(...args),
     decideTaskApproval: (...args: unknown[]) => decideTaskApproval(...args),
+    listOrganizations: (...args: unknown[]) => listOrganizations(...args),
 }));
 
 import { InboxApprovalsView } from "@/components/work-suggestions/inbox-approvals";
@@ -79,7 +73,18 @@ describe("InboxApprovalsView", () => {
         getTaskApprovals.mockReset();
         decideTaskApproval.mockReset();
         listOrganizations.mockReset();
-        listOrganizations.mockResolvedValue([]);
+        listOrganizations.mockResolvedValue([
+            {
+                id: "507f1f77bcf86cd799439015",
+                name: "Acme",
+                slug: "acme",
+                status: "active",
+                createdBy: "user-1",
+                createdAt: "2026-08-08T10:00:00.000Z",
+                updatedAt: "2026-08-08T10:00:00.000Z",
+                role: "owner",
+            },
+        ]);
         window.localStorage.clear();
         window.localStorage.setItem("semantask.activeOrganizationId", "507f1f77bcf86cd799439015");
     });
@@ -95,6 +100,9 @@ describe("InboxApprovalsView", () => {
 
         renderWithQuery(<InboxApprovalsView />);
         expect(await screen.findByTestId("inbox-approvals-loading")).toBeInTheDocument();
+        await waitFor(() => {
+            expect(getTaskApprovals).toHaveBeenCalled();
+        });
 
         resolveLoad({ approvals: [] });
         expect(await screen.findByTestId("inbox-approvals-empty")).toBeInTheDocument();
@@ -147,6 +155,27 @@ describe("InboxApprovalsView", () => {
             expect(getTaskApprovals).toHaveBeenCalledTimes(2);
         });
         expect(await screen.findByTestId("inbox-approvals-empty")).toBeInTheDocument();
+    });
+
+    it("does not fetch organization-wide approvals for members", async () => {
+        listOrganizations.mockResolvedValue([
+            {
+                id: "507f1f77bcf86cd799439015",
+                name: "Acme",
+                slug: "acme",
+                status: "active",
+                createdBy: "user-1",
+                createdAt: "2026-08-08T10:00:00.000Z",
+                updatedAt: "2026-08-08T10:00:00.000Z",
+                role: "member",
+            },
+        ]);
+
+        renderWithQuery(<InboxApprovalsView />);
+
+        const error = await screen.findByTestId("inbox-approvals-error");
+        expect(error).toHaveTextContent(/owners and admins/i);
+        expect(getTaskApprovals).not.toHaveBeenCalled();
     });
 
     it("surfaces forbidden access clearly for unauthorized callers", async () => {

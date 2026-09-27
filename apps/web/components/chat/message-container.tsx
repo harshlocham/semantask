@@ -48,7 +48,7 @@ const MessageContainer = ({ conversationId }: MessageContainerProps) => {
 
     useConversationPresence(conversationId);
     useMessageDelivery({ conversationId, currentUserId });
-    const { getSuggestionId } = useConversationWorkSuggestions(conversationId);
+    const { getSuggestionId, getSuggestion } = useConversationWorkSuggestions(conversationId);
 
     const fetchMessages = useCallback(async (cursor?: string, signal?: AbortSignal) => {
         if (!sel) return;
@@ -221,17 +221,17 @@ const MessageContainer = ({ conversationId }: MessageContainerProps) => {
     const grouped = groupMessages(messages);
 
     return (
-        <div className="relative h-full min-h-0 flex-1 overflow-y-auto bg-[hsl(var(--container))] bg-chat-tile-light bg-repeat pb-24 text-[hsl(var(--foreground))] dark:bg-chat-tile-dark sm:pb-28 lg:pb-0">
+        <div className="relative h-full min-h-0 flex-1 overflow-y-auto bg-background pb-24 text-foreground sm:pb-28 lg:pb-0">
             {/* Floating New Messages button */}
             {newMessages && (
                 <button
-                    className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 animate-fade-in rounded-full bg-green-primary px-4 py-2 text-sm text-white shadow-lg sm:bottom-32 lg:bottom-24"
+                    className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 animate-fade-in rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg sm:bottom-32 lg:bottom-24"
                     onClick={scrollToBottom}
                 >
                     New Messages
                 </button>
             )}
-            <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-3 px-2 py-3 sm:px-4 sm:py-4 md:px-6">
+            <div className="flex h-full w-full flex-col px-3 py-3">
                 <div ref={topRef} />
                 <AnimatePresence initial={false}>
                     {user && grouped.map((group) => (
@@ -261,6 +261,7 @@ const MessageContainer = ({ conversationId }: MessageContainerProps) => {
                                     showAvatar={group.showAvatar && i === 0}
                                     showUsername={group.showUsername && i === 0}
                                     suggestionId={getSuggestionId(String(msg._id))}
+                                    suggestion={getSuggestion(String(msg._id))}
                                     highlighted={highlightedMessageId === String(msg._id)}
                                 />
                             ))}

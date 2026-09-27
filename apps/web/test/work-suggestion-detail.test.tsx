@@ -55,7 +55,7 @@ describe("WorkSuggestionDetailView", () => {
             />
         );
         expect(screen.getByTestId("work-suggestion-forbidden")).toHaveTextContent("Forbidden");
-        expect(screen.getByRole("link", { name: /back to chat/i })).toHaveAttribute("href", "/");
+        expect(screen.getByRole("link", { name: /back to chat/i })).toHaveAttribute("href", "/app");
     });
 
     it("shows not found state for 404", () => {
@@ -83,7 +83,7 @@ describe("WorkSuggestionDetailView", () => {
             "Failed to load suggestion"
         );
         expect(screen.queryByTestId("work-suggestion-not-found")).not.toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /back to chat/i })).toHaveAttribute("href", "/");
+        expect(screen.getByRole("link", { name: /back to chat/i })).toHaveAttribute("href", "/app");
     });
 
     it("renders suggestion detail on success", () => {

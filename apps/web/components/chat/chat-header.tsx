@@ -11,6 +11,7 @@ interface ChatHeaderProps {
     isGroup: boolean;
     onBack: () => void;
     onClearSelection: () => void;
+    onOpenTasks?: () => void;
 }
 
 export default function ChatHeader({
@@ -20,21 +21,21 @@ export default function ChatHeader({
     isGroup,
     onBack,
     onClearSelection,
+    onOpenTasks,
 }: ChatHeaderProps) {
     return (
-        <div className="sticky top-0 z-30 border-b border-[hsl(var(--border))] bg-[hsl(var(--gray-primary))] px-3 py-2 sm:p-3">
-            <div className="flex items-center justify-between">
-                <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b border-border bg-background px-3">
+                <div className="flex min-w-0 items-center gap-2">
                     <button
                         type="button"
                         onClick={onBack}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] lg:hidden"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground lg:hidden"
                         aria-label="Back to conversations"
                     >
                         <ArrowLeft size={18} />
                     </button>
 
-                    <Avatar>
+                    <Avatar className="h-7 w-7">
                         <AvatarImage
                             src={avatarSrc}
                             alt={conversationName || "User avatar"}
@@ -46,20 +47,32 @@ export default function ChatHeader({
                     </Avatar>
 
                     <div className="flex min-w-0 flex-col">
-                        <p className="truncate text-sm font-medium text-[hsl(var(--foreground))] sm:text-base">{conversationName}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{conversationName}</p>
                         {isGroup && <GroupMembersDialog />}
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={onClearSelection}
-                    className="hidden h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--chat-hover))] lg:inline-flex"
-                    aria-label="Close conversation"
-                >
-                    <X size={18} />
-                </button>
-            </div>
+                <div className="flex items-center gap-2">
+                    {onOpenTasks ? (
+                        <button
+                            type="button"
+                            onClick={onOpenTasks}
+                            className="inline-flex h-8 items-center rounded-md border border-border px-2.5 text-xs font-medium text-foreground lg:hidden"
+                            data-testid="open-task-drawer"
+                            aria-label="Open work"
+                        >
+                            Work
+                        </button>
+                    ) : null}
+                    <button
+                        type="button"
+                        onClick={onClearSelection}
+                        className="hidden h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent lg:inline-flex"
+                        aria-label="Close conversation"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
         </div>
     );
 }

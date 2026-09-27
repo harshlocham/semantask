@@ -4,15 +4,16 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import type { TaskExecutionEventRecord, TaskRecord, TaskStatus } from "@semantask/types";
+import type { BoardStatus, TaskExecutionEventRecord, TaskRecord } from "@semantask/types";
 import { authenticatedFetch } from "@/lib/utils/api";
 import { getSocket } from "@/hooks/socketClient";
 import { useTaskExecution } from "@/hooks/useTaskExecution";
 import { useDeepLinkScroll } from "@/hooks/useDeepLinkScroll";
 import useTaskStore from "@/store/task-store";
 import { Button } from "@/components/ui/button";
-import { Check, Loader2, Sparkles } from "lucide-react";
+import { Check, ListChecks, Loader2 } from "lucide-react";
 import { taskHref } from "@/lib/work-links";
+import { PriorityBadge } from "@/components/work-suggestions/priority-badge";
 import { reviewSuggestionHref } from "@/lib/work-suggestions/map";
 import {
     DEEP_LINK_HIGHLIGHT_CLASS,
@@ -22,9 +23,15 @@ import { cn } from "@/lib/utils/utils";
 
 interface TaskPanelProps {
     conversationId: string;
+    mobileOpen?: boolean;
+    onMobileOpenChange?: (open: boolean) => void;
 }
 
-const TASK_STATUSES: TaskStatus[] = ["pending", "executing", "completed", "failed", "partial"];
+const BOARD_STATUSES: { value: BoardStatus; label: string }[] = [
+    { value: "todo", label: "Todo" },
+    { value: "doing", label: "Doing" },
+    { value: "done", label: "Done" },
+];
 const EMPTY_TASK_IDS: string[] = [];
 const EMPTY_STEPS: ExecutionStep[] = [];
 const EMPTY_EXECUTION_EVENTS: TaskExecutionEventRecord[] = [];
@@ -41,7 +48,7 @@ interface ExecutionStep {
 interface TaskInlineCardProps {
     task: TaskRecord;
     highlighted?: boolean;
-    onStatusChange: (taskId: string, status: TaskStatus) => void;
+    onBoardStatusChange: (taskId: string, status: BoardStatus) => void;
     onCancel: (taskId: string) => Promise<void>;
 }
 
@@ -49,7 +56,7 @@ function formatDueDate(value: string | null) {
     if (!value) return "No due date";
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return "No due date";
-    return parsed.toLocaleDateString();
+    return parsed.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
 function getProgressValue(steps: ExecutionStep[]) {
@@ -152,7 +159,9 @@ const StepRow = memo(function StepRow({
 
             <div className="min-w-0 flex-1">
                 <p className={`text-sm font-medium ${tone.text}`}>{step.label}</p>
-                <p className={`mt-0.5 text-xs leading-5 ${tone.detail}`}>{step.detail}</p>
+                {step.detail ? (
+                    <p className={`mt-0.5 text-xs leading-5 ${tone.detail}`}>{step.detail}</p>
+                ) : null}
             </div>
         </motion.div>
     );
@@ -166,7 +175,7 @@ function canCancelTask(task: TaskRecord): boolean {
         && !task.cancelRequestedAt;
 }
 
-function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }: TaskInlineCardProps) {
+function TaskInlineCard({ task, highlighted = false, onBoardStatusChange, onCancel }: TaskInlineCardProps) {
     const shouldReduceMotion = useReducedMotion();
     const executionView = useTaskExecution(task._id);
     const setExecutionEvents = useTaskStore((state) => state.setExecutionEvents);
@@ -188,7 +197,15 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
     );
 
     const progress = executionView.progress > 0 ? executionView.progress : getProgressValue(steps);
-    const hasRunningStep = steps.some((step) => step.status === "running") || task.status === "executing";
+    const executionFailed = task.status === "failed" || Boolean(executionView.failureReason && !executionView.approvalPending);
+    const executionTerminal = executionFailed || task.status === "completed";
+    const visibleSteps = executionView.approvalPending || executionTerminal
+        ? []
+        : steps.filter((step) => step.label.trim().length > 0);
+    const hasRunningStep = task.status === "executing"
+        && visibleSteps.some((step) => step.status === "running");
+    const showApproval = executionView.approvalPending && !executionFailed && task.status !== "completed";
+    const showProgress = visibleSteps.length > 0 && !executionTerminal;
     const showCancel = canCancelTask(task);
 
     const replayExecutionEvents = useCallback(async () => {
@@ -250,21 +267,19 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
             exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className={cn(
-                "overflow-hidden rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm backdrop-blur-sm",
+                "overflow-hidden rounded-lg border border-border bg-background p-3 text-card-foreground",
                 highlighted && DEEP_LINK_HIGHLIGHT_CLASS
             )}
         >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+                <span
+                    aria-hidden="true"
+                    className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+                >
+                    <ListChecks className="h-3.5 w-3.5" />
+                </span>
                 <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                        <span className="rounded-full border border-border bg-muted/60 px-2.5 py-1 text-foreground">
-                            {task.source === "ai" ? "From chat" : task.source === "manual" ? "Manual task" : "Imported task"}
-                        </span>
-                        <span className="rounded-full border border-border bg-muted/60 px-2.5 py-1 text-foreground">
-                            {task.status.replace("_", " ")}
-                        </span>
-                    </div>
-                    <h4 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                    <h4 className="truncate text-[13px] font-semibold text-foreground">
                         <Link
                             href={taskHref(task._id)}
                             className="hover:underline"
@@ -273,50 +288,40 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
                             {task.title}
                         </Link>
                     </h4>
-                    {task.suggestionId ? (
-                        <Link
-                            href={reviewSuggestionHref(task.suggestionId) ?? "#"}
-                            className="mt-1 inline-block text-[11px] underline underline-offset-2 text-muted-foreground hover:text-foreground"
-                            data-testid="task-panel-suggestion-link"
-                        >
-                            Suggestion
-                        </Link>
-                    ) : null}
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
+                        {task.priority ? <PriorityBadge priority={task.priority} className="py-0" /> : null}
+                        <span>{task.source === "ai" ? "From chat" : task.source === "manual" ? "Manual" : "Imported"}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{task.dueAt ? `Due ${formatDueDate(task.dueAt)}` : "No due date"}</span>
+                        {task.suggestionId ? (
+                            <>
+                                <span aria-hidden="true">·</span>
+                                <Link
+                                    href={reviewSuggestionHref(task.suggestionId) ?? "#"}
+                                    className="underline underline-offset-2 hover:text-foreground"
+                                    data-testid="task-panel-suggestion-link"
+                                >
+                                    Suggestion
+                                </Link>
+                            </>
+                        ) : null}
+                    </p>
                     {task.description && (
-                        <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{task.description}</p>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{task.description}</p>
                     )}
                 </div>
-
-                <label className="flex flex-col gap-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Run status
-                    <select
-                    value={task.status}
-                    className="rounded-lg border border-input bg-background px-2.5 py-2 text-xs normal-case tracking-normal text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-                    onChange={(event) => onStatusChange(task._id, event.target.value as TaskStatus)}
-                >
-                    {TASK_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                            {status.replace("_", " ")}
-                        </option>
-                    ))}
-                </select>
-                </label>
             </div>
 
-            <div className="mt-4">
-                {executionView.runId && (
-                    <p className="mb-2 font-mono text-[10px] text-muted-foreground">
-                        run {executionView.runId}
-                        {executionView.durationMs !== null ? ` · ${Math.round(executionView.durationMs / 1000)}s` : ""}
+            <div className={cn((executionView.failureReason || executionView.retryStatus || showApproval || task.cancelRequestedAt || hasRunningStep || visibleSteps.length > 0) && "mt-2.5")}>
+                {executionFailed && executionView.failureReason ? (
+                    <p className="mb-2 text-xs text-destructive" data-testid="task-panel-failure">
+                        {executionView.failureReason}
                     </p>
-                )}
-                {executionView.failureReason && (
-                    <p className="mb-2 text-xs text-destructive">{executionView.failureReason}</p>
-                )}
-                {executionView.retryStatus && (
+                ) : null}
+                {executionView.retryStatus && !executionTerminal ? (
                     <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">{executionView.retryStatus}</p>
-                )}
-                {executionView.approvalPending && (
+                ) : null}
+                {showApproval ? (
                     <div className="mb-2 space-y-1">
                         <p className="text-xs text-amber-700 dark:text-amber-300">
                             Awaiting human approval to allow AI tools
@@ -325,11 +330,11 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
                             <Link href="/inbox/approvals">Allow AI tools</Link>
                         </Button>
                     </div>
-                )}
+                ) : null}
                 {task.cancelRequestedAt && task.status !== "failed" && task.status !== "completed" && (
                     <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">Cancellation requested…</p>
                 )}
-                {steps.length === 0 && task.status === "executing" && (
+                {visibleSteps.length === 0 && task.status === "executing" && !showApproval && (
                     <p className="mb-2 text-xs text-muted-foreground">Waiting for execution telemetry...</p>
                 )}
                 {hasRunningStep && (
@@ -368,55 +373,75 @@ function TaskInlineCard({ task, highlighted = false, onStatusChange, onCancel }:
                 )}
 
                 <AnimatePresence initial={false} mode="popLayout">
-                    {steps.map((step) => (
+                    {visibleSteps.map((step) => (
                         <StepRow key={step.id} step={step} shouldReduceMotion={Boolean(shouldReduceMotion)} />
                     ))}
                 </AnimatePresence>
             </div>
 
-            <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>{Math.round(progress)}% complete</span>
-                    <span>{steps.filter((step) => step.status === "completed").length} of {steps.length} steps done</span>
+            {showProgress ? (
+                <div className="mt-2 space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>{Math.round(progress)}% complete</span>
+                        <span>{visibleSteps.filter((step) => step.status === "completed").length} of {visibleSteps.length} steps done</span>
+                    </div>
+                    <div className="h-1 overflow-hidden rounded-full bg-muted">
+                        <motion.div
+                            layout
+                            className="h-full rounded-full bg-primary"
+                            initial={false}
+                            animate={{ width: `${progress}%` }}
+                            transition={{ duration: 0.35, ease: "easeOut" }}
+                        />
+                    </div>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <motion.div
-                        layout
-                        className="h-full rounded-full bg-linear-to-r from-blue-500 via-cyan-400 to-emerald-400"
-                        initial={false}
-                        animate={{ width: `${progress}%` }}
-                        transition={{ duration: 0.35, ease: "easeOut" }}
-                    />
-                </div>
-            </div>
+            ) : null}
 
-            <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-[11px] text-muted-foreground">
-                <span>Due {formatDueDate(task.dueAt)}</span>
-                <div className="flex items-center gap-2">
+            <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2.5">
+                <label className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground">
+                    Status
+                    <select
+                        aria-label="Board status"
+                        value={task.boardStatus}
+                        className="h-7 rounded-md border border-input bg-background px-1.5 text-[11px] text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+                        onChange={(event) => onBoardStatusChange(task._id, event.target.value as BoardStatus)}
+                    >
+                        {BOARD_STATUSES.map((status) => (
+                            <option key={status.value} value={status.value}>
+                                {status.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <div className="flex shrink-0 items-center gap-1.5">
                     {showCancel && (
                         <Button
                             type="button"
                             size="sm"
-                            variant="outline"
-                            className="h-7 rounded-lg px-2.5 text-[11px]"
+                            variant="ghost"
+                            className="h-7 rounded-md px-2 text-[11px] text-muted-foreground"
                             onClick={() => void onCancel(task._id)}
                         >
                             Cancel
                         </Button>
                     )}
-                    <span className="inline-flex items-center gap-1">
-                        <Sparkles className="h-3 w-3 text-primary" />
-                        Run detail
-                    </span>
+                    <Button asChild size="sm" variant="outline" className="h-7 rounded-md px-2.5 text-[11px]">
+                        <Link href={taskHref(task._id)}>View task</Link>
+                    </Button>
                 </div>
             </div>
         </motion.article>
     );
 }
 
-export default function TaskPanel({ conversationId }: TaskPanelProps) {
+export default function TaskPanel({
+    conversationId,
+    mobileOpen = false,
+    onMobileOpenChange,
+}: TaskPanelProps) {
     const searchParams = useSearchParams();
     const highlightedTaskId = searchParams.get("task");
+    const [dismissedHighlight, setDismissedHighlight] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -442,7 +467,8 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
     const highlightedOnPage = Boolean(
         highlightedTaskId && tasks.some((task) => task._id === highlightedTaskId)
     );
-    const showMobileTaskSurface = Boolean(highlightedTaskId);
+    const highlightOpen = Boolean(highlightedTaskId) && dismissedHighlight !== highlightedTaskId;
+    const showMobileTaskSurface = mobileOpen || highlightOpen;
     useDeepLinkScroll(
         highlightedTaskId ? taskPanelElementId(highlightedTaskId) : null,
         highlightedOnPage
@@ -514,14 +540,14 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
         }
     };
 
-    const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    const updateBoardStatus = async (taskId: string, boardStatus: BoardStatus) => {
         try {
             const response = await authenticatedFetch(`/api/tasks/${taskId}`, {
                 method: "PATCH",
-                body: JSON.stringify({ status }),
+                body: JSON.stringify({ boardStatus }),
             });
             if (!response.ok) {
-                throw new Error("Failed to update task status");
+                throw new Error("Failed to update board status");
             }
 
             const updated = (await response.json()) as TaskRecord;
@@ -556,54 +582,43 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
         <>
             {showMobileTaskSurface ? (
                 <div
-                    className="fixed inset-0 z-30 bg-black/40 xl:hidden"
+                    className="fixed inset-0 z-40 bg-black/40 lg:hidden"
                     data-testid="task-panel-mobile-backdrop"
                     aria-hidden="true"
+                    onClick={() => {
+                        onMobileOpenChange?.(false);
+                        if (highlightedTaskId) setDismissedHighlight(highlightedTaskId);
+                    }}
                 />
             ) : null}
             <aside
                 data-testid="task-panel"
                 data-mobile-visible={showMobileTaskSurface ? "true" : "false"}
                 className={cn(
-                    "min-h-0 shrink-0 border-l border-border bg-[hsl(var(--left-panel))] text-foreground dark:bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.12),transparent_28%),linear-gradient(180deg,hsl(var(--left-panel)),hsl(var(--background)))]",
+                    "min-h-0 shrink-0 border-l border-border bg-card text-foreground",
                     showMobileTaskSurface
-                        ? "fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col shadow-xl xl:static xl:z-auto xl:w-85 xl:shadow-none"
-                        : "hidden w-85 xl:flex xl:flex-col"
+                        ? "fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col shadow-xl lg:static lg:z-auto lg:w-[340px] lg:shadow-none"
+                        : "hidden w-[340px] lg:flex lg:flex-col"
                 )}
             >
-            <div className="border-b border-border px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <h3 className="text-sm font-semibold tracking-tight text-foreground">Work</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">Tasks for this conversation</p>
-                    </div>
-                    <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
-                        Live
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+                <div className="flex items-center gap-2">
+                    <h3 className="text-[13px] font-semibold text-foreground">Work from this conversation</h3>
+                    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {tasks.length}
                     </span>
                 </div>
-            </div>
-
-            <div className="space-y-2 border-b border-border p-3">
-                <input
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
-                    value={newTaskTitle}
-                    placeholder="Create a task"
-                    onChange={(event) => setNewTaskTitle(event.target.value)}
-                />
-                <textarea
-                    className="max-h-24 min-h-16 w-full resize-y rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
-                    value={newTaskDescription}
-                    placeholder="Description (optional)"
-                    onChange={(event) => setNewTaskDescription(event.target.value)}
-                />
-                <Button
-                    size="sm"
-                    disabled={creating || newTaskTitle.trim().length < 3}
-                    onClick={createTask}
-                    className="w-full rounded-xl"
+                <button
+                    type="button"
+                    className="inline-flex h-7 items-center rounded-md border border-border px-2 text-[11px] lg:hidden"
+                    data-testid="task-panel-close"
+                    onClick={() => {
+                        onMobileOpenChange?.(false);
+                        if (highlightedTaskId) setDismissedHighlight(highlightedTaskId);
+                    }}
                 >
-                    {creating ? "Creating..." : "Create task"}
-                </Button>
+                    Close
+                </button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -614,18 +629,48 @@ export default function TaskPanel({ conversationId }: TaskPanelProps) {
                 )}
 
                 <AnimatePresence initial={false} mode="popLayout">
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {tasks.map((task) => (
                             <TaskInlineCard
                                 key={task._id}
                                 task={task}
                                 highlighted={task._id === highlightedTaskId}
-                                onStatusChange={updateTaskStatus}
+                                onBoardStatusChange={updateBoardStatus}
                                 onCancel={cancelTask}
                             />
                         ))}
                     </div>
                 </AnimatePresence>
+            </div>
+
+            <div className="shrink-0 space-y-2 border-t border-border p-3">
+                <div className="flex gap-2">
+                    <input
+                        className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
+                        value={newTaskTitle}
+                        placeholder="Create a task"
+                        aria-label="Task title"
+                        onChange={(event) => setNewTaskTitle(event.target.value)}
+                    />
+                    <Button
+                        size="sm"
+                        disabled={creating || newTaskTitle.trim().length < 3}
+                        onClick={createTask}
+                        className="h-8 rounded-lg"
+                        variant="outline"
+                    >
+                        {creating ? "Creating..." : "Create"}
+                    </Button>
+                </div>
+                {newTaskTitle.trim().length > 0 || newTaskDescription.length > 0 ? (
+                    <textarea
+                        className="max-h-16 min-h-10 w-full resize-y rounded-lg border border-input bg-background px-2.5 py-1.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
+                        value={newTaskDescription}
+                        placeholder="Description (optional)"
+                        aria-label="Task description"
+                        onChange={(event) => setNewTaskDescription(event.target.value)}
+                    />
+                ) : null}
             </div>
             </aside>
         </>

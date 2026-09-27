@@ -8,6 +8,20 @@ import type { TaskRecord } from "@semantask/types";
 
 const mockTaskSearch = { value: "task=task-1" };
 const authenticatedFetch = jest.fn();
+const executionView = {
+    value: {
+        steps: [] as Array<{ id: string; label: string; detail: string; status: "pending" | "running" | "completed" }>,
+        progress: 0,
+        runId: null as string | null,
+        durationMs: null as number | null,
+        failureReason: null as string | null,
+        retryStatus: null as string | null,
+        approvalPending: false,
+        phase: null as string | null,
+        activeTool: null as string | null,
+        verification: false,
+    },
+};
 
 jest.mock("next/navigation", () => ({
     useSearchParams: () => new URLSearchParams(mockTaskSearch.value),
@@ -18,18 +32,7 @@ jest.mock("@/lib/utils/api", () => ({
 }));
 
 jest.mock("@/hooks/useTaskExecution", () => ({
-    useTaskExecution: () => ({
-        steps: [],
-        progress: 0,
-        runId: null,
-        durationMs: null,
-        failureReason: null,
-        retryStatus: null,
-        approvalPending: false,
-        phase: null,
-        activeTool: null,
-        verification: false,
-    }),
+    useTaskExecution: () => executionView.value,
 }));
 
 jest.mock("@/hooks/socketClient", () => ({
@@ -79,10 +82,24 @@ function buildTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
     };
 }
 
+const defaultExecutionView = {
+    steps: [] as Array<{ id: string; label: string; detail: string; status: "pending" | "running" | "completed" }>,
+    progress: 0,
+    runId: null as string | null,
+    durationMs: null as number | null,
+    failureReason: null as string | null,
+    retryStatus: null as string | null,
+    approvalPending: false,
+    phase: null as string | null,
+    activeTool: null as string | null,
+    verification: false,
+};
+
 describe("TaskPanel deep links", () => {
     beforeEach(() => {
         authenticatedFetch.mockReset();
         mockTaskSearch.value = "task=task-1";
+        executionView.value = { ...defaultExecutionView, steps: [] };
         authenticatedFetch.mockImplementation(async (url: unknown) => {
             if (String(url).includes("execution-events")) {
                 return { ok: true, json: async () => ({ events: [] }) };
@@ -102,7 +119,48 @@ describe("TaskPanel deep links", () => {
             "href",
             "/work-suggestions/sug-1"
         );
-        expect(screen.getByLabelText("Run status")).toBeInTheDocument();
+        expect(screen.getByLabelText("Board status")).toBeInTheDocument();
+        expect(screen.queryByLabelText("Run status")).not.toBeInTheDocument();
         expect(screen.getByTestId("task-panel")).toHaveAttribute("data-mobile-visible", "true");
+    });
+
+    it("does not pile failed run telemetry on top of Allow AI tools", async () => {
+        executionView.value = {
+            ...executionView.value,
+            runId: "forn-6a67c4277d19:50876f90-1798431257249-27951",
+            approvalPending: true,
+            failureReason: "Policy blocked tools.",
+            progress: 25,
+            steps: [
+                { id: "1", label: "", detail: "", status: "completed" },
+                { id: "2", label: "", detail: "", status: "running" },
+                { id: "3", label: "", detail: "", status: "pending" },
+                { id: "4", label: "", detail: "", status: "pending" },
+            ],
+        };
+        authenticatedFetch.mockImplementation(async (url: unknown) => {
+            if (String(url).includes("execution-events")) {
+                return { ok: true, json: async () => ({ events: [] }) };
+            }
+            return { ok: true, json: async () => [buildTask({ status: "failed" })] };
+        });
+
+        render(React.createElement(TaskPanel, { conversationId: "conv-1" }));
+
+        expect(await screen.findByTestId("task-panel-card")).toBeInTheDocument();
+        expect(screen.getByLabelText("Board status")).toHaveValue("todo");
+        expect(screen.queryByText("Updating…")).not.toBeInTheDocument();
+        expect(screen.queryByText(/25% complete/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/forn-6a67c4277d19/)).not.toBeInTheDocument();
+        expect(screen.queryByTestId("task-panel-allow-ai-tools")).not.toBeInTheDocument();
+        expect(screen.getByTestId("task-panel-failure")).toHaveTextContent("Policy blocked tools.");
+    });
+
+    it("opens below the desktop breakpoint when the work control asks for the drawer", async () => {
+        mockTaskSearch.value = "";
+        render(React.createElement(TaskPanel, { conversationId: "conv-1", mobileOpen: true }));
+        expect(await screen.findByTestId("task-panel")).toHaveAttribute("data-mobile-visible", "true");
+        expect(screen.getByTestId("task-panel-close")).toBeInTheDocument();
+        expect(screen.getByTestId("task-panel-mobile-backdrop")).toBeInTheDocument();
     });
 });

@@ -38,7 +38,7 @@ export function WorkSearchBox() {
         <div className="relative min-w-[180px] flex-1" data-testid="work-search">
             <input
                 data-testid="work-search-input"
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                className="h-8 w-full max-w-md rounded-lg border border-input bg-background px-3 text-[13px]"
                 placeholder="Search work, people, conversations"
                 value={query}
                 onChange={(event) => {

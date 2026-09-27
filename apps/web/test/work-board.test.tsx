@@ -10,6 +10,7 @@ import type { TaskRecord } from "@semantask/types";
 const listWorkBoard = jest.fn();
 const patchTaskApi = jest.fn();
 const getTask = jest.fn();
+const listOrganizations = jest.fn();
 
 const mockBoardSearch = { value: "" };
 
@@ -27,6 +28,7 @@ jest.mock("@/lib/utils/api", () => ({
     listWorkBoard: (...args: unknown[]) => listWorkBoard(...args),
     patchTaskApi: (...args: unknown[]) => patchTaskApi(...args),
     getTask: (...args: unknown[]) => getTask(...args),
+    listOrganizations: (...args: unknown[]) => listOrganizations(...args),
 }));
 
 jest.mock("next/navigation", () => ({
@@ -88,6 +90,8 @@ describe("WorkBoardView", () => {
         listWorkBoard.mockReset();
         patchTaskApi.mockReset();
         getTask.mockReset();
+        listOrganizations.mockReset();
+        listOrganizations.mockResolvedValue([]);
         mockBoardSearch.value = "";
         window.localStorage.clear();
     });
@@ -99,6 +103,18 @@ describe("WorkBoardView", () => {
     });
 
     it("moves a card by PATCHing boardStatus only", async () => {
+        listOrganizations.mockResolvedValue([
+            {
+                id: "507f1f77bcf86cd799439015",
+                name: "Acme",
+                slug: "acme",
+                status: "active",
+                createdBy: "user-1",
+                createdAt: "2026-08-22T10:00:00.000Z",
+                updatedAt: "2026-08-22T10:00:00.000Z",
+                role: "owner",
+            },
+        ]);
         window.localStorage.setItem("semantask.activeOrganizationId", "507f1f77bcf86cd799439015");
         const task = buildTask();
         listWorkBoard.mockResolvedValue({
@@ -138,6 +154,18 @@ describe("WorkBoardView", () => {
     });
 
     it("highlights the card matching ?task=", async () => {
+        listOrganizations.mockResolvedValue([
+            {
+                id: "507f1f77bcf86cd799439015",
+                name: "Acme",
+                slug: "acme",
+                status: "active",
+                createdBy: "user-1",
+                createdAt: "2026-08-22T10:00:00.000Z",
+                updatedAt: "2026-08-22T10:00:00.000Z",
+                role: "owner",
+            },
+        ]);
         window.localStorage.setItem("semantask.activeOrganizationId", "507f1f77bcf86cd799439015");
         mockBoardSearch.value = "task=task-1";
         getTask.mockResolvedValue(buildTask());
@@ -196,6 +224,18 @@ describe("WorkBoardView", () => {
     });
 
     it("opens the page that contains a deep-linked task", async () => {
+        listOrganizations.mockResolvedValue([
+            {
+                id: "507f1f77bcf86cd799439015",
+                name: "Acme",
+                slug: "acme",
+                status: "active",
+                createdBy: "user-1",
+                createdAt: "2026-08-22T10:00:00.000Z",
+                updatedAt: "2026-08-22T10:00:00.000Z",
+                role: "owner",
+            },
+        ]);
         window.localStorage.setItem("semantask.activeOrganizationId", "507f1f77bcf86cd799439015");
         mockBoardSearch.value = "task=task-2";
         getTask.mockResolvedValue(buildTask({ _id: "task-2" }));

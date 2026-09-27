@@ -1,17 +1,40 @@
-import nodemailer from "nodemailer";
-import { getSmtpConfig } from "@/lib/config/smtp";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { getResendConfig, isResendConfigured } from "@/lib/config/resend";
 
-function getTransporter() {
-    const smtp = getSmtpConfig();
-    if (!smtp.user || !smtp.pass) {
-        throw new Error("SMTP credentials are not configured");
+export { isResendConfigured };
+
+function e2eMailDir(): string | null {
+    const dir = process.env.E2E_MAIL_DIR?.trim();
+    return dir || null;
+}
+
+async function writeE2eMail(input: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+}): Promise<void> {
+    const dir = e2eMailDir();
+    if (!dir) {
+        return;
     }
-    return nodemailer.createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.port === 465,
-        auth: { user: smtp.user, pass: smtp.pass },
-    });
+
+    await mkdir(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const safeTo = input.to.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const filePath = join(dir, `${stamp}-${safeTo}-${randomUUID()}.json`);
+    await writeFile(
+        filePath,
+        JSON.stringify({
+            to: input.to,
+            subject: input.subject,
+            text: input.text,
+            html: input.html,
+        }),
+        "utf8"
+    );
 }
 
 export async function sendTransactionalEmail(input: {
@@ -20,18 +43,33 @@ export async function sendTransactionalEmail(input: {
     text: string;
     html: string;
 }): Promise<void> {
-    const transporter = getTransporter();
-    const smtp = getSmtpConfig();
-    await transporter.sendMail({
-        from: smtp.from,
-        to: input.to,
-        subject: input.subject,
-        text: input.text,
-        html: input.html,
-    });
-}
+    if (e2eMailDir()) {
+        await writeE2eMail(input);
+        return;
+    }
 
-export function isSmtpConfigured(): boolean {
-    const smtp = getSmtpConfig();
-    return Boolean(smtp.user && smtp.pass && smtp.from);
+    const { apiKey, from } = getResendConfig();
+    if (!apiKey || !from) {
+        throw new Error("Resend is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL.");
+    }
+
+    const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            from,
+            to: [input.to],
+            subject: input.subject,
+            text: input.text,
+            html: input.html,
+        }),
+    });
+
+    if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(detail.trim() || `Failed to send email (${response.status})`);
+    }
 }

@@ -1,0 +1,23 @@
+# Disposable Mongo + Redis for Playwright. Dedicated host ports so a laptop
+# instance on 27017/6379 is not overwritten. CI uses workflow services instead.
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

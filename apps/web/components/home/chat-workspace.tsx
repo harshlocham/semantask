@@ -2,6 +2,7 @@
 
 import Sidebar from "@/components/home/left-panel";
 import RightPanel from "@/components/home/right-panel";
+import UserListDialog from "@/components/home/dialogs/user-list-dialog";
 import { useOfflineMessageSync } from "@/lib/hooks/useOfflineMessageSync";
 import { useEffect, useState } from "react";
 import useChatStore from "@/store/chat-store";
@@ -9,6 +10,7 @@ import useChatStore from "@/store/chat-store";
 export default function ChatWorkspace() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileViewport, setIsMobileViewport] = useState(false);
+    const [startConversationOpen, setStartConversationOpen] = useState(false);
     const selectedConversationId = useChatStore((s) => s.selectedConversationId);
 
     useOfflineMessageSync();
@@ -50,15 +52,21 @@ export default function ChatWorkspace() {
     }, [isMobileViewport, isSidebarOpen]);
 
     return (
-        <main className="min-h-dvh bg-[hsl(var(--gray-secondary))] p-0 sm:p-2 lg:p-5">
-            <div className="relative mx-auto flex h-dvh w-full max-w-425 overflow-hidden bg-[hsl(var(--gray-secondary))] sm:h-[calc(100dvh-1rem)] lg:rounded-2xl lg:shadow-2xl">
+        <main className="h-full min-h-0 bg-background">
+            <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-background">
+                <UserListDialog
+                    open={startConversationOpen}
+                    onOpenChange={setStartConversationOpen}
+                    hideTrigger
+                />
                 <Sidebar
                     isMobileOpen={isSidebarOpen}
                     onMobileClose={
                         selectedConversationId ? () => setIsSidebarOpen(false) : undefined
                     }
+                    onStartConversation={() => setStartConversationOpen(true)}
                 />
-                <RightPanel />
+                <RightPanel onStartConversation={() => setStartConversationOpen(true)} />
             </div>
         </main>
     );

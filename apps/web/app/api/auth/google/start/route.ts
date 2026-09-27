@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createGoogleOAuthState } from "@semantask/auth";
 import { getGoogleClientId } from "@/lib/config/app";
+import { APP_HOME } from "@/lib/routes";
 import {
     buildAppRedirectUrl,
     getGoogleOAuthBaseUrl,
@@ -29,7 +30,8 @@ function buildGoogleOAuthAuthorizeUrl(input: {
 
 export async function GET(req: NextRequest) {
     try {
-        const callbackUrl = req.nextUrl.searchParams.get("callbackUrl") || "/";
+        const requestedCallback = req.nextUrl.searchParams.get("callbackUrl") || APP_HOME;
+        const callbackUrl = requestedCallback === "/" ? APP_HOME : requestedCallback;
         const baseUrl = getGoogleOAuthBaseUrl(req);
         const redirectUri = `${baseUrl}/api/auth/google/callback`;
         const googleClientId = getGoogleClientId();
