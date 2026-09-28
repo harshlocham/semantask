@@ -1,5 +1,27 @@
 # @semantask/socket
 
+## 4.2.1
+
+### Patch Changes
+
+- 6f8a55d: Worker Redis is `REDIS_URL` only (`UPSTASH_REDIS_REST_URL` is web REST, not ioredis). Boot warns once when only a dual-read alias is set; alias reads are unchanged.
+- fc4cade: Bake remaining config cutovers: accept never enqueues execution, inbox always on, FSM authoritative, `TASK_TOOL_RBAC` default enforce, `TASK_PROMPT_GUARD` default monitor, drop `NEXT_PUBLIC_APP_URL` Docker ARG, and hard-cut dual-read aliases except `INTERNAL_SECRET`.
+- 42dbcb4: Parse web and socket deploy knobs through typed config helpers without renaming env vars.
+
+  SMTP still dual-reads `EMAIL_USER` / `EMAIL_PASS`. Client files keep `NEXT_PUBLIC_*` via a client-safe helper.
+
+- 45d3e43: Remove automatic step-up OTP challenges from normal session refresh and bootstrap. Access-token refresh rotates tokens without creating challenges; challenge UI/API and StepUpChallenge model are removed as dead code. Docs updated to the MVP session contract (silent refresh; login/register OTP remains account verification only).
+- Updated dependencies [293f039]
+- Updated dependencies [d63de76]
+- Updated dependencies [5049ff5]
+- Updated dependencies [4de730c]
+- Updated dependencies [eb2ed2b]
+- Updated dependencies [5bcff34]
+- Updated dependencies [3861d6e]
+- Updated dependencies [428d748]
+  - @semantask/types@2.2.0
+  - @semantask/observability@1.2.0
+
 ## 4.2.0
 
 ### Minor Changes
