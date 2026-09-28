@@ -162,11 +162,14 @@ describe("org dashboard flag", () => {
 });
 
 describe("classifier mode flag", () => {
-    it("defaults TASK_CLASSIFIER_MODE to regex", () => {
+    it("defaults TASK_CLASSIFIER_MODE to llm", () => {
         delete process.env.TASK_CLASSIFIER_MODE;
-        expect(getClassifierMode()).toBe("regex");
+        expect(getClassifierMode()).toBe("llm");
+        expect(getClassifierMode("")).toBe("llm");
+        expect(getClassifierMode("   ")).toBe("llm");
         expect(getClassifierMode("shadow")).toBe("shadow");
         expect(getClassifierMode("llm")).toBe("llm");
+        expect(getClassifierMode("regex")).toBe("regex");
         expect(getClassifierMode("nope")).toBe("regex");
     });
 });

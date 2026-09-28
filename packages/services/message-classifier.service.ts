@@ -234,6 +234,7 @@ async function classifyWithLlmOrFallback(content: string): Promise<MessageClassi
 
 /**
  * Classify message intent for task creation.
+ * Unset `TASK_CLASSIFIER_MODE` is `llm`.
  * - `regex`: heuristic only
  * - `shadow`: run LLM + regex, log disagreements, authority stays on regex
  * - `llm`: LLM with regex fallback on failure

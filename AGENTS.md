@@ -219,8 +219,10 @@ Invariant → pinning test map:
   `apps/task-worker/CHANGELOG.md`). Tools now run only through `ToolExecutor`.
 - `docs/ARCHITECTURE.md` carries a verification date and commit; treat anything
   newer in code as authoritative.
-- Ingress classification defaults to **regex/heuristic** (`TASK_CLASSIFIER_MODE`),
-  not an LLM; LLMs are used in optional execution (planning, decisions, reflection).
+- Ingress classification defaults to the **LLM** (`TASK_CLASSIFIER_MODE` unset or
+  `llm`), with regex fallback when the model is missing or fails. `regex` and
+  `shadow` remain explicit switches. LLMs are also used in optional execution
+  (planning, decisions, reflection).
 
 ## 9. Change conventions
 

@@ -125,10 +125,11 @@ describe("message-classifier.service", () => {
         restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
     });
 
-    test("getClassifierMode defaults to regex", () => {
+    test("getClassifierMode defaults to llm", () => {
         const previous = process.env.TASK_CLASSIFIER_MODE;
         delete process.env.TASK_CLASSIFIER_MODE;
-        expect(getClassifierMode()).toBe("regex");
+        expect(getClassifierMode()).toBe("llm");
+        expect(getClassifierMode("nope")).toBe("regex");
         restoreEnvVar("TASK_CLASSIFIER_MODE", previous);
     });
 

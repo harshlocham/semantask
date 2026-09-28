@@ -38,7 +38,8 @@ import { emitPolicyShadowState } from "./services/policy-shadow.js";
 import { isTaskCancelRequestedPayload, processTaskCancellation, type TaskCancelRequestedPayload } from "./services/task-cancellation.js";
 import { startStuckTaskDetector } from "./services/stuck-task-detector.js";
 import { classifyMessageWithLlm } from "./services/message-classifier-llm.js";
-import { configureMessageClassifier } from "@semantask/services/message-classifier.service";
+import { configureMessageClassifier, getClassifierMode } from "@semantask/services/message-classifier.service";
+import { getLlmApiKey } from "./config/llm.js";
 import { assertToolGrant, isHighRiskToolName } from "@semantask/services/tool-grant.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
 import { appendExecutionAudit } from "@semantask/services/execution-audit.service";
@@ -79,6 +80,12 @@ configureMessageClassifier({
             contentPreview: payload.contentPreview,
         });
     },
+});
+
+logExecution("info", {
+    event: "classifier.mode",
+    mode: getClassifierMode(),
+    llmApiKeyPresent: getLlmApiKey().trim().length > 0,
 });
 
 const WORKER_ID = `${process.pid}-${Math.random().toString(36).slice(2, 10)}`;

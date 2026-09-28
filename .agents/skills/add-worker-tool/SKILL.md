@@ -110,7 +110,7 @@ idempotency, and tests. Do not invent a parallel tool system.
 ## Rules
 
 - Reuse `Tool` / `ToolRegistry`; do not create a new plugin framework.
-- Do not invent APIs or env vars without adding them to `env.sample` when they
+- Do not invent APIs or env vars without adding them to `.env.sample` when they
   are required for operators.
 - Do not weaken gates to demo a tool (AGENTS.md §2.1, §7 test-env note).
 - Preserve idempotency: stable params must not double-send across lease handoffs.

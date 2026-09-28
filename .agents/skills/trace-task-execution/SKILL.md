@@ -113,8 +113,10 @@ Trace-scoped facts (invariants: AGENTS.md §2):
   semantic types (specialized templates are extension points only).
 - Registered tools today: `send_email`, `schedule_meeting`, `create_github_issue`
   (`AgentContext.createDefaultToolRegistry`).
-- Ingress classification defaults to regex/heuristic (`TASK_CLASSIFIER_MODE`),
-  so a missing task is often a classifier miss, not a policy block.
+- Ingress classification defaults to the LLM (`TASK_CLASSIFIER_MODE` unset or
+  `llm`), with regex fallback when the model is missing or fails. `regex` and
+  `shadow` remain explicit switches. A missing task can be a classifier miss
+  or a fallback, not only a policy block.
 
 ## Rules
 
