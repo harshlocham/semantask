@@ -38,11 +38,18 @@ export function isOrgDashboardEnabled(raw?: string | null): boolean {
     return isEnvFlagEnabled(raw ?? process.env.ORG_DASHBOARD, false);
 }
 
-/** TASK_CLASSIFIER_MODE: regex (default) | shadow | llm. */
+/**
+ * TASK_CLASSIFIER_MODE: llm (default) | regex | shadow.
+ * Blank or unset is llm. An unrecognized value stays regex so a typo does not call the model.
+ */
 export function getClassifierMode(raw?: string | null): ClassifierMode {
-    const value = (raw ?? process.env.TASK_CLASSIFIER_MODE ?? "regex").trim().toLowerCase();
-    if (value === "shadow" || value === "llm") {
-        return value;
+    const source = raw == null ? process.env.TASK_CLASSIFIER_MODE : raw;
+    const value = (source ?? "").trim().toLowerCase();
+    if (value === "" || value === "llm") {
+        return "llm";
+    }
+    if (value === "shadow") {
+        return "shadow";
     }
     return "regex";
 }

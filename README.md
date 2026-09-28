@@ -36,7 +36,7 @@ Conversation becomes reviewable suggestions. Autonomy is optional — not the pr
 
 ```bash
 pnpm install
-cp env.sample .env   # set MongoDB, Redis, and auth secrets
+cp .env.sample .env   # set MongoDB, Redis, and auth secrets
 pnpm run dev
 ```
 
@@ -92,7 +92,7 @@ flowchart LR
 
 Full system map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Optional LLM/worker operator docs: [`docs/archive/optional-autonomy/`](docs/archive/optional-autonomy/).
 
-**Ingress:** new chat messages are classified with `classifyMessage()` in `packages/services/task-intelligence.service.ts` on the **regex/heuristic** path (`TASK_CLASSIFIER_MODE` defaults to `regex`). LLM providers are used for optional **task execution**; `shadow` / `llm` ingress modes exist but are not the default.
+**Ingress:** new chat messages are classified with `classifyMessage()` in `packages/services/task-intelligence.service.ts`. The default is the LLM (`TASK_CLASSIFIER_MODE` unset or `llm`), with regex fallback when the model is missing or fails. Set `TASK_CLASSIFIER_MODE=regex` or `shadow` to switch. Assignee and due-date candidates stay heuristic. LLM providers are also used for optional task execution.
 
 ## Platform stack
 
@@ -135,16 +135,16 @@ Full system map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Optional LLM/wo
 
 ## Environment configuration
 
-Copy [`env.sample`](env.sample) to `.env` at the repository root and adjust for your environment.
+Copy [`.env.sample`](.env.sample) to `.env` at the repository root and adjust for your environment.
 
 **Core:** database, Redis, auth secrets (`ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`), OAuth (optional), ImageKit (if media uploads are enabled), Resend (OTP, invites, and notifications).
 
-**Task-worker runtime:** `TASK_*`, outbox/lease, and Redis settings in `env.sample` (needed for classification and outbox processing even when tools are off).
+**Task-worker runtime:** `TASK_*`, outbox/lease, and Redis settings in `.env.sample` (needed for classification and outbox processing even when tools are off).
 
-**Optional LLM / autonomy providers:** set `LLM_PROVIDER`, `LLM_API_KEY`, and `LLM_BASE_URL` when policy-enabled tool execution is used. Supports **OpenAI**, **OpenAI-compatible** bases (including **AMD**), and **Hugging Face**. See `env.sample`.
+**Optional LLM / autonomy providers:** set `LLM_PROVIDER`, `LLM_API_KEY`, and `LLM_BASE_URL` when policy-enabled tool execution is used. Supports **OpenAI**, **OpenAI-compatible** bases (including **AMD**), and **Hugging Face**. See `.env.sample`.
 
 ```env
-# Core (abbreviated — see env.sample for the full list)
+# Core (abbreviated — see .env.sample for the full list)
 MONGODB_URI=mongodb://localhost:27017/semantask
 ACCESS_TOKEN_SECRET=replace_with_a_strong_secret
 REFRESH_TOKEN_SECRET=replace_with_a_strong_secret
@@ -153,7 +153,7 @@ ORIGIN=http://localhost:3000
 REDIS_URL=redis://localhost:6379
 NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
 
-# Optional LLM / autonomy settings (see env.sample)
+# Optional LLM / autonomy settings (see .env.sample)
 LLM_PROVIDER=openai
 LLM_API_KEY=
 # LLM_BASE_URL=             # OpenAI-compatible / vLLM / custom gateway

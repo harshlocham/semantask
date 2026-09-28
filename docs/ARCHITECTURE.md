@@ -387,7 +387,7 @@ erDiagram
   Root scripts run `turbo run dev|build|start|lint|test|typecheck` across `apps/*` and `packages/*`.
 - **Containers**: `docker/web.Dockerfile`, `docker/socket.Dockerfile`, `apps/task-worker/Dockerfile`,
   composed in `docker-compose.yml` (+ `docker-compose.worker.yml`) behind `nginx/default.conf`.
-- **Config**: `.env` / `env.sample` provide `REDIS_URL`, `MONGODB_URI`, `ACCESS_TOKEN_SECRET`,
+- **Config**: `.env` / `.env.sample` provide `REDIS_URL`, `MONGODB_URI`, `ACCESS_TOKEN_SECRET`,
   `INTERNAL_SECRET`, `ORIGIN`, `SOCKET_SERVER_URL`, `WEB_SERVER_URL`, plus integration keys
   (`GITHUB_TOKEN`/`GITHUB_REPO`, `RESEND_API_KEY`, ImageKit, Google, LLM provider keys).
 - **CI / release**: GitHub workflows in `.github/`, Changesets versioning (`.changeset/`), and

@@ -243,7 +243,7 @@ The env parser stays until the list is empty. Invalid or missing org IDs fail cl
 
 Auth is custom JWT (`ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`), not NextAuth.
 
-See [`env.sample`](../../env.sample) for the full list.
+See [`.env.sample`](../../.env.sample) for the full list.
 
 ---
 

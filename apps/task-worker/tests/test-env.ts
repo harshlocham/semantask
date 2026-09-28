@@ -14,3 +14,11 @@ if (!process.env.INTERNAL_SECRET?.trim()) {
 if (!process.env.DEFAULT_EXECUTION_MODE?.trim()) {
     process.env.DEFAULT_EXECUTION_MODE = "auto_execute";
 }
+
+/**
+ * Ingress classification defaults to llm, which calls the provider when a key
+ * is configured. Worker tests stay on the offline regex path.
+ */
+if (!process.env.TASK_CLASSIFIER_MODE?.trim()) {
+    process.env.TASK_CLASSIFIER_MODE = "regex";
+}
