@@ -7,6 +7,13 @@ export type PromptGuardMode = (typeof PROMPT_GUARD_MODES)[number];
 export const EXECUTION_MODES = ["suggest_only", "require_approval", "auto_execute"] as const;
 export type OrganizationExecutionMode = (typeof EXECUTION_MODES)[number];
 
+/** Per-tool autonomy. `off` denies the tool; the other values match execution mode. */
+export const TOOL_AUTONOMY_MODES = ["off", "suggest_only", "require_approval", "auto_execute"] as const;
+export type ToolAutonomyMode = (typeof TOOL_AUTONOMY_MODES)[number];
+
+export const POLICY_TOOL_NAMES = ["send_email", "schedule_meeting", "create_github_issue"] as const;
+export type PolicyToolName = (typeof POLICY_TOOL_NAMES)[number];
+
 export interface IOrganizationPolicy extends Document {
     _id: mongoose.Types.ObjectId;
     organizationId: mongoose.Types.ObjectId;
@@ -24,6 +31,11 @@ export interface IOrganizationPolicy extends Document {
     promptGuardMode?: PromptGuardMode | null;
     /** Workspace execution mode; missing → treat as suggest_only on read. */
     executionMode?: OrganizationExecutionMode | null;
+    /**
+     * Per high-risk tool autonomy. Missing keys inherit the org execution mode.
+     * `auto_execute` follows the org path and cannot loosen `suggest_only`.
+     */
+    toolExecutionModes?: Partial<Record<PolicyToolName, ToolAutonomyMode>> | null;
     executionModeUpdatedAt?: Date | null;
     executionModeUpdatedBy?: mongoose.Types.ObjectId | null;
     createdAt: Date;
@@ -53,6 +65,7 @@ const OrganizationPolicySchema = new Schema<IOrganizationPolicy>(
             enum: EXECUTION_MODES,
             default: null,
         },
+        toolExecutionModes: { type: Schema.Types.Mixed, default: null },
         executionModeUpdatedAt: { type: Date, default: null },
         executionModeUpdatedBy: {
             type: Schema.Types.ObjectId,

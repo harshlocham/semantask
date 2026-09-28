@@ -28,6 +28,8 @@ export type OrganizationPolicyOverlay = {
     toolDenyList?: string[];
     promptGuardMode?: PromptGuardMode | null;
     executionMode?: ExecutionMode | null;
+    /** Per-tool autonomy. Missing keys inherit the org execution mode. */
+    toolExecutionModes?: Record<string, string> | null;
 };
 
 type RequestedPayload = {
@@ -105,6 +107,18 @@ function resolveConfidenceThreshold(
         }
     }
     return getExecutionConfidenceThreshold(semanticType);
+}
+
+const TOOL_AUTONOMY_MODES = new Set(["off", "suggest_only", "require_approval", "auto_execute"]);
+
+function resolveToolAutonomyMode(
+    orgPolicy: OrganizationPolicyOverlay | null,
+    actionKey: string
+): string | null {
+    const raw = orgPolicy?.toolExecutionModes?.[actionKey];
+    if (typeof raw !== "string") return null;
+    const mode = raw.trim().toLowerCase();
+    return TOOL_AUTONOMY_MODES.has(mode) ? mode : null;
 }
 
 function resolveSemanticType(payload: RequestedPayload): MessageSemanticType | undefined {
@@ -188,6 +202,23 @@ export function evaluateExecutionPolicy(payload: RequestedPayload): ExecutionPol
             executionMode,
             executionModeEnforced: true,
         };
+    }
+
+    const toolMode = resolveToolAutonomyMode(orgPolicy, actionKey);
+    if (toolMode === "off" || toolMode === "suggest_only") {
+        return applyExecutionModeGate({
+            outcome: "blocked",
+            riskLevel: "high",
+            reasons: [`tool_execution_mode:${toolMode}`],
+            semanticType,
+            confidence,
+            threshold,
+            orgPolicyVersion,
+        }, executionMode, enforce);
+    }
+
+    if (toolMode === "require_approval") {
+        reasons.push("tool_execution_mode:require_approval");
     }
 
     if (orgPolicy?.toolDenyList?.includes(actionKey)) {
