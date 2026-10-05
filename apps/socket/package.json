@@ -20,7 +20,7 @@
         "ioredis": "^5.10.0",
         "jsonwebtoken": "^9.0.2",
         "redis": "^5.9.0",
-        "socket.io": "^4.8.1",
+        "socket.io": "^4.8.4",
         "zod": "^4.0.5"
     },
     "devDependencies": {
