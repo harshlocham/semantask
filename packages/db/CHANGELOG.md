@@ -1,5 +1,31 @@
 # @semantask/db
 
+## 3.3.0
+
+### Minor Changes
+
+- 293f039: ADR-005 S0.2 — default workspace `executionMode` (`suggest_only` | `require_approval` | `auto_execute`) with shadow→enforce flags.
+
+  ### Added
+  - `ExecutionMode` type and `OrganizationPolicy.executionMode` (+ updatedAt/By)
+  - `getEffectiveExecutionMode` / `EXECUTION_MODE_ENFORCE` / `DEFAULT_EXECUTION_MODE` / `GRANDFATHER_AUTO_TENANTS`
+  - Policy GET/PUT surfaces `executionMode`; logs `policy.execution_mode.changed`
+  - Worker policy gate: enforce + `suggest_only` blocks tools (`EXECUTION_MODE_DENIED`); `require_approval` caps auto-execute; shadow logs; tool-executor fail-closed
+
+- 4de730c: Phase 1 PR1 — WorkSuggestion domain types and Mongoose model (reviewable proposed work, distinct from MessageIntent facts and Task committed work).
+
+  ### Added
+  - `WORK_SUGGESTION_STATUSES` / `WorkSuggestionRecord` under `packages/types/work/`
+  - `WorkSuggestion` model with org/conversation indexes and partial-unique `messageId` while `status=proposed`
+
+- 5bcff34: Phase 2 PR1 — Accept/dismiss/assign WorkSuggestion mutations create coordination Tasks without enqueueing execution (`ACCEPT_CREATES_EXECUTION=0` rail, `Task.suggestionId` linkage).
+- 3861d6e: Phase 3 PR1 — Additive Task `boardStatus` (`todo | doing | done`) with PATCH, work-board list API, and a feature-flagged `/inbox/board` (COORDINATION_BOARD default off). Accept creates coordination tasks in `todo` without enqueueing execution.
+
+### Patch Changes
+
+- 45d3e43: Remove automatic step-up OTP challenges from normal session refresh and bootstrap. Access-token refresh rotates tokens without creating challenges; challenge UI/API and StepUpChallenge model are removed as dead code. Docs updated to the MVP session contract (silent refresh; login/register OTP remains account verification only).
+- eb2ed2b: Phase 2 hardening — emit `work.suggestion.accepted|dismissed` outbox events, triage accept/dismiss metrics + latency, and accept→execution-while-disabled safety signal. AuthZ matrix documented as conversation participant OR org owner/admin (no behavior change; no conversation manager role).
+
 ## 3.2.0
 
 ### Minor Changes
