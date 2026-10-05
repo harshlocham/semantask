@@ -189,7 +189,7 @@
         "@semantask/observability": "workspace:*",
         "@semantask/types": "workspace:*",
         "mongoose": "^8.24.0",
-        "nodemailer": "^9.1.0",
+        "nodemailer": "^10.0.10",
         "zod": "^4.0.5"
     }
 }
