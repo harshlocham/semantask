@@ -1,5 +1,12 @@
 # @semantask/auth
 
+## 3.0.2
+
+### Patch Changes
+
+- e8752cf: Send newly created Google accounts through the existing onboarding wizard. Returning Google sign-ins still open the app.
+- 45d3e43: Remove automatic step-up OTP challenges from normal session refresh and bootstrap. Access-token refresh rotates tokens without creating challenges; challenge UI/API and StepUpChallenge model are removed as dead code. Docs updated to the MVP session contract (silent refresh; login/register OTP remains account verification only).
+
 ## 3.0.1
 
 ### Patch Changes
