@@ -529,6 +529,27 @@ function parseCsv(value: string): string[] {
         .filter(Boolean);
 }
 
+const AUTONOMY_TOOLS = [
+    { name: "send_email", label: "Send email" },
+    { name: "schedule_meeting", label: "Schedule meeting" },
+    { name: "create_github_issue", label: "Create GitHub issue" },
+] as const;
+
+const AUTONOMY_OPTIONS = [
+    { value: "off", label: "Off" },
+    { value: "suggest_only", label: "Suggest" },
+    { value: "require_approval", label: "Require approval" },
+    { value: "auto_execute", label: "Auto" },
+] as const;
+
+function emptyToolModes(): Record<(typeof AUTONOMY_TOOLS)[number]["name"], string> {
+    return {
+        send_email: "auto_execute",
+        schedule_meeting: "auto_execute",
+        create_github_issue: "auto_execute",
+    };
+}
+
 function OrgPolicyQuotaPanel({
     organizationId,
     canManage,
@@ -544,6 +565,7 @@ function OrgPolicyQuotaPanel({
     const [toolDenyList, setToolDenyList] = useState("");
     const [defaultGrants, setDefaultGrants] = useState("");
     const [promptGuardMode, setPromptGuardMode] = useState("");
+    const [toolModes, setToolModes] = useState(emptyToolModes);
     const [maxTokens, setMaxTokens] = useState("");
     const [maxMembers, setMaxMembers] = useState("");
     const [message, setMessage] = useState<string | null>(null);
@@ -574,6 +596,18 @@ function OrgPolicyQuotaPanel({
                 setToolDenyList(csv(policy.toolDenyList));
                 setDefaultGrants(csv(policy.defaultToolGrants));
                 setPromptGuardMode(typeof policy.promptGuardMode === "string" ? policy.promptGuardMode : "");
+                const storedModes = policy.toolExecutionModes;
+                const nextModes = emptyToolModes();
+                if (storedModes && typeof storedModes === "object" && !Array.isArray(storedModes)) {
+                    const stored = storedModes as Record<string, unknown>;
+                    for (const tool of AUTONOMY_TOOLS) {
+                        const mode = stored[tool.name];
+                        if (typeof mode === "string" && AUTONOMY_OPTIONS.some((option) => option.value === mode)) {
+                            nextModes[tool.name] = mode;
+                        }
+                    }
+                }
+                setToolModes(nextModes);
             })
             .catch(() => {
                 if (cancelled) return;
@@ -617,6 +651,7 @@ function OrgPolicyQuotaPanel({
                 toolDenyList: parseCsv(toolDenyList),
                 defaultToolGrants: parseCsv(defaultGrants),
                 promptGuardMode: promptGuardMode || null,
+                toolExecutionModes: toolModes,
             });
             setEffectiveMode(executionMode);
             setMessage("Policy saved. The default execution mode is suggest_only unless you change it.");
@@ -721,6 +756,31 @@ function OrgPolicyQuotaPanel({
                             </label>
                         </div>
                         <div className="space-y-3">
+                            <fieldset className="space-y-2" data-testid="organization-policy-tool-modes">
+                                <legend className={FIELD_LABEL}>Tool autonomy</legend>
+                                <p className="text-xs text-muted-foreground">
+                                    Auto follows the organization mode. A tool cannot run while the organization is suggest_only.
+                                </p>
+                                {AUTONOMY_TOOLS.map((tool) => (
+                                    <label key={tool.name} className="block space-y-1">
+                                        <span className="text-xs text-muted-foreground">{tool.label}</span>
+                                        <select
+                                            className={SELECT}
+                                            data-testid={`organization-policy-tool-mode-${tool.name}`}
+                                            value={toolModes[tool.name]}
+                                            disabled={!canManage || policyMutation.isPending}
+                                            onChange={(event) => {
+                                                const value = event.target.value;
+                                                setToolModes((current) => ({ ...current, [tool.name]: value }));
+                                            }}
+                                        >
+                                            {AUTONOMY_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                ))}
+                            </fieldset>
                             <label className="block space-y-1">
                                 <span className={FIELD_LABEL}>Require approval for tools</span>
                                 <Input

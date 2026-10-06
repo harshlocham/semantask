@@ -592,6 +592,7 @@ async function processTaskExecutionRequested(payload: NormalizedTaskExecutionReq
             toolDenyList: orgPolicyResolved.toolDenyList,
             promptGuardMode: orgPolicyResolved.promptGuardMode,
             executionMode: orgPolicyResolved.executionMode,
+            toolExecutionModes: orgPolicyResolved.toolExecutionModes,
         }
         : null;
 
