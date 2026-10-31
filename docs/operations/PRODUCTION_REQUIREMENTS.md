@@ -110,6 +110,13 @@ Deploy **one worker replica per partition id** (e.g. count=`3` → three replica
 
 Pending / failed / processing rows are never archived.
 
+To retry dead-lettered `message.created` events inside that window, fix the cause, then run:
+
+```bash
+pnpm --filter @semantask/task-worker requeue:dead-letter-messages --dry-run
+pnpm --filter @semantask/task-worker requeue:dead-letter-messages
+```
+
 ### Retry scanner batch (Phase 6.2)
 
 | Variable | Default | Effect |

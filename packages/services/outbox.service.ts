@@ -162,3 +162,41 @@ export async function markOutboxEventDeadLetter(id: string, errorMessage: string
         }
     );
 }
+
+export type RequeueDeadLetteredMessageEventsResult = {
+    dryRun: boolean;
+    matched: number;
+    requeued: number;
+};
+
+/**
+ * Move dead-lettered message.created events back to pending with attempts reset.
+ * Safe to repeat: ingress skips messages that are already classified.
+ */
+export async function requeueDeadLetteredMessageEvents(
+    options: { dryRun?: boolean } = {}
+): Promise<RequeueDeadLetteredMessageEventsResult> {
+    await connectToDatabase();
+
+    const filter = { topic: "message.created" as const, status: "dead_letter" as const };
+
+    if (options.dryRun) {
+        const matched = await OutboxEventModel.countDocuments(filter);
+        return { dryRun: true, matched, requeued: 0 };
+    }
+
+    const result = await OutboxEventModel.updateMany(filter, {
+        $set: {
+            status: "pending",
+            attempts: 0,
+            availableAt: new Date(),
+            processedAt: null,
+            deadLetteredAt: null,
+            lockedBy: null,
+            lockedAt: null,
+            lastError: null,
+        },
+    });
+
+    return { dryRun: false, matched: result.matchedCount, requeued: result.modifiedCount };
+}
