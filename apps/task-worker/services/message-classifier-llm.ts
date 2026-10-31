@@ -3,8 +3,19 @@ import { CLASSIFIABLE_SEMANTIC_TYPES } from "@semantask/types";
 import type { MessageClassification } from "@semantask/services/message-classifier.service";
 import { createDefaultLLMProvider } from "./llm/provider-factory.js";
 import { parseJsonText } from "./llm/response-parser.js";
+import type { BaseLLMProvider } from "./llm/base-provider.js";
 import { LLMError } from "./llm/types.js";
+import { RetryManager } from "./retry-manager.js";
+import { logExecution } from "./execution-logger.js";
 import { getClassifierModel, getClassifierTimeoutMs, getLlmApiKey } from "../config/llm.js";
+
+const CLASSIFIER_MAX_RETRIES = 2;
+const classifierRetryManager = new RetryManager([1000, 2000]);
+
+export type ClassifyMessageWithLlmDeps = {
+    provider?: Pick<BaseLLMProvider, "generate">;
+    retryManager?: RetryManager;
+};
 
 const classifierResponseSchema = z.object({
     semanticType: z.enum(CLASSIFIABLE_SEMANTIC_TYPES),
@@ -60,14 +71,10 @@ function extractResponseText(response: { output_text?: string; output?: unknown 
     return "";
 }
 
-export async function classifyMessageWithLlm(content: string): Promise<MessageClassification | null> {
-    const apiKey = getLlmApiKey();
-
-    if (!apiKey.trim()) {
-        return null;
-    }
-
-    const provider = createDefaultLLMProvider();
+async function requestClassification(
+    provider: Pick<BaseLLMProvider, "generate">,
+    content: string
+): Promise<MessageClassification> {
     const model = getClassifierModel();
     const timeoutMs = getClassifierTimeoutMs();
     const startedAt = Date.now();
@@ -116,4 +123,35 @@ export async function classifyMessageWithLlm(content: string): Promise<MessageCl
         reasoning: validated.data.reasoning,
         source: "llm",
     };
+}
+
+/**
+ * Returns null only when no API key is configured. A timeout or provider error
+ * is retried, then thrown so the outbox event stays retryable.
+ */
+export async function classifyMessageWithLlm(
+    content: string,
+    deps: ClassifyMessageWithLlmDeps = {}
+): Promise<MessageClassification | null> {
+    if (!getLlmApiKey().trim()) {
+        return null;
+    }
+
+    const provider = deps.provider ?? createDefaultLLMProvider();
+    const retryManager = deps.retryManager ?? classifierRetryManager;
+
+    return retryManager.execute({
+        retryCount: 0,
+        maxRetries: CLASSIFIER_MAX_RETRIES,
+        operation: () => requestClassification(provider, content),
+        shouldRetry: (error) => (error instanceof LLMError ? error.retryable : true),
+        onRetry: ({ attempt, delayMs, reason }) => {
+            logExecution("warn", {
+                event: "classifier.llm.retry",
+                attempt,
+                delayMs,
+                error: reason,
+            });
+        },
+    });
 }

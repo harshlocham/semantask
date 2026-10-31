@@ -219,6 +219,7 @@ export async function processMessageTaskIntelligence(
         };
     }
 
+    // Throws if the LLM fails. Nothing is written yet, so the outbox event stays retryable.
     const classification = await classifyMessage(input.content);
     const semanticType = classification.semanticType;
 

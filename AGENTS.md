@@ -300,9 +300,10 @@ Invariant → pinning test map:
 - `README.md` places `classifyMessage` in `task-intelligence.service.ts`, which only
   imports it. It is defined in `packages/services/message-classifier.service.ts`.
 - Ingress classification defaults to the **LLM** (`TASK_CLASSIFIER_MODE` unset or
-  `llm`), with regex fallback when the model is missing or fails. `regex` and
-  `shadow` remain explicit switches. LLMs are also used in optional execution
-  (planning, decisions, reflection).
+  `llm`), with regex fallback only when no API key is configured. A timeout or
+  provider error is retried, then leaves the `message.created` event retryable
+  and the message unclassified. `regex` and `shadow` remain explicit switches.
+  LLMs are also used in optional execution (planning, decisions, reflection).
 
 ## 9. Change conventions
 
