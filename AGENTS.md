@@ -23,7 +23,11 @@ pnpm + Turborepo monorepo, ESM TypeScript, Node 24 (`.nvmrc`; CI matrix 24.x).
 | `packages/types` | Pure shared contracts (zero internal deps) |
 | `packages/db` | Mongoose models |
 | `packages/services` | Domain logic, repositories, policy helpers |
-| `packages/auth`, `packages/observability`, `packages/redis` | Auth, logs/metrics/tracing, Redis shim |
+| `packages/auth`, `packages/observability` | Auth, logs/metrics/tracing |
+
+There is no shared Redis package: the worker and socket each own an `ioredis`
+client on `REDIS_URL`. Web uses Upstash REST for rate limiting and its user-state
+cache, plus a `redis` client in the admin dashboard route.
 
 Open the matching skill before editing that layer.
 
@@ -35,6 +39,37 @@ Open the matching skill before editing that layer.
 | A new tool adapter | `add-worker-tool` |
 | Why a task did or did not run | `trace-task-execution` first |
 | Suggestions, notifications, web UI, auth, orgs, socket handlers | this file only (§3) |
+
+### Runtime flow
+
+1. **Message.** `POST /api/messages` calls `createMessage`
+   (`packages/services/message.service.ts`), which writes the message and a
+   `message.created` `OutboxEvent` in one Mongo transaction.
+2. **Classification.** The worker loop (`apps/task-worker/index.ts`) claims outbox
+   events and dispatches by topic. `message.created` runs
+   `processMessageTaskIntelligence`, which classifies the message and creates a
+   `WorkSuggestion`. Under `suggest_only` it stops there. Other modes continue on
+   the legacy path: create a task and enqueue `task.execution.requested`.
+3. **Review.** `acceptWorkSuggestion` creates a coordination task and never
+   enqueues execution. A manager asks for tools through `requestTaskExecution`.
+4. **Execution.** `task.execution.requested` / `.approved` pass the suggest_only
+   gate, then `evaluateExecutionPolicy`, then `withExecutionLease`, then
+   `AgentRunner` → `StepLoop` → `ToolExecutor` → `*.tool.ts`.
+5. **Realtime.** Web and the worker push events to the socket server over
+   `/internal/*`. The socket server asks web to authorize through
+   `/api/internal/socket/*` and never reads Mongo itself.
+
+### Local development
+
+```bash
+pnpm install
+cp .env.sample .env      # root .env; web, socket, and worker each load it
+pnpm run dev             # web :3000, socket :3001, worker (mobile: pnpm mobile)
+pnpm run task-worker     # worker alone
+```
+
+MongoDB and Redis are external. `docker compose up --build` runs web, socket,
+worker, Redis, and nginx, but still needs a reachable `MONGODB_URI`.
 
 ## 2. Non-negotiable invariants
 
@@ -159,14 +194,24 @@ These are real, pre-existing, and out of scope for unrelated changes:
 
 ## 7. Testing and verification
 
-**Build shared packages first.** Workspace tests import built output from
-`packages/*/dist`. In a fresh or cleaned tree, `pnpm --filter @semantask/task-worker test`
-fails every file with `ERR_MODULE_NOT_FOUND … @semantask/db/dist/db.js`. That is a
-missing build, **not** a broken test. Run CI's step first:
+**Build shared packages first.** Many tests import built output from
+`packages/*/dist`. In a fresh or cleaned tree, many `apps/task-worker` files, some
+`apps/socket` files, and the `notify.service` suite in `packages/services` fail with
+`ERR_MODULE_NOT_FOUND … @semantask/db/dist/db.js` or
+`TS2307 … @semantask/types/utils/internal-bridge-auth`. That is a missing build,
+**not** a broken test. Run CI's step first, and again after editing a shared package:
 
 ```bash
 pnpm exec turbo run build '--filter=./packages/*'
 ```
+
+Two things can mislead you about the state of a build:
+
+- `ts-jest` caches transforms, so a Jest suite can keep passing after `dist` is gone.
+  Add `--no-cache` when a result looks wrong.
+- In the worker, `tsx` follows `apps/task-worker/tsconfig.json` paths, so
+  `@semantask/services/*` resolves to source while `@semantask/db` and
+  `@semantask/types` resolve to `dist`.
 
 Test runners differ per workspace — use the right one:
 
@@ -179,11 +224,40 @@ Test runners differ per workspace — use the right one:
 | `apps/web` | Jest (+ Playwright e2e) | `pnpm --filter @semantask/web test` |
 
 Repo-wide (what CI runs): `pnpm run test`, `pnpm run typecheck`, `pnpm run lint`,
-`pnpm run build`, `pnpm run ci:verify-artifacts`.
+`pnpm run build`, `pnpm run ci:verify-artifacts`. Only `apps/web` defines `lint`, and
+`packages/auth` has no `typecheck` script, so a green repo-wide run does not lint the
+worker, socket, or packages.
+
+Running a single test:
+
+```bash
+# Jest: path pattern, optional -t name filter
+pnpm --filter @semantask/services test -t 'dedupe' __tests__/notify.service.test.ts
+pnpm --filter @semantask/web test test/config.test.ts
+
+# node:test: the package script hard-codes its glob, so call tsx directly
+INTERNAL_SECRET=test-internal-secret TASK_TOOL_RBAC=off \
+  pnpm --filter @semantask/task-worker exec tsx --test tests/execution-policy.test.ts
+pnpm --filter @semantask/socket exec tsx --test tests/config.test.ts
+# narrow by name with --test-name-pattern='explicit' before the file
+
+# Vitest: pick the project; integration boots mongodb-memory-server and runs serially
+pnpm --filter @semantask/auth exec vitest run -c vitest.config.ts --project unit \
+  __tests__/otp.service.test.ts
+pnpm --filter @semantask/auth exec vitest run -c vitest.config.ts --project integration \
+  --no-file-parallelism --max-workers=1 __tests__/token-versioning.integration.test.ts
+
+# Playwright: Docker Mongo :27018 and Redis :6380; starts web, socket, and worker
+# with a curated env that does not inherit your .env
+pnpm --filter @semantask/web exec playwright install chromium
+pnpm --filter @semantask/web test:e2e:deps
+pnpm --filter @semantask/web test:e2e e2e/landing.spec.ts
+```
 
 Worker test conventions:
 
-- `apps/task-worker/tests/test-env.ts` sets `INTERNAL_SECRET` and
+- `apps/task-worker/tests/test-env.ts` sets `INTERNAL_SECRET`,
+  `TASK_CLASSIFIER_MODE=regex` (to stay offline), and
   `DEFAULT_EXECUTION_MODE=auto_execute` **because production default
   `suggest_only` denies tools**. Import it in tests that exercise tool paths;
   never change the production default to make a test pass.
@@ -218,7 +292,13 @@ Invariant → pinning test map:
   `apps/task-worker/index.ts`. **That code was removed** (see TD-05 in
   `apps/task-worker/CHANGELOG.md`). Tools now run only through `ToolExecutor`.
 - `docs/ARCHITECTURE.md` carries a verification date and commit; treat anything
-  newer in code as authoritative.
+  newer in code as authoritative. Its §4 still calls ingress regex-only and places
+  `buildToolIdempotencyKey` on `AgentRunner`; the key now lives on `ToolExecutor`.
+- `packages/redis` / `@semantask/redis` no longer exists, but `README.md`,
+  `docs/ARCHITECTURE.md`, and `docs/architecture/shared-package-design.md` still
+  describe it.
+- `README.md` places `classifyMessage` in `task-intelligence.service.ts`, which only
+  imports it. It is defined in `packages/services/message-classifier.service.ts`.
 - Ingress classification defaults to the **LLM** (`TASK_CLASSIFIER_MODE` unset or
   `llm`), with regex fallback when the model is missing or fails. `regex` and
   `shadow` remain explicit switches. LLMs are also used in optional execution
