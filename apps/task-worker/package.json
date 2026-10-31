@@ -9,7 +9,8 @@
         "start": "node dist/apps/task-worker/index.js",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "test": "INTERNAL_SECRET=test-internal-secret TASK_TOOL_RBAC=off tsx --test tests/**/*.test.ts",
-        "requeue:dead-letter-messages": "tsx scripts/requeue-dead-letter-messages.ts"
+        "requeue:dead-letter-messages": "tsx scripts/requeue-dead-letter-messages.ts",
+        "replay:classifier": "tsx scripts/replay-classifier.ts"
     },
     "dependencies": {
         "@semantask/db": "workspace:*",
