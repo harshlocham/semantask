@@ -1,7 +1,7 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
-import { getUpstashRestConfig } from "@/lib/config/redis";
+import { getUpstashRestConfig, upstashFailFastOptions } from "@/lib/config/redis";
 
 type RateLimitResult = {
     success: boolean;
@@ -54,6 +54,7 @@ if (upstashUrl && upstashToken) {
     upstashRedisClient = new Redis({
         url: upstashUrl,
         token: upstashToken,
+        ...upstashFailFastOptions,
     });
 }
 
@@ -74,6 +75,9 @@ class HybridRateLimiter {
             redis: upstashRedisClient,
             limiter: Ratelimit.fixedWindow(max, `${windowSeconds} s`),
             prefix,
+            // Off, because the library's own timeout allows the request. The
+            // client's timeout throws instead, which reaches the fallback below.
+            timeout: 0,
         });
     }
 
@@ -90,8 +94,8 @@ class HybridRateLimiter {
                 reset: result.reset,
             };
         } catch {
-            // Fail closed from a reliability perspective with a local fallback
-            // so auth endpoints remain available if the Redis network path is down.
+            // Keep enforcing a limit locally so auth endpoints stay available and
+            // throttled if the Redis network path is down. Counts are per process.
             return this.inMemoryLimiter.limit(key);
         }
     }
