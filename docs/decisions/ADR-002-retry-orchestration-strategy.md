@@ -64,11 +64,12 @@ heartbeat.
 
 The outbox is at-least-once. Idempotency is layered on top:
 
-- **Per-event de-duplication**: `processOneEvent` derives a Redis key
-  `task-worker:processed:${event.dedupeKey}` and tries
-  `SET NX EX 7d` (`apps/task-worker/index.ts:1488-1499`). If the key already
-  exists, the event is acknowledged without processing. On thrown error, the
-  Redis key is deleted so the next claim can re-attempt.
+- **Per-event de-duplication**: `processOutboxEventOnce`
+  (`apps/task-worker/services/outbox-processed-marker.ts`) checks the Redis key
+  `task-worker:processed:v2:${event.dedupeKey}` and writes it (`SET EX 7d`) only
+  after the handler succeeds. If the key already exists, the event is
+  acknowledged without processing. A crash or thrown error leaves no key, so the
+  next claim re-attempts, which is why handlers must stay duplicate-safe.
 - **Per-action idempotency** (legacy path):
   `buildActionIdempotencyKey(payload)` hashes
   `(taskId, actionType, stableStringify(parameters))` and `withIdempotencyGuard`
@@ -202,7 +203,7 @@ any non-negative integer.
 | Outbox claim | Worker crashes after `findOneAndUpdate` | Row remains `processing`; reclaim after `stale_processing_cutoff = 5 min`. |
 | Outbox process | `processOneEvent` throws | `markOutboxEventFailed` with exponential delay; after `OUTBOX_MAX_ATTEMPTS=12` → dead-letter. |
 | Outbox process | `ExecutionLeaseBusyError` (lease held by another worker) | `markOutboxEventDeferred` — restores eager `attempts` increment, sets `availableAt` for re-claim; event is **not** completed. |
-| Outbox dedupe | Redis unavailable | `if (!redis) shouldProcess = true`; the worker proceeds without de-dup. This is documented in code at `apps/task-worker/index.ts:1490-1494`. |
+| Outbox dedupe | Redis unavailable | With no Redis configured the worker proceeds without de-dup (`processOutboxEventOnce`). A failed marker read leaves the event for retry; a failed marker write still completes it. |
 | Lease | Heartbeat lost | `withExecutionLease`'s `setInterval` aborts the AbortController; the runner sees the signal and throws `Execution aborted.`; the outbox path records the failure and re-enqueues. |
 | Lease | Steal by another worker | `acquireTaskLease`'s `$or` includes `{ leaseExpiresAt: { $lt: now } }` so any worker can take over after expiry; the original `release` call is then a no-op due to the `leaseOwner` predicate. |
 | Tool execution | Adapter returns non-2xx | Tool result has `adapterSuccess: false`; agent-runner records the failure in `executionHistory`, calls `scheduleTaskRetry` if budget remains, else marks failed. |

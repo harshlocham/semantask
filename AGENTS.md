@@ -275,6 +275,7 @@ Invariant → pinning test map:
 | ingress stays suggest-first | `packages/services/__tests__/task-intelligence.suggest-only.test.ts` |
 | tool idempotency is run-independent | `apps/task-worker/tests/idempotent-tool-execution.test.ts` |
 | lease contention defers | `apps/task-worker/tests/dispatch.lease-wrapper.test.ts`, `apps/task-worker/tests/lease.contention.test.ts` |
+| crash then reclaim re-runs the event | `apps/task-worker/tests/outbox-processed-marker.test.ts` |
 | agent loop / cancellation | `apps/task-worker/tests/agent-runner.*.test.ts` |
 | workflow resolution | `apps/task-worker/tests/workflow-registry.test.ts` |
 | accept never enqueues execution | `packages/services/__tests__/work-suggestion.mutations.test.ts` |
