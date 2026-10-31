@@ -14,6 +14,7 @@ export type CachedUserState = {
 
 const DEFAULT_USER_STATE_CACHE_TTL_SECONDS = 45;
 const USER_STATE_CACHE_KEY_PREFIX = "auth:user-state";
+const USER_STATE_CACHE_TIMEOUT_MS = 500;
 
 const upstash = getUpstashRestConfig();
 const upstashUrl = upstash?.url;
@@ -24,6 +25,11 @@ if (upstashUrl && upstashToken) {
     redisClient = new Redis({
         url: upstashUrl,
         token: upstashToken,
+        // Not `retry: false`, which the SDK still sends twice.
+        retry: { retries: 0 },
+        // Must be a function. The SDK turns an aborted plain signal into a
+        // successful response whose value is the abort reason.
+        signal: () => AbortSignal.timeout(USER_STATE_CACHE_TIMEOUT_MS),
     });
 }
 
