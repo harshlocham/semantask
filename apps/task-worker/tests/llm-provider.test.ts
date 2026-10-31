@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import test, { type TestContext } from "node:test";
 import { createLLMProvider, recommendProviderForTaskProfile, validateProviderStartup } from "../services/llm/provider-factory.js";
 import { getAllLLMProviderMetricsSnapshots, resetLLMProviderMetrics } from "../services/llm/metrics.js";
 import { HuggingFaceProvider } from "../services/llm/providers/huggingface-provider.js";
@@ -234,4 +236,45 @@ test("provider recommendation helper returns a lightweight fallback plan", () =>
 
     assert.equal(recommendation.provider, "openai-compatible");
     assert.equal(recommendation.fallbackProvider, "openai-compatible");
+});
+
+async function failingProvider(t: TestContext) {
+    let requests = 0;
+    const server = createServer((_req, res) => {
+        requests += 1;
+        res.writeHead(500, { "content-type": "application/json", "retry-after-ms": "1" });
+        res.end(JSON.stringify({ error: { message: "boom" } }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    t.after(() => server.close());
+
+    const { port } = server.address() as AddressInfo;
+    const provider = new OpenAIProvider({
+        provider: "openai",
+        apiKey: "test-key",
+        baseUrl: `http://127.0.0.1:${port}/v1`,
+        supportsResponsesApi: false,
+        logRequests: false,
+    });
+    return { provider, requestCount: () => requests };
+}
+
+test("callers that do not set maxRetries still get SDK retries", async (t) => {
+    const { provider, requestCount } = await failingProvider(t);
+
+    await assert.rejects(
+        provider.generate({ model: "test-model", input: "hello" }),
+        (error: LLMError) => error.status === 500
+    );
+    assert.equal(requestCount(), 3);
+});
+
+test("maxRetries: 0 sends a single request", async (t) => {
+    const { provider, requestCount } = await failingProvider(t);
+
+    await assert.rejects(
+        provider.generate({ model: "test-model", input: "hello" }, { maxRetries: 0 }),
+        (error: LLMError) => error.status === 500
+    );
+    assert.equal(requestCount(), 1);
 });

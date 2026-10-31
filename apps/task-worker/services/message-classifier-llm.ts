@@ -85,6 +85,8 @@ async function requestClassification(
         temperature: 0,
     }, {
         timeoutMs,
+        // RetryManager owns classifier retries. SDK retries would multiply each attempt.
+        maxRetries: 0,
     });
 
     const text = extractResponseText(response);

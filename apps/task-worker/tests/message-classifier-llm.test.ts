@@ -52,14 +52,17 @@ function retryableError(status: number): LLMError {
 /** Rejects with each scripted error in order, then returns a valid classification. */
 function scriptedProvider(errors: Error[]) {
     const timeouts: Array<number | undefined> = [];
+    const maxRetries: Array<number | undefined> = [];
     let calls = 0;
     return {
         timeouts,
+        maxRetries,
         get calls() {
             return calls;
         },
-        generate: async (_request: unknown, options?: { timeoutMs?: number }) => {
+        generate: async (_request: unknown, options?: { timeoutMs?: number; maxRetries?: number }) => {
             timeouts.push(options?.timeoutMs);
+            maxRetries.push(options?.maxRetries);
             const error = errors[calls];
             calls += 1;
             if (error) {
@@ -133,6 +136,14 @@ test("default retries back off 1s then 2s and use the 15s timeout", async () => 
 
     assert.ok(Date.now() - startedAt >= 2900);
     assert.deepEqual(provider.timeouts, [15_000, 15_000, 15_000]);
+});
+
+test("every classifier attempt disables SDK retries", async () => {
+    const provider = scriptedProvider([retryableError(500)]);
+
+    await classifyMessageWithLlm(MESSAGE, { provider, retryManager: noDelay });
+
+    assert.deepEqual(provider.maxRetries, [0, 0]);
 });
 
 test("missing API key returns null without calling the provider", async () => {
