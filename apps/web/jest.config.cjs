@@ -32,6 +32,7 @@ module.exports = {
     "^@semantask/services/(.*)$": "<rootDir>/../../packages/services/$1",
     "^@semantask/db$": "<rootDir>/../../packages/db/dist/db.js",
     "^@semantask/db/(.*)$": "<rootDir>/../../packages/db/$1",
+    "^@semantask/observability/(.*)$": "<rootDir>/../../packages/observability/$1",
     "^next/link$": "<rootDir>/test/mocks/next-link.tsx",
   },
   clearMocks: true,
