@@ -1,10 +1,16 @@
 # CLAUDE.md
 
-Read [`AGENTS.md`](AGENTS.md) and follow it. It is the canonical, tool-agnostic
-instruction file for this repository: product contract, non-negotiable
-invariants (suggest_only fail-closed, policy-before-side-effects, ToolExecutor
-as the side-effect boundary, idempotency and lease duplicate-safety), package
-boundaries, per-workspace test commands, and known documentation drift.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Do not duplicate those rules here — update `AGENTS.md` instead, so every agent
-sees the same instructions.
+@AGENTS.md
+
+`AGENTS.md`, imported above, is the canonical, tool-agnostic instruction file:
+product contract, non-negotiable invariants, runtime flow, package boundaries,
+commands, and known documentation drift. Do not duplicate those rules here —
+update `AGENTS.md` instead, so every agent sees the same instructions.
+
+## Claude Code notes
+
+- The skills named in the `AGENTS.md` §1 router are plain files, not registered
+  with the Skill tool. Read `.agents/skills/<name>/SKILL.md` directly before
+  editing that layer.
