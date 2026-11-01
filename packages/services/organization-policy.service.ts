@@ -32,6 +32,12 @@ export {
     shouldBlockExecutionEnqueue,
 } from "./config/flags";
 
+const TOOL_AUTONOMY_MODES = ["off", "suggest_only", "require_approval", "auto_execute"] as const;
+const POLICY_TOOL_NAMES = ["send_email", "schedule_meeting", "create_github_issue"] as const;
+
+export type ToolAutonomyMode = (typeof TOOL_AUTONOMY_MODES)[number];
+export type ToolExecutionModes = Partial<Record<(typeof POLICY_TOOL_NAMES)[number], ToolAutonomyMode>>;
+
 export type ResolvedOrganizationPolicy = {
     organizationId: string;
     version: number;
@@ -42,6 +48,7 @@ export type ResolvedOrganizationPolicy = {
     defaultToolGrants: string[];
     promptGuardMode: PromptGuardMode | null;
     executionMode: ExecutionMode | null;
+    toolExecutionModes: ToolExecutionModes | null;
 };
 
 function isValidObjectId(value: string | null | undefined): value is string {
@@ -83,6 +90,34 @@ function normalizeStoredExecutionMode(
     return isExecutionModeValue(value) ? value : null;
 }
 
+function isPolicyToolName(value: string): value is (typeof POLICY_TOOL_NAMES)[number] {
+    return (POLICY_TOOL_NAMES as readonly string[]).includes(value);
+}
+
+function isToolAutonomyMode(value: string): value is ToolAutonomyMode {
+    return (TOOL_AUTONOMY_MODES as readonly string[]).includes(value);
+}
+
+function normalizeToolExecutionModes(value: unknown): ToolExecutionModes | null {
+    if (value == null) return null;
+    if (typeof value !== "object" || Array.isArray(value)) {
+        throw new ValidationError("toolExecutionModes must be an object");
+    }
+
+    const normalized: ToolExecutionModes = {};
+    for (const [tool, mode] of Object.entries(value)) {
+        const toolName = tool.trim().toLowerCase();
+        if (!isPolicyToolName(toolName)) {
+            throw new ValidationError(`Unknown tool in toolExecutionModes: ${tool}`);
+        }
+        if (typeof mode !== "string" || !isToolAutonomyMode(mode)) {
+            throw new ValidationError(`Invalid autonomy mode for ${toolName}`);
+        }
+        normalized[toolName] = mode;
+    }
+    return normalized;
+}
+
 export async function getOrganizationPolicy(
     organizationId: string
 ): Promise<IOrganizationPolicy | null> {
@@ -115,6 +150,7 @@ export async function resolveOrganizationPolicy(
             defaultToolGrants: [],
             promptGuardMode: null,
             executionMode: null,
+            toolExecutionModes: null,
         };
     }
 
@@ -130,6 +166,7 @@ export async function resolveOrganizationPolicy(
         defaultToolGrants: (doc.defaultToolGrants ?? []).map((t) => t.toLowerCase()),
         promptGuardMode: doc.promptGuardMode ?? null,
         executionMode: normalizeStoredExecutionMode(doc.executionMode),
+        toolExecutionModes: normalizeToolExecutionModes(doc.toolExecutionModes),
     };
 }
 
@@ -143,6 +180,7 @@ export type UpsertOrganizationPolicyInput = {
     defaultToolGrants?: string[] | null;
     promptGuardMode?: PromptGuardMode | null;
     executionMode?: ExecutionMode | null;
+    toolExecutionModes?: ToolExecutionModes | null;
 };
 
 export async function upsertOrganizationPolicy(
@@ -193,6 +231,9 @@ export async function upsertOrganizationPolicy(
         }
         if (input.promptGuardMode !== undefined) {
             $set.promptGuardMode = input.promptGuardMode;
+        }
+        if (input.toolExecutionModes !== undefined) {
+            $set.toolExecutionModes = normalizeToolExecutionModes(input.toolExecutionModes);
         }
 
         let executionModeChanged = false;
@@ -280,6 +321,7 @@ export function serializeOrganizationPolicy(doc: IOrganizationPolicy | null, org
             defaultToolGrants: [],
             promptGuardMode: null,
             executionMode: null,
+            toolExecutionModes: null,
             effectiveExecutionMode: getEffectiveExecutionMode({ organizationId, executionMode: null }),
         };
     }
@@ -295,6 +337,7 @@ export function serializeOrganizationPolicy(doc: IOrganizationPolicy | null, org
         toolDenyList: doc.toolDenyList ?? [],
         defaultToolGrants: doc.defaultToolGrants ?? [],
         promptGuardMode: doc.promptGuardMode ?? null,
+        toolExecutionModes: normalizeToolExecutionModes(doc.toolExecutionModes),
         executionMode,
         effectiveExecutionMode: getEffectiveExecutionMode({
             organizationId: doc.organizationId.toString(),

@@ -275,6 +275,80 @@ test("org allowedEmailDomains beats env email allowlist", () => {
     assert.ok(denied.reasons.some((reason) => reason.includes("org policy v3")));
 });
 
+test("org auto_execute plus tool suggest_only blocks that tool", () => {
+    const blocked = evaluateExecutionPolicy({
+        actionType: "send_email",
+        confidence: 0.95,
+        semanticType: "task",
+        parameters: { to: ["user@example.com"] },
+        organizationId: "507f1f77bcf86cd799439011",
+        orgPolicy: {
+            version: 4,
+            executionMode: "auto_execute",
+            promptGuardMode: "off",
+            toolExecutionModes: { send_email: "suggest_only" },
+        },
+        executionModeEnforce: true,
+    });
+    assert.equal(blocked.outcome, "blocked");
+    assert.ok(blocked.reasons.includes("tool_execution_mode:suggest_only"));
+
+    const otherTool = evaluateExecutionPolicy({
+        actionType: "create_github_issue",
+        confidence: 0.95,
+        semanticType: "task",
+        parameters: { title: "Classifier retest" },
+        organizationId: "507f1f77bcf86cd799439011",
+        orgPolicy: {
+            version: 4,
+            executionMode: "auto_execute",
+            promptGuardMode: "off",
+            toolExecutionModes: { send_email: "suggest_only" },
+        },
+        executionModeEnforce: true,
+    });
+    assert.equal(otherTool.outcome, "auto_execute");
+});
+
+test("tool require_approval does not auto-run", () => {
+    const decision = evaluateExecutionPolicy({
+        actionType: "send_email",
+        confidence: 0.95,
+        semanticType: "task",
+        parameters: { to: ["user@example.com"] },
+        organizationId: "507f1f77bcf86cd799439011",
+        orgPolicy: {
+            version: 4,
+            executionMode: "auto_execute",
+            promptGuardMode: "off",
+            toolExecutionModes: { send_email: "require_approval" },
+        },
+        executionModeEnforce: true,
+    });
+    assert.equal(decision.outcome, "approval_required");
+    assert.ok(decision.reasons.includes("tool_execution_mode:require_approval"));
+});
+
+test("org suggest_only still blocks a tool set to auto_execute", () => {
+    const decision = evaluateExecutionPolicy({
+        actionType: "send_email",
+        confidence: 0.95,
+        semanticType: "task",
+        parameters: { to: ["user@example.com"] },
+        organizationId: "507f1f77bcf86cd799439011",
+        orgPolicy: {
+            version: 4,
+            executionMode: "suggest_only",
+            promptGuardMode: "off",
+            toolExecutionModes: { send_email: "auto_execute" },
+        },
+        executionModeEnforce: true,
+    });
+    assert.equal(decision.outcome, "blocked");
+    assert.ok(decision.reasons.includes("execution_mode:suggest_only"));
+    assert.equal(decision.reasons.some((reason) => reason.startsWith("tool_execution_mode:")), false);
+});
+
 test("applyExecutionModeGate is pure for suggest_only enforce", () => {
     const gated = applyExecutionModeGate(
         {

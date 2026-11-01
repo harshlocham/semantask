@@ -258,4 +258,62 @@ describe("OrganizationsPage", () => {
         });
         expect(await screen.findByText(/Invitation resent/)).toBeInTheDocument();
     });
+
+    it("saves per-tool autonomy with the organization policy", async () => {
+        listOrganizations.mockResolvedValue([
+            {
+                id: "org-1",
+                name: "Acme",
+                slug: "acme",
+                status: "active",
+                createdBy: "u1",
+                createdAt: "2026-08-08T10:00:00.000Z",
+                updatedAt: "2026-08-08T10:00:00.000Z",
+                role: "owner",
+            },
+        ]);
+        updateOrganizationPolicy.mockResolvedValue({ organizationId: "org-1" });
+        window.localStorage.setItem("semantask.activeOrganizationId", "org-1");
+
+        renderWithQuery(<OrganizationsPage />);
+
+        fireEvent.click(await screen.findByRole("tab", { name: "Policy & quotas" }));
+        const emailMode = await screen.findByTestId("organization-policy-tool-mode-send_email");
+        expect(emailMode).toHaveValue("auto_execute");
+        expect(emailMode).toBeEnabled();
+        fireEvent.change(emailMode, { target: { value: "suggest_only" } });
+        fireEvent.click(screen.getByRole("button", { name: "Save policy" }));
+
+        await waitFor(() => {
+            expect(updateOrganizationPolicy).toHaveBeenCalledWith("org-1", expect.objectContaining({
+                toolExecutionModes: {
+                    send_email: "suggest_only",
+                    schedule_meeting: "auto_execute",
+                    create_github_issue: "auto_execute",
+                },
+            }));
+        });
+    });
+
+    it("disables tool autonomy controls for members", async () => {
+        listOrganizations.mockResolvedValue([
+            {
+                id: "org-1",
+                name: "Acme",
+                slug: "acme",
+                status: "active",
+                createdBy: "u1",
+                createdAt: "2026-08-08T10:00:00.000Z",
+                updatedAt: "2026-08-08T10:00:00.000Z",
+                role: "member",
+            },
+        ]);
+        window.localStorage.setItem("semantask.activeOrganizationId", "org-1");
+
+        renderWithQuery(<OrganizationsPage />);
+
+        fireEvent.click(await screen.findByRole("tab", { name: "Policy & quotas" }));
+        expect(await screen.findByTestId("organization-policy-tool-mode-send_email")).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Save policy" })).toBeDisabled();
+    });
 });

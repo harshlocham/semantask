@@ -52,7 +52,7 @@ Need the worker in isolation? `pnpm run task-worker`. Full env notes are in [Env
 | **Manager control** | Approvals, tool grants, org policy, and audit trails. |
 | **Org visibility** | Personal workspace by default; optional organizations ([ADR-004](docs/decisions/ADR-004-personal-and-optional-organizations.md)). |
 | **Realtime collaboration** | Socket.IO for messages, presence, and work updates. |
-| **Optional autonomy** | Multi-provider LLM worker when policy allows. |
+| **Optional autonomy** | Chosen per organization and, for high-risk tools, per tool. |
 
 Product contract: suggest → (approve when policy requires) → coordinate. False tool side effects under effective `suggest_only` are a P0. See [ADR-005](docs/decisions/ADR-005-suggest-first-work-coordination.md). Roadmap lives in Notion, not this repo.
 
