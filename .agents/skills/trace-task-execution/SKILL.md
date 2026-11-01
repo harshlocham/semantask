@@ -114,9 +114,10 @@ Trace-scoped facts (invariants: AGENTS.md §2):
 - Registered tools today: `send_email`, `schedule_meeting`, `create_github_issue`
   (`AgentContext.createDefaultToolRegistry`).
 - Ingress classification defaults to the LLM (`TASK_CLASSIFIER_MODE` unset or
-  `llm`), with regex fallback when the model is missing or fails. `regex` and
-  `shadow` remain explicit switches. A missing task can be a classifier miss
-  or a fallback, not only a policy block.
+  `llm`), with regex fallback only when no API key is configured. An LLM failure
+  leaves the outbox event retryable, then dead-lettered. `regex` and `shadow`
+  remain explicit switches. A missing task can be a classifier miss, a fallback,
+  or a dead-lettered event, not only a policy block.
 
 ## Rules
 

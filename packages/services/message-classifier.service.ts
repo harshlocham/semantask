@@ -24,6 +24,14 @@ export type MessageClassification = {
     source: "regex" | "llm" | "llm_fallback";
 };
 
+/** The configured LLM failed. Ingress must retry instead of accepting regex as final. */
+export class ClassifierUnavailableError extends Error {
+    constructor(message: string, options?: { cause?: unknown }) {
+        super(message, options);
+        this.name = "ClassifierUnavailableError";
+    }
+}
+
 export type LlmClassifyFn = (content: string) => Promise<MessageClassification | null>;
 
 export type ClassifierDisagreementPayload = {
@@ -77,7 +85,10 @@ function buildClassification(
     };
 }
 
-function recordClassification(mode: ClassifierMode, source: MessageClassification["source"]): void {
+function recordClassification(
+    mode: ClassifierMode,
+    source: MessageClassification["source"] | "llm_failed"
+): void {
     try {
         classifierClassificationsCounter.inc({ mode, source });
     } catch {
@@ -201,7 +212,10 @@ function logShadowDisagreement(content: string, regex: MessageClassification, ll
     }
 }
 
-async function classifyWithLlmOrFallback(content: string): Promise<MessageClassification> {
+async function classifyWithLlmOrFallback(
+    content: string,
+    options: { throwOnLlmFailure: boolean }
+): Promise<MessageClassification> {
     const regexFallback = classifyMessageWithRegex(content);
 
     if (!configuredLlmClassify) {
@@ -224,6 +238,11 @@ async function classifyWithLlmOrFallback(content: string): Promise<MessageClassi
         };
     } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
+        if (options.throwOnLlmFailure) {
+            recordClassification("llm", "llm_failed");
+            throw new ClassifierUnavailableError(`LLM classifier failed (${detail})`, { cause: error });
+        }
+
         return {
             ...regexFallback,
             source: "llm_fallback",
@@ -237,7 +256,8 @@ async function classifyWithLlmOrFallback(content: string): Promise<MessageClassi
  * Unset `TASK_CLASSIFIER_MODE` is `llm`.
  * - `regex`: heuristic only
  * - `shadow`: run LLM + regex, log disagreements, authority stays on regex
- * - `llm`: LLM with regex fallback on failure
+ * - `llm`: LLM. Regex is used only when no LLM is available (no API key). A
+ *   timeout or provider error throws ClassifierUnavailableError.
  */
 export async function classifyMessage(content: string): Promise<MessageClassification> {
     const mode = getClassifierMode();
@@ -249,13 +269,13 @@ export async function classifyMessage(content: string): Promise<MessageClassific
     }
 
     if (mode === "llm") {
-        const result = await classifyWithLlmOrFallback(content);
+        const result = await classifyWithLlmOrFallback(content, { throwOnLlmFailure: true });
         recordClassification(mode, result.source);
         return result;
     }
 
     // shadow: LLM may fail/fallback; product path always returns regex
-    const llm = await classifyWithLlmOrFallback(content);
+    const llm = await classifyWithLlmOrFallback(content, { throwOnLlmFailure: false });
     logShadowDisagreement(content, regex, llm);
     recordClassification(mode, "regex");
     return regex;

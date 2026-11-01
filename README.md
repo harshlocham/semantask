@@ -92,7 +92,7 @@ flowchart LR
 
 Full system map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Optional LLM/worker operator docs: [`docs/archive/optional-autonomy/`](docs/archive/optional-autonomy/).
 
-**Ingress:** new chat messages are classified with `classifyMessage()` in `packages/services/task-intelligence.service.ts`. The default is the LLM (`TASK_CLASSIFIER_MODE` unset or `llm`), with regex fallback when the model is missing or fails. Set `TASK_CLASSIFIER_MODE=regex` or `shadow` to switch. Assignee and due-date candidates stay heuristic. LLM providers are also used for optional task execution.
+**Ingress:** new chat messages are classified with `classifyMessage()` in `packages/services/task-intelligence.service.ts`. The default is the LLM (`TASK_CLASSIFIER_MODE` unset or `llm`), with regex fallback only when no API key is configured. A timeout or provider error is retried, then leaves the message unclassified and its outbox event retryable. Set `TASK_CLASSIFIER_MODE=regex` or `shadow` to switch. Assignee and due-date candidates stay heuristic. LLM providers are also used for optional task execution.
 
 ## Platform stack
 

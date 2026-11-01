@@ -124,6 +124,10 @@ export class OpenAIProvider extends BaseLLMProvider {
         const signal = options?.signal
             ? (AbortSignal.any?.([options.signal, abortController.signal]) ?? abortController.signal)
             : abortController.signal;
+        const requestOptions = {
+            signal,
+            ...(options?.maxRetries === undefined ? {} : { maxRetries: options.maxRetries }),
+        };
 
         if (this.shouldLogRequests()) {
             console.info("llm:request", {
@@ -151,7 +155,7 @@ export class OpenAIProvider extends BaseLLMProvider {
                             top_p: request.topP,
                             max_output_tokens: request.maxOutputTokens,
                         },
-                        { signal } as never
+                        requestOptions as never
                     );
                 } catch (error) {
                     const normalized = this.normalizeError(error, requestId, timeoutMs);
@@ -180,7 +184,7 @@ export class OpenAIProvider extends BaseLLMProvider {
                             top_p: request.topP,
                             max_tokens: request.maxOutputTokens,
                         },
-                        { signal } as never
+                        requestOptions as never
                     );
                 }
             } else {
@@ -205,7 +209,7 @@ export class OpenAIProvider extends BaseLLMProvider {
                         top_p: request.topP,
                         max_tokens: request.maxOutputTokens,
                     },
-                    { signal } as never
+                    requestOptions as never
                 );
             }
 

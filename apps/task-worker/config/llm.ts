@@ -50,7 +50,7 @@ export function getClassifierModel(): string {
 }
 
 export function getClassifierTimeoutMs(): number {
-    return parsePositiveNumber(process.env.TASK_CLASSIFIER_LLM_TIMEOUT_MS, 3000);
+    return parsePositiveNumber(process.env.TASK_CLASSIFIER_LLM_TIMEOUT_MS, 15_000);
 }
 
 export function getLlmTimeoutMs(): number {

@@ -363,6 +363,35 @@ describe("processMessageTaskIntelligence suggest-only ingress", () => {
         expect(enqueueOutboxEvent).not.toHaveBeenCalled();
     });
 
+    it("classifier failure writes nothing and rejects so the outbox event stays retryable", async () => {
+        const failure = new Error("LLM classifier failed (LLM request timed out after 15000ms)");
+        classifyMessage.mockRejectedValue(failure);
+
+        await expect(processMessageTaskIntelligence(actionableInput)).rejects.toBe(failure);
+
+        expect(updateMessageSemanticState).not.toHaveBeenCalled();
+        expect(upsertMessageIntent).not.toHaveBeenCalled();
+        expect(createWorkSuggestion).not.toHaveBeenCalled();
+        expect(upsertTaskByDedupeKey).not.toHaveBeenCalled();
+        expect(enqueueTaskExecutionRequested).not.toHaveBeenCalled();
+    });
+
+    it("outbox retry after a classifier failure classifies the message normally", async () => {
+        shouldBlockExecutionEnqueue.mockReturnValue(true);
+        classifyMessage.mockRejectedValueOnce(new Error("LLM classifier failed (provider down)"));
+
+        await expect(processMessageTaskIntelligence(actionableInput)).rejects.toThrow("provider down");
+        await processMessageTaskIntelligence(actionableInput);
+
+        expect(classifyMessage).toHaveBeenCalledTimes(2);
+        expect(createWorkSuggestion).toHaveBeenCalledTimes(1);
+        expect(updateMessageSemanticState).toHaveBeenCalledTimes(1);
+        expect(updateMessageSemanticState).toHaveBeenCalledWith(
+            messageId,
+            expect.objectContaining({ aiStatus: "classified" })
+        );
+    });
+
     it("already classified messages short-circuit (worker retry after success)", async () => {
         messageFindById.mockReturnValue({
             select: jest.fn().mockResolvedValue({

@@ -2,6 +2,7 @@ import "./test-env.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    getClassifierTimeoutMs,
     getLlmApiKey,
     getLlmBaseUrl,
     getLlmModel,
@@ -187,4 +188,13 @@ test("boot warns when only INTERNAL_SECRET or Upstash REST URL is set", () => {
     assert.ok(warnings.some((line) => line.includes("UPSTASH_REDIS_REST_URL")));
     assert.ok(!warnings.some((line) => line.includes("LLM_MODEL")));
     assert.ok(!warnings.some((line) => line.includes("ALLOWED_EMAIL_DOMAINS")));
+});
+
+test("classifier timeout defaults to 15s and can be overridden", () => {
+    withEnv({ TASK_CLASSIFIER_LLM_TIMEOUT_MS: undefined }, () => {
+        assert.equal(getClassifierTimeoutMs(), 15_000);
+    });
+    withEnv({ TASK_CLASSIFIER_LLM_TIMEOUT_MS: "5000" }, () => {
+        assert.equal(getClassifierTimeoutMs(), 5000);
+    });
 });

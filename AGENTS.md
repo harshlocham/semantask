@@ -275,6 +275,7 @@ Invariant → pinning test map:
 | ingress stays suggest-first | `packages/services/__tests__/task-intelligence.suggest-only.test.ts` |
 | tool idempotency is run-independent | `apps/task-worker/tests/idempotent-tool-execution.test.ts` |
 | lease contention defers | `apps/task-worker/tests/dispatch.lease-wrapper.test.ts`, `apps/task-worker/tests/lease.contention.test.ts` |
+| crash then reclaim re-runs the event | `apps/task-worker/tests/outbox-processed-marker.test.ts` |
 | agent loop / cancellation | `apps/task-worker/tests/agent-runner.*.test.ts` |
 | workflow resolution | `apps/task-worker/tests/workflow-registry.test.ts` |
 | accept never enqueues execution | `packages/services/__tests__/work-suggestion.mutations.test.ts` |
@@ -300,9 +301,10 @@ Invariant → pinning test map:
 - `README.md` places `classifyMessage` in `task-intelligence.service.ts`, which only
   imports it. It is defined in `packages/services/message-classifier.service.ts`.
 - Ingress classification defaults to the **LLM** (`TASK_CLASSIFIER_MODE` unset or
-  `llm`), with regex fallback when the model is missing or fails. `regex` and
-  `shadow` remain explicit switches. LLMs are also used in optional execution
-  (planning, decisions, reflection).
+  `llm`), with regex fallback only when no API key is configured. A timeout or
+  provider error is retried, then leaves the `message.created` event retryable
+  and the message unclassified. `regex` and `shadow` remain explicit switches.
+  LLMs are also used in optional execution (planning, decisions, reflection).
 
 ## 9. Change conventions
 

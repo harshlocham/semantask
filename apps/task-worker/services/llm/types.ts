@@ -56,6 +56,8 @@ export interface LLMGenerateOptions {
     timeoutMs?: number;
     signal?: AbortSignal;
     metadata?: Record<string, unknown>;
+    /** SDK retries for this request. Unset keeps the SDK default. */
+    maxRetries?: number;
 }
 
 export class LLMError extends Error {

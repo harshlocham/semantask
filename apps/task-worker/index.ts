@@ -58,6 +58,7 @@ import {
 } from "@semantask/observability/metrics";
 import { refreshOutboxMetrics } from "@semantask/services/outbox-metrics.service";
 import { bootstrapWorkerObservability } from "./services/observability-bootstrap.js";
+import { processOutboxEventOnce } from "./services/outbox-processed-marker.js";
 import { startWorkerMetricsServer } from "./services/metrics-server.js";
 import { warnDeprecatedWorkerAliases } from "./config/aliases.js";
 import { getRedisUrl, getSocketServerUrl, getWorkerRuntimeConfig } from "./config/worker.js";
@@ -1320,20 +1321,8 @@ async function processOneEvent(event: {
         }, async () => {
     const { complete } = getOutboxFns();
     const eventId = event._id.toString();
-    const processedKey = `task-worker:processed:${event.dedupeKey}`;
 
-    let shouldProcess = true;
-    if (redis) {
-        const acquired = await redis.set(processedKey, WORKER_ID, "EX", 7 * 24 * 60 * 60, "NX");
-        shouldProcess = Boolean(acquired);
-    }
-
-    if (!shouldProcess) {
-        await complete(eventId);
-        return;
-    }
-
-    try {
+    const handle = async () => {
         if (event.topic === "message.created") {
             const processIntelligence = getIntelligenceFn();
 
@@ -1381,7 +1370,6 @@ async function processOneEvent(event: {
                 }
             }
 
-            await complete(eventId);
             return;
         }
 
@@ -1393,7 +1381,6 @@ async function processOneEvent(event: {
             const normalizedRequestedPayload = normalizeTaskExecutionRequestedPayload(event.payload);
             await processTaskExecutionRequested(normalizedRequestedPayload);
 
-            await complete(eventId);
             return;
         }
 
@@ -1408,7 +1395,6 @@ async function processOneEvent(event: {
                 event.payload.socketPayload
             );
 
-            await complete(eventId);
             return;
         }
 
@@ -1419,7 +1405,6 @@ async function processOneEvent(event: {
 
             await processTaskExecutionApproved(event.payload);
 
-            await complete(eventId);
             return;
         }
 
@@ -1430,19 +1415,17 @@ async function processOneEvent(event: {
 
             await processTaskCancelRequested(event.payload);
 
-            await complete(eventId);
             return;
         }
+    };
 
-        await complete(eventId);
-        return;
-
-    } catch (error) {
-        if (redis) {
-            await redis.del(processedKey);
-        }
-        throw error;
-    }
+    await processOutboxEventOnce({
+        store: redis,
+        dedupeKey: event.dedupeKey,
+        workerId: WORKER_ID,
+        handle,
+        complete: () => complete(eventId),
+    });
         }));
     });
 }

@@ -3,7 +3,9 @@ jest.mock("@semantask/observability/metrics", () => ({
     classifierDisagreementCounter: { inc: jest.fn() },
 }));
 
+import { classifierClassificationsCounter } from "@semantask/observability/metrics";
 import {
+    ClassifierUnavailableError,
     classifyMessage,
     classifyMessageWithRegex,
     configureMessageClassifier,
@@ -196,18 +198,27 @@ describe("message-classifier.service", () => {
         restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
     });
 
-    test("llm mode falls back when LLM throws", async () => {
+    test("llm mode throws instead of accepting regex when LLM throws", async () => {
         const previousMode = process.env.TASK_CLASSIFIER_MODE;
         process.env.TASK_CLASSIFIER_MODE = "llm";
+        const providerError = new Error("provider down");
         configureMessageClassifier({
             llmClassify: async () => {
-                throw new Error("provider down");
+                throw providerError;
             },
         });
 
-        const result = await classifyMessage("send an email to the team");
-        expect(result.source).toBe("llm_fallback");
-        expect(result.semanticType).toBe("task");
+        const failure = classifyMessage("send an email to the team");
+
+        await expect(failure).rejects.toBeInstanceOf(ClassifierUnavailableError);
+        await expect(failure).rejects.toMatchObject({
+            message: "LLM classifier failed (provider down)",
+            cause: providerError,
+        });
+        expect(classifierClassificationsCounter.inc).toHaveBeenCalledWith({
+            mode: "llm",
+            source: "llm_failed",
+        });
 
         restoreEnvVar("TASK_CLASSIFIER_MODE", previousMode);
     });
