@@ -1,5 +1,15 @@
 # @semantask/services
 
+## 3.4.0
+
+### Minor Changes
+
+- bd3582f: Stop treating an LLM timeout or error at ingress as a final regex classification.
+
+  The worker now allows 15 seconds per classifier call and retries retryable failures up to twice with backoff. If the LLM still fails, the message stays unclassified and the `message.created` outbox event is retried. A missing API key still uses regex, and `shadow` and `regex` modes are unchanged.
+
+- bd3582f: Add `requeue:dead-letter-messages`, which moves dead-lettered `message.created` outbox events back to pending with attempts reset. Pass `--dry-run` to count them without writing.
+
 ## 3.3.0
 
 ### Minor Changes
