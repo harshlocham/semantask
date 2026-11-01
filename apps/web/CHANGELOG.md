@@ -1,5 +1,16 @@
 # @semantask/web
 
+## 5.2.2
+
+### Patch Changes
+
+- a888560: Log a warning, at most once a minute for each of the rate limiter and the user state cache, when either falls back because Upstash timed out or returned an error.
+- a888560: Make the Upstash rate limiter fail fast. Each call now gets a 500ms timeout and no SDK retries, including the block check in `enforceAuthRateLimit`. A timeout or error falls back to the in-memory limiter, so a host that stops answering no longer allows requests without a limit or leaves auth requests waiting.
+- a888560: Make the Upstash user state cache fail fast. Each call now gets a 500ms timeout and no SDK retries, so an unreachable host costs a cache miss instead of about 8.7s per authenticated request.
+- Updated dependencies [bd3582f]
+- Updated dependencies [bd3582f]
+  - @semantask/services@3.4.0
+
 ## 5.2.1
 
 ### Patch Changes

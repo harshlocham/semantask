@@ -1,5 +1,24 @@
 # @semantask/task-worker
 
+## 3.4.0
+
+### Minor Changes
+
+- bd3582f: Stop treating an LLM timeout or error at ingress as a final regex classification.
+
+  The worker now allows 15 seconds per classifier call and retries retryable failures up to twice with backoff. If the LLM still fails, the message stays unclassified and the `message.created` outbox event is retried. A missing API key still uses regex, and `shadow` and `regex` modes are unchanged.
+
+- bd3582f: Add `requeue:dead-letter-messages`, which moves dead-lettered `message.created` outbox events back to pending with attempts reset. Pass `--dry-run` to count them without writing.
+
+### Patch Changes
+
+- bd3582f: Disable OpenAI SDK retries for classifier calls only, so `RetryManager` alone decides how many requests each message sends. Planner, step-loop, and reflection calls keep SDK retries.
+- bd3582f: Add `replay:classifier`, which runs a fixture of messages through the real ingress classifier and reports type, confidence, suggestion decision, latency, and pass or fail. `--runs N` checks stability across repeated runs. `--mock` uses a stub LLM, so it needs no API key.
+- bd3582f: Write the outbox processed marker only after a handler succeeds. Previously a worker crash mid-processing left the marker behind, so the reclaimed event was marked completed without being processed.
+- Updated dependencies [bd3582f]
+- Updated dependencies [bd3582f]
+  - @semantask/services@3.4.0
+
 ## 3.3.0
 
 ### Minor Changes
