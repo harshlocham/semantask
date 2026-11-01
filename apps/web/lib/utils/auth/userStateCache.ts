@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
-import { getUpstashRestConfig } from "@/lib/config/redis";
+import { getUpstashRestConfig, upstashFailFastOptions } from "@/lib/config/redis";
+import { warnUpstashFallback } from "@/lib/observability/upstash-fallback";
 
 export type CachedUserState = {
     id: string;
@@ -24,6 +25,7 @@ if (upstashUrl && upstashToken) {
     redisClient = new Redis({
         url: upstashUrl,
         token: upstashToken,
+        ...upstashFailFastOptions,
     });
 }
 
@@ -38,10 +40,17 @@ export function getDefaultUserStateCacheTtlSeconds(): number {
 export async function getCachedUserState(userId: string): Promise<CachedUserState | null> {
     if (!redisClient) return null;
 
+    let raw: string | null;
     try {
-        const raw = await redisClient.get<string>(getUserStateCacheKey(userId));
-        if (!raw) return null;
+        raw = await redisClient.get<string>(getUserStateCacheKey(userId));
+    } catch (error) {
+        warnUpstashFallback("user_state_cache", "get", error);
+        return null;
+    }
+    if (!raw) return null;
 
+    // Separate from the read, because an unusable entry is not an Upstash failure.
+    try {
         const parsed = JSON.parse(raw) as Partial<CachedUserState>;
         if (!parsed?.id || !parsed?.email || !parsed?.role || typeof parsed?.tokenVersion !== "number") {
             return null;
@@ -72,8 +81,9 @@ export async function setCachedUserState(
         await redisClient.set(getUserStateCacheKey(state.id), JSON.stringify(state), {
             ex: Math.max(1, ttlSeconds),
         });
-    } catch {
+    } catch (error) {
         // Cache writes should never block auth.
+        warnUpstashFallback("user_state_cache", "set", error);
     }
 }
 
@@ -82,7 +92,8 @@ export async function clearCachedUserState(userId: string): Promise<void> {
 
     try {
         await redisClient.del(getUserStateCacheKey(userId));
-    } catch {
+    } catch (error) {
         // Best effort cache invalidation.
+        warnUpstashFallback("user_state_cache", "del", error);
     }
 }

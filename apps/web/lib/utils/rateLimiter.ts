@@ -1,7 +1,8 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
-import { getUpstashRestConfig } from "@/lib/config/redis";
+import { getUpstashRestConfig, upstashFailFastOptions } from "@/lib/config/redis";
+import { warnUpstashFallback } from "@/lib/observability/upstash-fallback";
 
 type RateLimitResult = {
     success: boolean;
@@ -54,6 +55,7 @@ if (upstashUrl && upstashToken) {
     upstashRedisClient = new Redis({
         url: upstashUrl,
         token: upstashToken,
+        ...upstashFailFastOptions,
     });
 }
 
@@ -74,6 +76,9 @@ class HybridRateLimiter {
             redis: upstashRedisClient,
             limiter: Ratelimit.fixedWindow(max, `${windowSeconds} s`),
             prefix,
+            // Off, because the library's own timeout allows the request. The
+            // client's timeout throws instead, which reaches the fallback below.
+            timeout: 0,
         });
     }
 
@@ -89,9 +94,10 @@ class HybridRateLimiter {
                 remaining: result.remaining,
                 reset: result.reset,
             };
-        } catch {
-            // Fail closed from a reliability perspective with a local fallback
-            // so auth endpoints remain available if the Redis network path is down.
+        } catch (error) {
+            // Keep enforcing a limit locally so auth endpoints stay available and
+            // throttled if the Redis network path is down. Counts are per process.
+            warnUpstashFallback("rate_limiter", "limit", error);
             return this.inMemoryLimiter.limit(key);
         }
     }
@@ -155,7 +161,8 @@ async function getRemoteBlockUntil(key: string): Promise<number | null> {
         const parsed = Number(raw);
         if (!Number.isFinite(parsed) || parsed <= Date.now()) return null;
         return parsed;
-    } catch {
+    } catch (error) {
+        warnUpstashFallback("rate_limiter", "block_check", error);
         return null;
     }
 }
@@ -203,8 +210,9 @@ async function registerBackoffViolation(key: string): Promise<number> {
 
             await upstashRedisClient.set(blockKey, String(blockUntil), { ex: blockSeconds });
             return blockUntil;
-        } catch {
+        } catch (error) {
             // Fall through to local backoff.
+            warnUpstashFallback("rate_limiter", "backoff_write", error);
         }
     }
 
