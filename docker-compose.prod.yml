@@ -1,0 +1,13 @@
+# Production overlay for one VPS behind Cloudflare Full (strict). Needs Compose 2.24 or later.
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Put the Cloudflare origin certificate in nginx/certs/. See:
+#   docs/operations/PRODUCTION_REQUIREMENTS.md
+services:
+  nginx:
+    ports: !override
+      - "80:80"
+      - "443:443"
+    volumes: !override
+      - ./nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/cloudflare-real-ip.conf:/etc/nginx/cloudflare-real-ip.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro

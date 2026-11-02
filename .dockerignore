@@ -4,6 +4,7 @@ apps/web/.next
 apps/mobile
 
 apps/socket/dist
+packages/*/dist
 .env
 .env.*
 .git

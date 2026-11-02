@@ -10,6 +10,7 @@ COPY packages ./packages
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @semantask/types build
+RUN pnpm --filter @semantask/observability build
 RUN pnpm --filter @semantask/socket build
 
 EXPOSE 3001

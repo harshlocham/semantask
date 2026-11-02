@@ -4,7 +4,8 @@
 #
 # Prerequisites:
 #   - .env with MONGODB_URI, auth secrets, ORIGIN=https://semantask.com, etc.
-#   - Docker + Docker Compose v2
+#   - Docker + Docker Compose 2.24 or later
+#   - Cloudflare origin certificate at nginx/certs/origin.pem and origin.key
 #
 # Usage:
 #   bash scripts/deploy/vps-compose.sh
@@ -19,15 +20,22 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+if [[ ! -f nginx/certs/origin.pem || ! -f nginx/certs/origin.key ]]; then
+  echo "Missing nginx/certs/origin.pem or origin.key — see docs/operations/PRODUCTION_REQUIREMENTS.md."
+  exit 1
+fi
+
+COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+
 echo "Building and starting Semantask stack..."
-docker compose build --no-cache nextapp
-docker compose up -d
+"${COMPOSE[@]}" build --no-cache nextapp
+"${COMPOSE[@]}" up -d --build
 
 echo "Reloading nginx (picks up config + fresh upstream DNS)..."
-docker compose restart nginx
+"${COMPOSE[@]}" restart nginx
 
 echo ""
-docker compose ps
+"${COMPOSE[@]}" ps
 
 echo ""
-echo "Done. Test: curl -I http://semantask.com/"
+echo "Done. Test: curl -I https://semantask.com/"

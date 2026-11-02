@@ -52,6 +52,7 @@ pnpm-debug.log*
 # Misc
 .DS_Store
 *.pem
+nginx/certs/
 .vercel
 .env*
 !.env.sample
