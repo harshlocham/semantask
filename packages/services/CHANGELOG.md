@@ -1,5 +1,19 @@
 # @semantask/services
 
+## 3.4.0
+
+### Minor Changes
+
+- bd3582f: Stop treating an LLM timeout or error at ingress as a final regex classification.
+
+  The worker now allows 15 seconds per classifier call and retries retryable failures up to twice with backoff. If the LLM still fails, the message stays unclassified and the `message.created` outbox event is retried. A missing API key still uses regex, and `shadow` and `regex` modes are unchanged.
+
+- bd3582f: Add `requeue:dead-letter-messages`, which moves dead-lettered `message.created` outbox events back to pending with attempts reset. Pass `--dry-run` to count them without writing.
+
+### Patch Changes
+
+- c244703: Stop the task worker gracefully on `SIGTERM` or `SIGINT`. It finishes the current event and hands back the rest of its batch, so a deploy no longer delays claimed events by 5 minutes. `TASK_WORKER_SHUTDOWN_GRACE_MS` sets how long it waits, 20 seconds by default and at most 25. Adds `releaseClaimedOutboxEvent`, which hands an event back only while the given worker still holds it.
+
 ## 3.3.0
 
 ### Minor Changes

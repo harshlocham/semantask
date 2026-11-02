@@ -1,5 +1,11 @@
 # @semantask/socket
 
+## 4.2.2
+
+### Patch Changes
+
+- 2057c8a: Build `@semantask/observability` in the socket image so it builds from a clean checkout, and keep local package builds out of Docker contexts so CI catches this kind of gap.
+
 ## 4.2.1
 
 ### Patch Changes
