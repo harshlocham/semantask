@@ -293,6 +293,17 @@ Format: comma-separated domains, case-insensitive (e.g. `example.com,mail.exampl
 Includes: `nginx`, `nextapp`, `socket`, `task-worker`, `redis`.  
 **Does not include MongoDB** — set `MONGODB_URI` in `.env` to an external database.
 
+### Production on one VPS (`docker-compose.prod.yml`)
+
+Adds HTTPS through `nginx/production.conf`. Deploy with `scripts/deploy/vps-compose.sh`.
+
+1. In Cloudflare, proxy `semantask.com` and `www.semantask.com` to the VPS and set SSL/TLS to **Full (strict)**. Flexible sends login cookies unencrypted between Cloudflare and the VPS.
+2. Create a Cloudflare origin certificate for both names. Save it as `nginx/certs/origin.pem` and `nginx/certs/origin.key`, which are gitignored.
+3. In `.env`, set `ORIGIN=https://semantask.com` and `APP_URL=https://semantask.com`, and leave `NEXT_PUBLIC_SOCKET_URL` unset. Compose reads these from the project `.env`, not from another env file.
+4. Allow ports 80 and 443 only from [Cloudflare's IP ranges](https://www.cloudflare.com/ips/), and SSH only from your own address. Docker's published ports can bypass `ufw`, so use your provider's firewall.
+
+`nginx/cloudflare-real-ip.conf` trusts `CF-Connecting-IP` only from those ranges, and auth rate limits depend on it. Recheck the list when renewing the certificate.
+
 ### VPS task worker (`deploy/docker-compose.task-worker.yml`)
 
 Minimal compose file; expects:
