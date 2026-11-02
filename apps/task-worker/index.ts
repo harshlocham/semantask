@@ -2,7 +2,7 @@ import "./config/env.js";
 import Redis from "ioredis";
 import mongoose from "mongoose";
 import type { MessageSemanticType, TaskExecutionActionType, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload } from "@semantask/types";
-import { claimOutboxEvents, markOutboxEventCompleted, markOutboxEventDeadLetter, markOutboxEventDeferred, markOutboxEventFailed } from "@semantask/services/outbox.service";
+import { claimOutboxEvents, markOutboxEventCompleted, markOutboxEventDeadLetter, markOutboxEventDeferred, markOutboxEventFailed, releaseClaimedOutboxEvent } from "@semantask/services/outbox.service";
 import { processMessageTaskIntelligence as processMessageTaskIntelligenceFromService } from "@semantask/services/task-intelligence.service";
 import * as taskRepo from "@semantask/services/repositories/task.repo";
 import * as taskModule from "@semantask/db/models/Task";
@@ -1436,7 +1436,7 @@ async function run() {
     const shutdown = createWorkerShutdown({
         workerId: WORKER_ID,
         graceMs: runtime.shutdownGraceMs,
-        release: (eventId, reason) => defer(eventId, reason, 0),
+        release: (eventId, reason) => releaseClaimedOutboxEvent(eventId, WORKER_ID, reason),
         exit: (code) => process.exit(code),
     });
     process.on("SIGTERM", () => shutdown.request("SIGTERM"));
@@ -1482,14 +1482,14 @@ async function run() {
             lastMetricsRefreshAt = Date.now();
         }
 
-        const events = await claim(WORKER_ID, BATCH_SIZE);
+        if (shutdown.isRequested()) break;
+
+        const events = await shutdown.claim(claim(WORKER_ID, BATCH_SIZE), (event) => event._id.toString());
 
         if (events.length === 0) {
             await wait(POLL_INTERVAL_MS);
             continue;
         }
-
-        shutdown.track(events.map((event) => event._id.toString()));
 
         for (const event of events) {
             if (shutdown.isRequested()) break;

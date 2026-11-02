@@ -120,14 +120,25 @@ test("lease and worker knobs use documented fallbacks", () => {
         TASK_WORKER_POLL_MS: undefined,
         TASK_STUCK_REMEDIATION: undefined,
         TASK_AGENT_MAX_ITERATIONS: undefined,
+        TASK_WORKER_SHUTDOWN_GRACE_MS: undefined,
     }, () => {
         const runtime = getWorkerRuntimeConfig();
         assert.equal(getLeaseMs(), LEASE_MS_FALLBACK);
+        assert.equal(runtime.shutdownGraceMs, 20_000);
         assert.equal(runtime.batchSize, 10);
         assert.equal(runtime.pollMs, 800);
         assert.equal(getStuckRemediationMode(), "log");
         assert.equal(runtime.agentMaxIterationsPlan, 5);
         assert.equal(runtime.agentMaxIterationsPersistent, 8);
+    });
+});
+
+test("shutdown grace stays inside the Compose stop timeout", () => {
+    withEnv({ TASK_WORKER_SHUTDOWN_GRACE_MS: "5000" }, () => {
+        assert.equal(getWorkerRuntimeConfig().shutdownGraceMs, 5_000);
+    });
+    withEnv({ TASK_WORKER_SHUTDOWN_GRACE_MS: "60000" }, () => {
+        assert.equal(getWorkerRuntimeConfig().shutdownGraceMs, 25_000);
     });
 });
 

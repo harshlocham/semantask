@@ -147,6 +147,30 @@ export async function markOutboxEventDeferred(id: string, reason: string, delayM
     );
 }
 
+/**
+ * Hands a claimed event back without spending its attempt, for a stopping worker.
+ * It changes nothing unless this worker still holds the event, so it cannot
+ * reopen an event that has just completed or that another worker reclaimed.
+ */
+export async function releaseClaimedOutboxEvent(id: string, workerId: string, reason: string): Promise<boolean> {
+    await connectToDatabase();
+    const result = await OutboxEventModel.updateOne(
+        { _id: id, status: "processing", lockedBy: workerId },
+        {
+            $set: {
+                status: "failed",
+                availableAt: new Date(),
+                deadLetteredAt: null,
+                lockedBy: null,
+                lockedAt: null,
+                lastError: reason.slice(0, 4000),
+            },
+            $inc: { attempts: -1 },
+        }
+    );
+    return result.modifiedCount === 1;
+}
+
 export async function markOutboxEventDeadLetter(id: string, errorMessage: string) {
     await connectToDatabase();
     await OutboxEventModel.updateOne(

@@ -3,15 +3,19 @@ import { logExecution } from "./execution-logger.js";
 export type WorkerShutdownOptions = {
     workerId: string;
     graceMs: number;
-    /** Must restore the attempt, because stopping says nothing about the event. */
-    release: (eventId: string, reason: string) => Promise<unknown>;
+    /**
+     * Must restore the attempt, because stopping says nothing about the event.
+     * Resolves false when the event was no longer held, such as one that just completed.
+     */
+    release: (eventId: string, reason: string) => Promise<boolean>;
     exit: (code: number) => void;
 };
 
 export type WorkerShutdown = {
     isRequested: () => boolean;
     request: (signal: string) => void;
-    track: (eventIds: string[]) => void;
+    /** Tracks a claim before it resolves, so a shutdown mid-claim still hands its events back. */
+    claim: <T>(pending: Promise<T[]>, idOf: (event: T) => string) => Promise<T[]>;
     finished: (eventId: string) => void;
     finish: () => Promise<void>;
 };
@@ -30,20 +34,24 @@ export function createWorkerShutdown(options: WorkerShutdownOptions): WorkerShut
     let requested = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let finishing: Promise<void> | null = null;
+    let pendingClaim: Promise<unknown> | null = null;
 
     async function releaseAndExit(): Promise<void> {
         if (timer) clearTimeout(timer);
+        if (pendingClaim) await pendingClaim;
 
         const eventIds = [...unfinished];
         const results = await Promise.allSettled(
             eventIds.map((eventId) => options.release(eventId, "worker_shutdown")),
         );
         const failed = results.filter((result) => result.status === "rejected").length;
+        const notHeld = results.filter((result) => result.status === "fulfilled" && result.value === false).length;
 
         logExecution(failed > 0 ? "warn" : "info", {
             event: "worker.shutdown.complete",
             workerId: options.workerId,
-            released: eventIds.length - failed,
+            released: eventIds.length - failed - notHeld,
+            notHeld,
             releaseFailed: failed,
         });
         options.exit(0);
@@ -71,8 +79,17 @@ export function createWorkerShutdown(options: WorkerShutdownOptions): WorkerShut
             });
             timer = setTimeout(() => void finish(), options.graceMs);
         },
-        track(eventIds) {
-            for (const eventId of eventIds) unfinished.add(eventId);
+        async claim(pending, idOf) {
+            const tracked = pending.then((events) => {
+                for (const event of events) unfinished.add(idOf(event));
+                return events;
+            });
+            pendingClaim = tracked.catch(() => undefined);
+            try {
+                return await tracked;
+            } finally {
+                pendingClaim = null;
+            }
         },
         finished(eventId) {
             unfinished.delete(eventId);
