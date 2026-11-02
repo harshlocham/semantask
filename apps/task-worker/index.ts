@@ -11,6 +11,7 @@ import AgentRunner from "./services/agent-runner.js";
 import { WorkflowRegistry } from "./services/workflow/workflow-registry.js";
 import { DefaultAgentLoopTemplate } from "./services/workflow/default-agent-loop.template.js";
 import { evaluateExecutionPolicy } from "./services/execution-policy.js";
+import { createWorkerShutdown } from "./services/worker-shutdown.js";
 import {
     getEffectiveExecutionMode,
     isExecutionModeEnforce,
@@ -1432,14 +1433,23 @@ async function processOneEvent(event: {
 
 async function run() {
     const { claim, fail, defer, deadLetter } = getOutboxFns();
+    const shutdown = createWorkerShutdown({
+        workerId: WORKER_ID,
+        graceMs: runtime.shutdownGraceMs,
+        release: (eventId, reason) => defer(eventId, reason, 0),
+        exit: (code) => process.exit(code),
+    });
+    process.on("SIGTERM", () => shutdown.request("SIGTERM"));
+    process.on("SIGINT", () => shutdown.request("SIGINT"));
 
     if (!getWorkerRuntimeConfig().mongodbUri) {
         console.warn("task-worker disabled: MONGODB_URI is not set. Set MONGODB_URI to enable task processing.");
         // Keep process alive so monorepo dev does not fail hard when worker env is missing.
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-            await wait(10_000);
+        while (!shutdown.isRequested()) {
+            await wait(1_000);
         }
+        await shutdown.finish();
+        return;
     }
 
     await ensureDatabaseConnection();
@@ -1462,8 +1472,7 @@ async function run() {
 
     let lastMetricsRefreshAt = 0;
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    while (!shutdown.isRequested()) {
         if (Date.now() - lastMetricsRefreshAt > 15_000) {
             try {
                 await refreshOutboxMetrics();
@@ -1480,7 +1489,11 @@ async function run() {
             continue;
         }
 
+        shutdown.track(events.map((event) => event._id.toString()));
+
         for (const event of events) {
+            if (shutdown.isRequested()) break;
+
             try {
                 await processOneEvent(event);
             } catch (error) {
@@ -1513,9 +1526,13 @@ async function run() {
                     terminal: event.attempts >= OUTBOX_MAX_ATTEMPTS,
                     error: message,
                 });
+            } finally {
+                shutdown.finished(event._id.toString());
             }
         }
     }
+
+    await shutdown.finish();
 }
 
 warnDeprecatedWorkerAliases();

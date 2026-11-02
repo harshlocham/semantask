@@ -86,6 +86,8 @@ services:
       - chatnet
   task-worker:
     restart: unless-stopped
+    # Longer than TASK_WORKER_SHUTDOWN_GRACE_MS, so Docker does not kill it mid-event.
+    stop_grace_period: 30s
     build:
       context: .
       dockerfile: apps/task-worker/Dockerfile

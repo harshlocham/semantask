@@ -16,4 +16,6 @@ RUN pnpm --filter @semantask/task-worker build
 
 EXPOSE 4444
 USER node
-CMD ["pnpm", "--filter", "@semantask/task-worker", "start"]
+WORKDIR /app/apps/task-worker
+# Run node directly so it receives SIGTERM and can finish its work before stopping.
+CMD ["node", "dist/apps/task-worker/index.js"]
