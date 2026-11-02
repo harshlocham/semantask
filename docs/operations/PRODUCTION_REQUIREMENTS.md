@@ -313,6 +313,12 @@ Minimal compose file; expects:
 
 Deploy script: `scripts/ci/deploy/vps-task-worker.sh`.
 
+### Stopping the task worker
+
+On `SIGTERM` or `SIGINT` the worker stops claiming, finishes the current event, and hands the rest of its batch back straight away, including events from a claim still in progress. After `TASK_WORKER_SHUTDOWN_GRACE_MS` (default 20s, capped at 25s) it hands back the current event too and exits. A second signal skips the wait. Compose waits 30s (`stop_grace_period`) before killing it. An event is handed back only while this worker still holds it, so a stop cannot reopen one that just completed.
+
+A hard kill or crash skips this, so its claimed events wait for the 5 minute stale cutoff in `claimOutboxEvents`. Nothing is lost, and handlers must stay duplicate-safe because events can re-run.
+
 ---
 
 ## Per-environment matrix

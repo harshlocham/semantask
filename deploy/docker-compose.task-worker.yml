@@ -2,4 +2,6 @@ services:
   task-worker:
     image: ${TASK_WORKER_IMAGE}
     restart: unless-stopped
+    # Longer than TASK_WORKER_SHUTDOWN_GRACE_MS, so Docker does not kill it mid-event.
+    stop_grace_period: 30s
     env_file: .env

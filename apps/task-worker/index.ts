@@ -2,7 +2,7 @@ import "./config/env.js";
 import Redis from "ioredis";
 import mongoose from "mongoose";
 import type { MessageSemanticType, TaskExecutionActionType, TaskExecutionUpdatedPayload, TaskResult, TaskUpdatedPayload } from "@semantask/types";
-import { claimOutboxEvents, markOutboxEventCompleted, markOutboxEventDeadLetter, markOutboxEventDeferred, markOutboxEventFailed } from "@semantask/services/outbox.service";
+import { claimOutboxEvents, markOutboxEventCompleted, markOutboxEventDeadLetter, markOutboxEventDeferred, markOutboxEventFailed, releaseClaimedOutboxEvent } from "@semantask/services/outbox.service";
 import { processMessageTaskIntelligence as processMessageTaskIntelligenceFromService } from "@semantask/services/task-intelligence.service";
 import * as taskRepo from "@semantask/services/repositories/task.repo";
 import * as taskModule from "@semantask/db/models/Task";
@@ -11,6 +11,7 @@ import AgentRunner from "./services/agent-runner.js";
 import { WorkflowRegistry } from "./services/workflow/workflow-registry.js";
 import { DefaultAgentLoopTemplate } from "./services/workflow/default-agent-loop.template.js";
 import { evaluateExecutionPolicy } from "./services/execution-policy.js";
+import { createWorkerShutdown } from "./services/worker-shutdown.js";
 import {
     getEffectiveExecutionMode,
     isExecutionModeEnforce,
@@ -1432,14 +1433,23 @@ async function processOneEvent(event: {
 
 async function run() {
     const { claim, fail, defer, deadLetter } = getOutboxFns();
+    const shutdown = createWorkerShutdown({
+        workerId: WORKER_ID,
+        graceMs: runtime.shutdownGraceMs,
+        release: (eventId, reason) => releaseClaimedOutboxEvent(eventId, WORKER_ID, reason),
+        exit: (code) => process.exit(code),
+    });
+    process.on("SIGTERM", () => shutdown.request("SIGTERM"));
+    process.on("SIGINT", () => shutdown.request("SIGINT"));
 
     if (!getWorkerRuntimeConfig().mongodbUri) {
         console.warn("task-worker disabled: MONGODB_URI is not set. Set MONGODB_URI to enable task processing.");
         // Keep process alive so monorepo dev does not fail hard when worker env is missing.
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-            await wait(10_000);
+        while (!shutdown.isRequested()) {
+            await wait(1_000);
         }
+        await shutdown.finish();
+        return;
     }
 
     await ensureDatabaseConnection();
@@ -1462,8 +1472,7 @@ async function run() {
 
     let lastMetricsRefreshAt = 0;
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    while (!shutdown.isRequested()) {
         if (Date.now() - lastMetricsRefreshAt > 15_000) {
             try {
                 await refreshOutboxMetrics();
@@ -1473,7 +1482,9 @@ async function run() {
             lastMetricsRefreshAt = Date.now();
         }
 
-        const events = await claim(WORKER_ID, BATCH_SIZE);
+        if (shutdown.isRequested()) break;
+
+        const events = await shutdown.claim(claim(WORKER_ID, BATCH_SIZE), (event) => event._id.toString());
 
         if (events.length === 0) {
             await wait(POLL_INTERVAL_MS);
@@ -1481,6 +1492,8 @@ async function run() {
         }
 
         for (const event of events) {
+            if (shutdown.isRequested()) break;
+
             try {
                 await processOneEvent(event);
             } catch (error) {
@@ -1513,9 +1526,13 @@ async function run() {
                     terminal: event.attempts >= OUTBOX_MAX_ATTEMPTS,
                     error: message,
                 });
+            } finally {
+                shutdown.finished(event._id.toString());
             }
         }
     }
+
+    await shutdown.finish();
 }
 
 warnDeprecatedWorkerAliases();

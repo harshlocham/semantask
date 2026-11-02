@@ -13,6 +13,9 @@ export const RETRY_MAX_BACKOFF_MS_FALLBACK = 300_000;
 export const STUCK_DETECTION_INTERVAL_MS_FALLBACK = 60_000;
 export const ARCHIVE_INTERVAL_MS_FALLBACK = 60 * 60 * 1000;
 export const METRICS_PORT_FALLBACK = 9091;
+export const SHUTDOWN_GRACE_MS_FALLBACK = 20_000;
+// Compose gives the worker 30s (stop_grace_period) before killing it.
+export const SHUTDOWN_GRACE_MS_MAX = 25_000;
 export const AGENT_MAX_ITERATIONS_PLAN_FALLBACK = 5;
 export const AGENT_MAX_ITERATIONS_PERSISTENT_FALLBACK = 8;
 export const AGENT_TOOL_TIMEOUT_MS_FALLBACK = 60_000;
@@ -34,6 +37,7 @@ export type WorkerRuntimeConfig = {
     metricsPort: number;
     batchSize: number;
     pollMs: number;
+    shutdownGraceMs: number;
     leaseMs: number;
     outboxMaxAttempts: number;
     outboxRetryJitterPct: number;
@@ -103,6 +107,10 @@ export function getWorkerRuntimeConfig(): WorkerRuntimeConfig {
         metricsPort: parsePositiveInt(process.env.METRICS_PORT, METRICS_PORT_FALLBACK),
         batchSize: parsePositiveInt(process.env.TASK_WORKER_BATCH_SIZE, BATCH_SIZE_FALLBACK),
         pollMs: parsePositiveNumber(process.env.TASK_WORKER_POLL_MS, POLL_MS_FALLBACK),
+        shutdownGraceMs: Math.min(
+            parsePositiveNumber(process.env.TASK_WORKER_SHUTDOWN_GRACE_MS, SHUTDOWN_GRACE_MS_FALLBACK),
+            SHUTDOWN_GRACE_MS_MAX,
+        ),
         leaseMs: getLeaseMs(),
         outboxMaxAttempts: parsePositiveInt(
             process.env.OUTBOX_MAX_ATTEMPTS,
