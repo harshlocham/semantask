@@ -25,6 +25,7 @@ jest.mock("../organization.service", () => ({
 import * as config from "../config";
 import {
     getEffectiveExecutionMode,
+    serializeOrganizationPolicy,
     isAcceptCreatesExecutionEnabled,
     isCoordinationBoardEnabled,
     isOrgDashboardEnabled,
@@ -106,5 +107,41 @@ describe("upsertOrganizationPolicy executionMode CAS", () => {
         expect(audit.version).toBe(3);
 
         infoSpy.mockRestore();
+    });
+
+    it("persists toolExecutionModes and rejects an unknown tool", async () => {
+        const orgId = "507f1f77bcf86cd799439011";
+        findOne.mockReturnValue({
+            lean: async () => null,
+        });
+        findOneAndUpdate.mockReturnValue({
+            lean: async () => ({
+                organizationId: orgId,
+                version: 1,
+                toolExecutionModes: { send_email: "suggest_only" },
+            }),
+        });
+
+        await upsertOrganizationPolicy({
+            organizationId: orgId,
+            actorUserId: "507f1f77bcf86cd799439012",
+            toolExecutionModes: { send_email: "suggest_only" },
+        });
+
+        const update = findOneAndUpdate.mock.calls[0]?.[1] as { $set: { toolExecutionModes: unknown } };
+        expect(update.$set.toolExecutionModes).toEqual({ send_email: "suggest_only" });
+
+        await expect(upsertOrganizationPolicy({
+            organizationId: orgId,
+            actorUserId: "507f1f77bcf86cd799439012",
+            toolExecutionModes: { not_a_tool: "off" } as never,
+        })).rejects.toThrow(/Unknown tool/);
+    });
+});
+
+describe("serializeOrganizationPolicy toolExecutionModes", () => {
+    it("returns null when the document has no per-tool modes", () => {
+        const serialized = serializeOrganizationPolicy(null, "507f1f77bcf86cd799439011");
+        expect(serialized.toolExecutionModes).toBeNull();
     });
 });

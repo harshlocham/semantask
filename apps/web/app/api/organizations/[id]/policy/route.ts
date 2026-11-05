@@ -8,7 +8,12 @@ import {
     upsertOrganizationPolicy,
 } from "@semantask/services/organization-policy.service";
 import { AuthorizationError } from "@semantask/services/authorization.service";
-import { EXECUTION_MODES, PROMPT_GUARD_MODES } from "@semantask/db/models/OrganizationPolicy";
+import {
+    EXECUTION_MODES,
+    POLICY_TOOL_NAMES,
+    PROMPT_GUARD_MODES,
+    TOOL_AUTONOMY_MODES,
+} from "@semantask/db/models/OrganizationPolicy";
 import {
     organizationApiErrorStatus,
     ValidationError,
@@ -24,6 +29,10 @@ const organizationPolicyBodySchema = z.object({
     defaultToolGrants: z.array(z.string()).nullable().optional(),
     promptGuardMode: z.enum(PROMPT_GUARD_MODES).nullable().optional(),
     executionMode: z.enum(EXECUTION_MODES).nullable().optional(),
+    toolExecutionModes: z.record(
+        z.enum(POLICY_TOOL_NAMES),
+        z.enum(TOOL_AUTONOMY_MODES),
+    ).nullable().optional(),
 }).strict();
 
 export async function GET(_req: Request, context: RouteContext) {
